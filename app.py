@@ -102,8 +102,8 @@ async def _run_scan(req: ScanRequest):
     elif req.url:
         target_urls = [req.url]
     else:
-        # Full scan: NPA sites + market benchmark sites
-        target_urls = NPA_SITES + MARKET_SITES
+        # Full scan: NPA sites only (market sites are reference data, not deal sources)
+        target_urls = NPA_SITES
 
     try:
         crawler = AutonomousCrawler(
@@ -174,7 +174,7 @@ async def trigger_scan(req: ScanRequest, background_tasks: BackgroundTasks):
     if _scan_state["status"] == "running":
         raise HTTPException(409, "Scan already running")
 
-    target_urls = req.urls or ([req.url] if req.url else NPA_SITES + MARKET_SITES)
+    target_urls = req.urls or ([req.url] if req.url else NPA_SITES)
     background_tasks.add_task(_run_scan, req)
     return {
         "message":      "Scan started",

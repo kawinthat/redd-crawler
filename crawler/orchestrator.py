@@ -24,19 +24,9 @@ load_dotenv()
 # IMPORTS — crawler package
 # ─────────────────────────────────────────────
 
-from crawler.spider import CrawlConfig, RawListing, LinkHarvester, PageFetcher
+from crawler.spider import CrawlConfig, RawListing, LinkHarvester, PageFetcher, RealEstateCrawler
 from crawler.extractor import DetailExtractor, ROIEngine
 from crawler.db_writer import SupabaseWriter
-from crawler.krungthai_harvester import KrungthaiHarvester
-
-
-# ─────────────────────────────────────────────
-# CONSTANTS
-# ─────────────────────────────────────────────
-
-API_HARVESTER_DOMAINS = {
-    "npa.krungthai.com": "krungthai",
-}
 
 
 # ─────────────────────────────────────────────
@@ -189,24 +179,37 @@ class AutonomousCrawler:
         """
         Returns (urls, api_data_by_url)
         api_data_by_url มี price/location/type จาก API (ใช้เมื่อ HTML ไม่มีราคา)
-        """
-        domain = base_url.split("/")[2]
 
-        # ── API mode (ไม่ต้อง Playwright) ──
-        if API_HARVESTER_DOMAINS.get(domain) == "krungthai":
-            logger.info(f"  ⚡ Using KrungthaiHarvester (API mode) — ไม่ต้อง Playwright")
-            harvester = KrungthaiHarvester(delay=0.5)
-            listings = await harvester.fetch_all(max_pages=min(config.max_pages, 140))
+        ใช้ RealEstateCrawler จาก spider.py ซึ่ง route ทุก domain อัตโนมัติ:
+        - npa.krungthai.com  → KrungthaiHarvester
+        - www.scbnpa.com     → SCBNPAHarvester
+        - www.ghbhomecenter.com → GHBankHarvester
+        - www.led.go.th      → LEDHarvester
+        - อื่นๆ              → Playwright spider (fallback)
+        """
+        from urllib.parse import urlparse
+        domain = urlparse(base_url).netloc
+
+        spider = RealEstateCrawler(config=config)
+        api_harvester = spider._get_api_harvester(base_url)
+
+        if api_harvester is not None:
+            logger.info(f"  ⚡ API harvester: {type(api_harvester).__name__} for {domain}")
+            listings = await api_harvester.fetch_all(
+                max_pages=config.max_pages,
+                max_listings=config.max_listings,
+            )
             urls = [x["source_url"] for x in listings][:config.max_listings]
             # Build url → api_data map (price, location, type from API)
             api_data: dict[str, dict] = {
                 x["source_url"]: x for x in listings if x.get("source_url")
             }
-            self._stats["pages_crawled"] = min(config.max_pages, 140)
+            self._stats["pages_crawled"] = len(listings)
+            logger.info(f"  ✅ {type(api_harvester).__name__}: {len(urls)} listings")
             return urls, api_data
 
-        # ── Playwright mode (JS-heavy sites) ──
-        logger.info(f"  🎭 Using Playwright spider")
+        # ── Playwright fallback (JS-heavy sites without API harvester) ──
+        logger.info(f"  🎭 Playwright spider for {domain}")
         await self.fetcher.start()
         all_urls: set[str] = set()
         current_url = base_url
