@@ -242,6 +242,8 @@ async function checkAPI() {
       document.getElementById("wake-banner").style.display = "none";
       loadDeals();
       loadStats();
+      // Auto-check: if scan is already running, start monitoring
+      checkScanStatusOnLoad();
     } else {
       scheduleRetry();
     }
@@ -302,6 +304,25 @@ async function loadStats() {
       : "—";
     document.getElementById("s-avg").textContent = avgRoi;
   } catch(e) { console.error("loadStats:", e); }
+}
+
+// ── AUTO-CHECK SCAN ON LOAD ───────────────────────────
+async function checkScanStatusOnLoad() {
+  try {
+    const r = await fetch(API + "/scan/status");
+    const d = await r.json();
+    if (d.status === "running") {
+      addLog("info", "📡 พบ scan กำลังทำงาน — กำลัง monitor อัตโนมัติ...");
+      isRunning = true;
+      scanPhase = 1;
+      renderPipeline();
+      switchTab("live");
+      document.getElementById("btn-scan").disabled = true;
+      document.getElementById("btn-stop").style.display = "";
+      document.getElementById("live-badge").style.display = "";
+      startPolling();
+    }
+  } catch(e) {}
 }
 
 // ── SCAN ──────────────────────────────────────────────
