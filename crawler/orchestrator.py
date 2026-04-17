@@ -107,7 +107,7 @@ class AutonomousCrawler:
 
                 for url, record in api_data.items():
                     deal = self._api_record_to_deal(record)
-                    if not deal.get("listing_url") or not deal.get("price"):
+                    if not deal.get("listing_url") or deal.get("price") is None:
                         self._stats["skipped"] += 1
                         continue
 
@@ -335,8 +335,8 @@ class AutonomousCrawler:
             "property_type": ptype,
             "project_name":  title,
             "location":      location,
-            "price":         price,
-            "area_sqm":      area_sqm,
+            "price":         int(price) if price else None,      # bigint in Supabase
+            "area_sqm":      round(area_sqm, 2) if area_sqm else None,  # numeric
             "condition":     condition,
             "scraped_at":    datetime.now(timezone.utc).isoformat(),
             "raw_data":      json.dumps({

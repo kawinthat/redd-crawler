@@ -188,7 +188,7 @@ async def test_db():
             "source_type": "NPA",
             "property_type": "condo",
             "location": "กรุงเทพ",
-            "price": 1000000.0,
+            "price": 1000000,
             "area_sqm": 30.0,
             "condition": "good",
             "roi_valid": False,
