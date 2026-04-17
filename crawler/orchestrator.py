@@ -258,92 +258,126 @@ class AutonomousCrawler:
 
     def _api_record_to_deal(self, record: dict) -> dict:
         """
-        แปลง normalized API record (จาก KrungthaiHarvester / SCBNPAHarvester / GHBankHarvester / etc.)
-        → deal dict ที่ ROIEngine และ SupabaseWriter รับได้
+        แปลง normalized API record → deal dict ตาม Supabase schema อย่างเคร่งครัด
 
-        ทุก harvester ส่ง dict ที่มี keys เดียวกัน (normalized format):
-          source_url, price, area_sqm, property_type, condition, location,
-          title, source_domain, is_benchmark
-        บาง harvester (krungthai) ส่ง asking_price, area_rai, property_type (ภาษาไทย)
+        Schema constraints:
+          source_type  IN ('bank_npa','enforcement','private','developer','agent')
+          property_type IN ('condo','house','townhouse','land','commercial','other')
+          condition    IN ('new','good','fair','poor')
+          priority     IN ('HIGH','MEDIUM','LOW')
+          price        BIGINT, price > 0
+          area_sqm     NUMERIC(10,2), > 0 if set
+          raw_data     JSONB (ส่งเป็น dict ไม่ใช่ string)
         """
-        # ── property type mapping ────────────────────────────────────────
-        PTYPE_MAP = {
-            "บ้านเดี่ยว": "house", "บ้าน": "house",
-            "ทาวน์เฮ้าส์": "townhouse", "ทาวน์โฮม": "townhouse", "ทาวน์เฮาส์": "townhouse",
-            "คอนโด": "condo", "ห้องชุด": "condo", "อาคารชุด": "condo",
-            "ที่ดิน": "land", "ที่ดินเปล่า": "land",
-            "อาคาร": "other", "สิ่งปลูกสร้าง": "other", "ตึกแถว": "other",
-            "house": "house", "condo": "condo", "townhouse": "townhouse",
-            "land": "land", "other": "other",
-        }
+        # ── source_type (must match CHECK constraint) ────────────────────
+        source_domain = str(record.get("source_domain") or record.get("source_site") or "")
+        if "led.go.th" in source_domain:
+            source_type = "enforcement"          # กรมบังคับคดี
+        elif record.get("is_benchmark"):
+            source_type = "agent"                # market reference sites
+        else:
+            source_type = "bank_npa"             # krungthai, SCB NPA, GH Bank
 
+        # ── property_type (must match CHECK constraint) ──────────────────
+        PTYPE_MAP = {
+            # Thai names
+            "บ้านเดี่ยว": "house",    "บ้าน": "house",
+            "ทาวน์เฮ้าส์": "townhouse", "ทาวน์โฮม": "townhouse", "ทาวน์เฮาส์": "townhouse",
+            "คอนโด": "condo",         "ห้องชุด": "condo", "อาคารชุด": "condo",
+            "ที่ดิน": "land",         "ที่ดินเปล่า": "land",
+            "อาคาร": "commercial",    "ตึกแถว": "commercial", "อาคารพาณิชย์": "commercial",
+            "สิ่งปลูกสร้าง": "other",
+            # English (already normalized)
+            "house": "house",         "condo": "condo",    "townhouse": "townhouse",
+            "land": "land",           "commercial": "commercial",   "other": "other",
+        }
         ptype_raw = str(record.get("property_type") or "")
         ptype = PTYPE_MAP.get(ptype_raw, "other")
 
-        # ── price ────────────────────────────────────────────────────────
-        price = 0.0
-        for price_key in ("price", "asking_price", "appraisalPrice", "start_price"):
-            raw_p = record.get(price_key)
-            if raw_p:
+        # ── price (BIGINT, must be int > 0) ──────────────────────────────
+        price = None
+        for pk in ("price", "asking_price", "appraisal_price", "appraisalPrice",
+                   "start_price", "minPrice"):
+            raw_p = record.get(pk)
+            if raw_p is not None:
                 try:
-                    price = float(str(raw_p).replace(",", ""))
-                    if price > 0:
+                    p = int(float(str(raw_p).replace(",", "")))
+                    if p > 0:
+                        price = p
+                        break
+                except (ValueError, TypeError):
+                    pass
+        if price is None:
+            return {}   # ไม่มีราคา — caller จะ skip
+
+        # ── area (NUMERIC, > 0 if set) ───────────────────────────────────
+        area_sqm = None
+        land_area_sqm = None
+
+        # Direct sqm
+        for ak in ("area_sqm", "usable_area", "floor_size", "size"):
+            raw_a = record.get(ak)
+            if raw_a is not None:
+                try:
+                    a = round(float(str(raw_a).replace(",", "")), 2)
+                    if a > 0:
+                        area_sqm = a
                         break
                 except (ValueError, TypeError):
                     pass
 
-        # ── area ─────────────────────────────────────────────────────────
-        area_sqm = 0.0
-        # Prefer direct sqm field
-        for area_key in ("area_sqm", "usable_area", "floor_size"):
-            raw_a = record.get(area_key)
-            if raw_a:
-                try:
-                    area_sqm = float(str(raw_a).replace(",", ""))
-                    if area_sqm > 0:
-                        break
-                except (ValueError, TypeError):
-                    pass
+        # Land area in rai → sqm (1 rai = 1,600 sqm)
+        raw_rai = record.get("area_rai")
+        if raw_rai is not None:
+            try:
+                rai = float(str(raw_rai).replace(",", ""))
+                if rai > 0:
+                    land_sqm = round(rai * 1600, 2)
+                    if ptype == "land":
+                        land_area_sqm = land_sqm   # ที่ดิน → land_area_sqm
+                    elif area_sqm is None:
+                        area_sqm = land_sqm         # อื่นๆ → area_sqm
+            except (ValueError, TypeError):
+                pass
 
-        # Fallback: rai → sqm (1 rai = 1,600 sqm)
-        if area_sqm == 0:
-            raw_rai = record.get("area_rai")
-            if raw_rai:
-                try:
-                    rai = float(str(raw_rai).replace(",", ""))
-                    if rai > 0:
-                        area_sqm = round(rai * 1600, 2)
-                except (ValueError, TypeError):
-                    pass
-
-        # ── condition ────────────────────────────────────────────────────
-        condition = record.get("condition") or ("fair" if record.get("source_domain") == "npa.krungthai.com" else "good")
+        # ── condition (must match CHECK constraint) ──────────────────────
+        COND_VALID = {"new", "good", "fair", "poor"}
+        condition_raw = str(record.get("condition") or "").lower()
+        condition = condition_raw if condition_raw in COND_VALID else "fair"
 
         # ── location ─────────────────────────────────────────────────────
-        location = record.get("location") or ""
+        location = str(record.get("location") or "").strip()
         if not location:
-            parts = filter(None, [record.get("district"), record.get("province")])
+            parts = [p for p in [record.get("district"), record.get("province")] if p]
             location = " ".join(parts)
 
-        # ── title / project_name ─────────────────────────────────────────
-        title = record.get("title") or record.get("project_name") or ""
+        # ── title ────────────────────────────────────────────────────────
+        title = record.get("title") or record.get("project_name") or None
 
-        return {
-            "listing_url":   record.get("source_url") or record.get("listing_url", ""),
-            "source_domain": record.get("source_domain") or record.get("source_site", ""),
-            "source_type":   "NPA" if not record.get("is_benchmark") else "MARKET",
+        # ── raw_data as dict (JSONB) — ไม่ใช่ string ─────────────────────
+        raw_dict = {k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
+                    for k, v in record.items()
+                    if k not in ("raw",) and v is not None}
+
+        result: dict = {
+            "listing_url":  record.get("source_url") or record.get("listing_url", ""),
+            "source_domain": source_domain,
+            "source_type":  source_type,
             "property_type": ptype,
-            "project_name":  title,
-            "location":      location,
-            "price":         int(price) if price else None,      # bigint in Supabase
-            "area_sqm":      round(area_sqm, 2) if area_sqm else None,  # numeric
-            "condition":     condition,
-            "scraped_at":    datetime.now(timezone.utc).isoformat(),
-            "raw_data":      json.dumps({
-                k: v for k, v in record.items()
-                if k != "raw" and v is not None
-            }, ensure_ascii=False)[:2000],
+            "location":     location or None,
+            "price":        price,
+            "condition":    condition,
+            "scraped_at":   datetime.now(timezone.utc).isoformat(),
+            "raw_data":     raw_dict,
         }
+        if title:
+            result["project_name"] = title
+        if area_sqm and area_sqm > 0:
+            result["area_sqm"] = area_sqm
+        if land_area_sqm and land_area_sqm > 0:
+            result["land_area_sqm"] = land_area_sqm
+
+        return result
 
     # ─────────────────────────────────────────
     # PHASE 2: SCRAPE DETAILS
