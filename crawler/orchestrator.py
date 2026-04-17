@@ -1,146 +1,46 @@
 """
-orchestrator.py — 100% Autonomous Crawler
-โยน base URL → ระบบทำทุกอย่างเอง
+orchestrator.py — RE:DD Autonomous Crawler Pipeline
+รัน: python -m crawler.orchestrator [--dry-run] [--url URL] [--max-pages N] [--max-listings N]
 """
+from __future__ import annotations
 
+import argparse
 import asyncio
 import hashlib
 import json
 import os
 import random
 import time
-from datetime import datetime
-from typing import Callable, Optional
+from datetime import datetime, timezone
+from typing import Optional
 
-from supabase import create_client, Client
+from dotenv import load_dotenv
+from loguru import logger
 
-from spider import CrawlConfig, RawListing, LinkHarvester, PageFetcher
-from extractor import DetailExtractor, ROIEngine
-
-
-# ─────────────────────────────────────────────
-# SUPABASE WRITER
-# ─────────────────────────────────────────────
-
-class DBWriter:
-    """
-    Upsert deals ลง Supabase
-    ไม่ duplicate — ใช้ listing_url เป็น unique key
-    """
-
-    def __init__(self, supabase_url: str, supabase_key: str):
-        self.db: Client = create_client(supabase_url, supabase_key)
-
-    def upsert_deal(self, data: dict, roi: dict) -> bool:
-        try:
-            record = {
-                # Listing info
-                "listing_url":      data.get("listing_url"),
-                "source_domain":    data.get("source_domain"),
-                "source_type":      data.get("source_type"),
-                "property_type":    data.get("property_type"),
-                "project_name":     data.get("project_name"),
-                "address":          data.get("address"),
-                "location":         data.get("location"),
-                "title_deed":       data.get("title_deed"),
-                "bedrooms":         data.get("bedrooms"),
-                "bathrooms":        data.get("bathrooms"),
-                "floors":           data.get("floors"),
-                "condition":        data.get("condition"),
-                "features":         data.get("features"),
-                "auction_date":     data.get("auction_date"),
-                "contact":          data.get("contact"),
-                # Prices
-                "price":            data.get("price"),
-                "area_sqm":         data.get("area_sqm"),
-                "usable_area_sqm":  data.get("usable_area_sqm"),
-                "land_area_sqm":    data.get("land_area_sqm"),
-                # ROI
-                "roi_valid":        roi.get("roi_valid", False),
-                "roi_percent":      roi.get("roi_percent"),
-                "roi_flag":         roi.get("roi_flag"),
-                "priority":         roi.get("priority"),
-                "estimated_profit": roi.get("estimated_profit"),
-                "total_cost":       roi.get("total_cost"),
-                "market_value":     roi.get("market_value"),
-                "reno_cost_total":  roi.get("reno_cost_total"),
-                # Meta
-                "scraped_at":       datetime.utcnow().isoformat(),
-                "raw_data":         json.dumps({**data, **roi}, ensure_ascii=False),
-            }
-
-            # Remove None values
-            record = {k: v for k, v in record.items() if v is not None}
-
-            self.db.table("deals").upsert(
-                record,
-                on_conflict="listing_url"  # ไม่ duplicate
-            ).execute()
-            return True
-
-        except Exception as e:
-            print(f"  ❌ DB write error: {e}")
-            return False
-
-    def is_already_scraped(self, url: str, content_hash: str) -> bool:
-        """เช็คว่าเคย scrape URL นี้แล้ว และเนื้อหาไม่เปลี่ยน"""
-        try:
-            r = self.db.table("scrape_cache") \
-                .select("content_hash") \
-                .eq("url", url) \
-                .execute()
-            if r.data:
-                return r.data[0]["content_hash"] == content_hash
-        except Exception:
-            pass
-        return False
-
-    def update_cache(self, url: str, content_hash: str):
-        try:
-            self.db.table("scrape_cache").upsert({
-                "url": url,
-                "content_hash": content_hash,
-                "checked_at": datetime.utcnow().isoformat(),
-            }, on_conflict="url").execute()
-        except Exception:
-            pass
+load_dotenv()
 
 
 # ─────────────────────────────────────────────
-# CIRCUIT BREAKER
+# IMPORTS — crawler package
 # ─────────────────────────────────────────────
 
-class CircuitBreaker:
-
-    def __init__(self, threshold: int = 5, timeout: int = 300):
-        self._failures: dict[str, int] = {}
-        self._opened_at: dict[str, float] = {}
-        self.threshold = threshold
-        self.timeout = timeout
-
-    def is_open(self, domain: str) -> bool:
-        if domain not in self._opened_at:
-            return False
-        elapsed = time.time() - self._opened_at[domain]
-        if elapsed > self.timeout:
-            # Half-open: ลองใหม่
-            self._failures[domain] = 0
-            del self._opened_at[domain]
-            return False
-        return True
-
-    def record_success(self, domain: str):
-        self._failures[domain] = 0
-
-    def record_failure(self, domain: str):
-        self._failures[domain] = self._failures.get(domain, 0) + 1
-        if self._failures[domain] >= self.threshold:
-            self._opened_at[domain] = time.time()
-            print(f"  🔴 Circuit OPEN: {domain} — หยุด {self.timeout}s")
+from crawler.spider import CrawlConfig, RawListing, LinkHarvester, PageFetcher
+from crawler.extractor import DetailExtractor, ROIEngine
+from crawler.db_writer import SupabaseWriter
+from crawler.krungthai_harvester import KrungthaiHarvester
 
 
 # ─────────────────────────────────────────────
-# MAIN ORCHESTRATOR — 100% Autonomous
+# CONSTANTS
+# ─────────────────────────────────────────────
+
+API_HARVESTER_DOMAINS = {
+    "npa.krungthai.com": "krungthai",
+}
+
+
+# ─────────────────────────────────────────────
+# MAIN ORCHESTRATOR
 # ─────────────────────────────────────────────
 
 class AutonomousCrawler:
@@ -148,45 +48,38 @@ class AutonomousCrawler:
     โยน URL เดียว → ระบบทำทุกอย่างเอง
 
     Flow:
-    1. เปิดหน้า listing → scroll → เก็บ listing URLs
-    2. ตาม pagination จนหมด
-    3. เข้าแต่ละ detail page → scrape HTML
-    4. Batch AI extraction
-    5. ROI calculation
-    6. Save Supabase
-    7. LINE alert ถ้า HOT
+    1. Harvest listing URLs (API harvester หรือ Playwright spider)
+    2. Scrape detail pages
+    3. AI batch extraction
+    4. ROI calculation
+    5. Save Supabase (ข้ามถ้า --dry-run)
+    6. LINE alert สำหรับ HOT deals
     """
 
     def __init__(
         self,
-        anthropic_key: str,
-        supabase_url: str,
-        supabase_key: str,
+        dry_run: bool = False,
         line_token: Optional[str] = None,
-        on_progress: Optional[Callable] = None,
     ):
-        self.extractor    = DetailExtractor(anthropic_key)
-        self.db           = DBWriter(supabase_url, supabase_key)
-        self.roi_engine   = ROIEngine()
-        self.harvester    = LinkHarvester()
-        self.fetcher      = PageFetcher()
-        self.breaker      = CircuitBreaker()
-        self.line_token   = line_token
-        self.on_progress  = on_progress or (lambda msg, data=None: print(msg))
-        self._stats       = {}
+        self.dry_run     = dry_run
+        self.line_token  = line_token
+        self.extractor   = DetailExtractor()           # reads OPENROUTER_API_KEY from env
+        self.roi_engine  = ROIEngine()
+        self.db          = SupabaseWriter()            # reads SUPABASE_URL/KEY from env
+        self.harvester   = LinkHarvester()
+        self.fetcher     = PageFetcher()
+        self._stats: dict = {}
 
-    # ──────────────────────────────────────────
+    # ─────────────────────────────────────────
     # ENTRY POINT
-    # ──────────────────────────────────────────
+    # ─────────────────────────────────────────
 
     async def run(self, base_url: str, config: CrawlConfig) -> dict:
-        """
-        โยน URL เดียว → return สรุปผล
-        """
         domain = base_url.split("/")[2]
         self._stats = {
             "base_url":      base_url,
-            "started_at":    datetime.utcnow().isoformat(),
+            "dry_run":       self.dry_run,
+            "started_at":    datetime.now(timezone.utc).isoformat(),
             "pages_crawled": 0,
             "links_found":   0,
             "scraped":       0,
@@ -197,189 +90,185 @@ class AutonomousCrawler:
             "errors":        0,
         }
 
-        self.on_progress(f"🚀 เริ่ม crawl: {base_url}")
+        mode = "🧪 DRY-RUN" if self.dry_run else "🚀 LIVE"
+        logger.info(f"{mode} — เริ่ม crawl: {base_url}")
 
         try:
-            await self.fetcher.start()
-
-            # ─ Phase 1: หา listing URLs ─
-            listing_urls = await self._harvest_all_listings(
-                base_url, config
-            )
+            # ── Phase 1: Harvest listing URLs + API data ──
+            listing_urls, api_data = await self._harvest(base_url, config)
             self._stats["links_found"] = len(listing_urls)
-            self.on_progress(
-                f"📋 พบ {len(listing_urls)} listing URLs",
-                {"phase": "harvest_done", "count": len(listing_urls)}
-            )
+            logger.info(f"📋 พบ {len(listing_urls)} listing URLs (API price data: {len(api_data)} records)")
 
-            # ─ Phase 2: Scrape detail pages (parallel) ─
-            raw_listings = await self._scrape_details_parallel(
-                listing_urls, config
-            )
+            if not listing_urls:
+                logger.warning("ไม่พบ listing — จบการทำงาน")
+                self._stats["finished_at"] = datetime.now(timezone.utc).isoformat()
+                return self._stats
+
+            # ── Phase 2: Scrape detail pages ──
+            raw_listings = await self._scrape_details(listing_urls, config)
             self._stats["scraped"] = len(raw_listings)
 
-            # ─ Phase 3: AI Extract (batch) ─
+            # ── Phase 3: AI Extract ──
+            if not raw_listings:
+                logger.warning("ไม่มี HTML ให้ extract")
+                self._stats["finished_at"] = datetime.now(timezone.utc).isoformat()
+                return self._stats
+
             extracted = await self.extractor.extract_batch(
-                [{"url": r.url, "html": r.html,
-                  "source_domain": r.source_domain}
-                 for r in raw_listings]
+                [{"url": r.url, "html": r.html, "source_domain": r.source_domain}
+                 for r in raw_listings],
+                batch_size=5,
             )
             self._stats["extracted"] = len(extracted)
-            self.on_progress(
-                f"🤖 Extracted {len(extracted)} records",
-                {"phase": "extract_done"}
-            )
+            logger.info(f"🤖 Extracted {len(extracted)} records")
 
-            # ─ Phase 4: ROI + Save ─
+            # ── Phase 4: ROI + Save ──
             hot_deals = []
             for data in extracted:
                 if data.get("error"):
                     self._stats["errors"] += 1
                     continue
 
+                # Merge API price data — krungthai hides prices in HTML
+                url = data.get("listing_url", "")
+                if url in api_data:
+                    api = api_data[url]
+                    # Use API price if AI couldn't find one from HTML
+                    if not data.get("price") and api.get("asking_price"):
+                        try:
+                            data["price"] = int(str(api["asking_price"]).replace(",", ""))
+                        except (ValueError, TypeError):
+                            pass
+                    if not data.get("location") and api.get("location"):
+                        data["location"] = api["location"]
+                    if not data.get("property_type") and api.get("property_type"):
+                        data["property_type"] = api["property_type"]
+                    # Convert area_rai → area_sqm if area missing (1 Rai = 1,600 sqm)
+                    if not data.get("area_sqm") and api.get("area_rai"):
+                        try:
+                            rai = float(str(api["area_rai"]).replace(",", ""))
+                            if rai > 0:
+                                data["area_sqm"] = round(rai * 1600, 2)
+                        except (ValueError, TypeError):
+                            pass
+
                 roi = self.roi_engine.calculate(data)
-                saved = self.db.upsert_deal(data, roi)
+                self._log_deal(data, roi)
 
-                if saved:
-                    self._stats["saved"] += 1
-                    if roi.get("priority") == "HIGH":
-                        hot_deals.append({**data, **roi})
-                        self._stats["hot_deals"] += 1
+                if not self.dry_run:
+                    merged = {**data, **roi}
+                    ok = await self.db.upsert_deal(merged)
+                    if ok:
+                        self._stats["saved"] += 1
+                else:
+                    self._stats["saved"] += 1   # count as "would save"
 
-            # ─ Phase 5: Alert ─
-            for deal in hot_deals:
-                await self._send_line_alert(deal)
-                self.on_progress(
-                    f"🔥 HOT DEAL: {deal.get('project_name', deal.get('address', '?'))} "
-                    f"ROI {deal.get('roi_percent')}%",
-                    {"phase": "alert", "deal": deal}
-                )
+                if roi.get("priority") == "HIGH":
+                    hot_deals.append({**data, **roi})
+                    self._stats["hot_deals"] += 1
+
+            # ── Phase 5: Alert ──
+            if not self.dry_run:
+                for deal in hot_deals:
+                    await self._send_line_alert(deal)
 
         finally:
             await self.fetcher.stop()
 
-        self._stats["finished_at"] = datetime.utcnow().isoformat()
-        self.on_progress("✅ สแกนเสร็จ", {"phase": "done", "stats": self._stats})
+        self._stats["finished_at"] = datetime.now(timezone.utc).isoformat()
+        logger.success(f"{'[DRY-RUN] ' if self.dry_run else ''}สแกนเสร็จ — {self._stats}")
         return self._stats
 
-    # ──────────────────────────────────────────
-    # PHASE 1: HARVEST ALL LISTING URLS
-    # ──────────────────────────────────────────
+    # ─────────────────────────────────────────
+    # PHASE 1: HARVEST
+    # ─────────────────────────────────────────
 
-    async def _harvest_all_listings(
+    async def _harvest(
         self, base_url: str, config: CrawlConfig
-    ) -> list[str]:
+    ) -> tuple[list[str], dict[str, dict]]:
+        """
+        Returns (urls, api_data_by_url)
+        api_data_by_url มี price/location/type จาก API (ใช้เมื่อ HTML ไม่มีราคา)
+        """
+        domain = base_url.split("/")[2]
 
+        # ── API mode (ไม่ต้อง Playwright) ──
+        if API_HARVESTER_DOMAINS.get(domain) == "krungthai":
+            logger.info(f"  ⚡ Using KrungthaiHarvester (API mode) — ไม่ต้อง Playwright")
+            harvester = KrungthaiHarvester(delay=0.5)
+            listings = await harvester.fetch_all(max_pages=min(config.max_pages, 140))
+            urls = [x["source_url"] for x in listings][:config.max_listings]
+            # Build url → api_data map (price, location, type from API)
+            api_data: dict[str, dict] = {
+                x["source_url"]: x for x in listings if x.get("source_url")
+            }
+            self._stats["pages_crawled"] = min(config.max_pages, 140)
+            return urls, api_data
+
+        # ── Playwright mode (JS-heavy sites) ──
+        logger.info(f"  🎭 Using Playwright spider")
+        await self.fetcher.start()
         all_urls: set[str] = set()
         current_url = base_url
         page_num = 1
-        domain = base_url.split("/")[2]
-        consecutive_empty = 0
 
-        while (current_url
-               and page_num <= config.max_pages
-               and len(all_urls) < config.max_listings):
-
-            if self.breaker.is_open(domain):
-                self.on_progress(f"⚠️  Circuit open — ข้าม {domain}")
-                break
-
-            self.on_progress(
-                f"  🌐 หน้า {page_num}: {current_url[:80]}...",
-                {"phase": "crawling", "page": page_num, "found": len(all_urls)}
-            )
-
+        while current_url and page_num <= config.max_pages and len(all_urls) < config.max_listings:
             try:
                 html = await self.fetcher.fetch(current_url)
-
                 if not html:
-                    self.breaker.record_failure(domain)
                     break
 
-                self.breaker.record_success(domain)
                 self._stats["pages_crawled"] += 1
-
-                # Extract listing links
                 new_links = self.harvester.extract_listing_links(html, current_url)
+                all_urls.update(new_links)
+                logger.info(f"  Page {page_num}: +{len(new_links)} URLs (total {len(all_urls)})")
 
-                if not new_links:
-                    consecutive_empty += 1
-                    if consecutive_empty >= 3:
-                        self.on_progress(f"  ⏹  ไม่พบ listing 3 หน้าติด — หยุด")
-                        break
-                else:
-                    consecutive_empty = 0
-                    before = len(all_urls)
-                    all_urls.update(new_links)
-                    after = len(all_urls)
-                    self.on_progress(
-                        f"  ✅ +{after - before} URLs (รวม {after})"
-                    )
-
-                # หาหน้าถัดไป
                 next_url = self.harvester.find_next_page(html, current_url, page_num)
-
-                # Validate — ต้อง same domain + ไม่ซ้ำ
-                if (next_url
-                        and next_url != current_url
-                        and domain in next_url):
+                if next_url and next_url != current_url and domain in next_url:
                     current_url = next_url
                     page_num += 1
                 else:
                     break
 
-                # Rate limit
-                await asyncio.sleep(random.uniform(
-                    config.delay_min, config.delay_max
-                ))
+                await asyncio.sleep(random.uniform(config.delay_min, config.delay_max))
 
             except Exception as e:
-                self.breaker.record_failure(domain)
-                self.on_progress(f"  ❌ Error หน้า {page_num}: {e}")
+                logger.error(f"  Harvest error page {page_num}: {e}")
                 self._stats["errors"] += 1
                 break
 
-        return list(all_urls)[:config.max_listings]
+        return list(all_urls)[:config.max_listings], {}
 
-    # ──────────────────────────────────────────
-    # PHASE 2: SCRAPE DETAIL PAGES (PARALLEL)
-    # ──────────────────────────────────────────
+    # ─────────────────────────────────────────
+    # PHASE 2: SCRAPE DETAILS
+    # ─────────────────────────────────────────
 
-    async def _scrape_details_parallel(
+    async def _scrape_details(
         self, urls: list[str], config: CrawlConfig
     ) -> list[RawListing]:
+        """Fetch detail pages with concurrency limit."""
+        if not self.fetcher._browser:
+            await self.fetcher.start()
 
         semaphore = asyncio.Semaphore(config.concurrency)
-        domain = urls[0].split("/")[2] if urls else ""
         results: list[RawListing] = []
 
-        async def scrape_one(url: str, idx: int) -> Optional[RawListing]:
+        async def _fetch_one(url: str, idx: int) -> Optional[RawListing]:
             async with semaphore:
                 try:
+                    domain = url.split("/")[2]
                     html = await self.fetcher.fetch(url)
                     if not html:
                         return None
 
                     content_hash = hashlib.md5(html.encode()).hexdigest()
 
-                    # Change detection — ข้ามถ้าไม่เปลี่ยน
-                    if self.db.is_already_scraped(url, content_hash):
-                        self._stats["skipped"] += 1
-                        return None
+                    if idx % 10 == 0 or idx < 5:
+                        logger.info(f"  📄 [{idx+1}/{len(urls)}] scraped {url[:70]}")
 
-                    self.db.update_cache(url, content_hash)
-
-                    # Random delay ป้องกัน ban
                     await asyncio.sleep(random.uniform(
-                        config.delay_min * 0.5,
-                        config.delay_max * 0.5
+                        config.delay_min * 0.4, config.delay_max * 0.4
                     ))
-
-                    if idx % 10 == 0:
-                        self.on_progress(
-                            f"  📄 Scraped {idx}/{len(urls)}",
-                            {"phase": "scraping", "progress": idx, "total": len(urls)}
-                        )
 
                     return RawListing(
                         url=url,
@@ -387,41 +276,45 @@ class AutonomousCrawler:
                         html=html,
                         content_hash=content_hash,
                     )
-
                 except Exception as e:
                     self._stats["errors"] += 1
+                    logger.warning(f"  Scrape error {url[:60]}: {e}")
                     return None
 
-        # รัน parallel
-        tasks = [scrape_one(url, i) for i, url in enumerate(urls)]
-        raw = await asyncio.gather(*tasks, return_exceptions=False)
+        tasks = [_fetch_one(url, i) for i, url in enumerate(urls)]
+        raw = await asyncio.gather(*tasks)
         results = [r for r in raw if r is not None]
-
-        self.on_progress(
-            f"  ✅ Scraped {len(results)} pages "
-            f"(skipped {self._stats['skipped']} unchanged)"
-        )
+        logger.info(f"  ✅ Scraped {len(results)}/{len(urls)} pages")
         return results
 
-    # ──────────────────────────────────────────
-    # LINE NOTIFY
-    # ──────────────────────────────────────────
+    # ─────────────────────────────────────────
+    # LOGGING + ALERTS
+    # ─────────────────────────────────────────
+
+    def _log_deal(self, data: dict, roi: dict):
+        flag = roi.get("roi_flag", "")
+        pct  = roi.get("roi_percent", 0)
+        loc  = data.get("location", "?")
+        price = data.get("price")
+        price_str = f"฿{price:,}" if price else "฿?"
+        logger.info(
+            f"  {flag} [{loc}] {price_str} "
+            f"| ROI {pct}% | {data.get('property_type','?')}"
+        )
 
     async def _send_line_alert(self, deal: dict):
-        if not self.line_token:
+        if not self.line_token or self.line_token == "your-line-token-here":
             return
         try:
             import httpx
             msg = (
-                f"\n🔥 HOT DEAL พบใหม่!\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"📍 {deal.get('location', '?')}\n"
-                f"🏠 {deal.get('property_type', '?')} "
-                f"| {deal.get('area_sqm', '?')} ตร.ม.\n"
-                f"💰 ราคา: ฿{deal.get('buy_price', 0):,.0f}\n"
-                f"📈 ROI: {deal.get('roi_percent', 0):.1f}% "
-                f"| กำไรคาด ฿{deal.get('estimated_profit', 0):,.0f}\n"
-                f"🔗 {deal.get('listing_url', '')[:60]}"
+                f"\n🔥 HOT DEAL!\n"
+                f"━━━━━━━━━━━━━\n"
+                f"📍 {deal.get('location','?')}\n"
+                f"🏠 {deal.get('property_type','?')} {deal.get('area_sqm','?')} ตร.ม.\n"
+                f"💰 ฿{deal.get('price',0):,.0f}\n"
+                f"📈 ROI {deal.get('roi_percent',0):.1f}% | กำไรคาด ฿{deal.get('estimated_profit',0):,.0f}\n"
+                f"🔗 {str(deal.get('listing_url',''))[:60]}"
             )
             async with httpx.AsyncClient() as client:
                 await client.post(
@@ -430,37 +323,48 @@ class AutonomousCrawler:
                     data={"message": msg},
                     timeout=10,
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"LINE alert failed: {e}")
 
 
 # ─────────────────────────────────────────────
-# ENTRY POINT
+# CLI ENTRY POINT
 # ─────────────────────────────────────────────
 
 async def main():
-    # config จาก environment variables
+    parser = argparse.ArgumentParser(description="RE:DD Autonomous Real Estate Scanner")
+    parser.add_argument("--url",          default=os.getenv("TARGET_URL", "https://npa.krungthai.com"),
+                        help="Base URL to crawl")
+    parser.add_argument("--max-pages",    type=int, default=int(os.getenv("MAX_PAGES", "5")))
+    parser.add_argument("--max-listings", type=int, default=int(os.getenv("MAX_LISTINGS", "20")))
+    parser.add_argument("--concurrency",  type=int, default=int(os.getenv("CONCURRENCY", "3")))
+    parser.add_argument("--dry-run",      action="store_true",
+                        help="Run pipeline but do NOT save to Supabase")
+    args = parser.parse_args()
+
     config = CrawlConfig(
-        base_url   = os.getenv("TARGET_URL", "https://led.go.th/assets"),
-        max_pages  = int(os.getenv("MAX_PAGES", "30")),
-        max_listings = int(os.getenv("MAX_LISTINGS", "300")),
-        concurrency  = int(os.getenv("CONCURRENCY", "5")),
+        base_url      = args.url,
+        max_pages     = args.max_pages,
+        max_listings  = args.max_listings,
+        concurrency   = args.concurrency,
+        delay_min     = 0.5,
+        delay_max     = 1.5,
     )
 
     crawler = AutonomousCrawler(
-        anthropic_key  = os.environ["ANTHROPIC_API_KEY"],
-        supabase_url   = os.environ["SUPABASE_URL"],
-        supabase_key   = os.environ["SUPABASE_KEY"],
-        line_token     = os.getenv("LINE_NOTIFY_TOKEN"),
+        dry_run    = args.dry_run,
+        line_token = os.getenv("LINE_NOTIFY_TOKEN"),
     )
 
-    stats = await crawler.run(config.base_url, config)
+    stats = await crawler.run(args.url, config)
 
-    print("\n" + "═" * 40)
-    print("📊 SUMMARY")
-    print("═" * 40)
+    print("\n" + "═" * 50)
+    print(f"  {'[DRY-RUN] ' if args.dry_run else ''}📊 PIPELINE SUMMARY")
+    print("═" * 50)
     for k, v in stats.items():
-        print(f"  {k:20s}: {v}")
+        if k not in ("started_at", "finished_at", "base_url"):
+            print(f"  {k:20s}: {v}")
+    print()
 
 
 if __name__ == "__main__":

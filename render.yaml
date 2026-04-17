@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: redd-crawler
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter          # $7/mo — upgrade to standard ถ้า need more RAM
+    region: singapore      # ใกล้ TH สุด
+    healthCheckPath: /health
+
+    envVars:
+      # Required — ตั้งใน Render dashboard → Environment
+      - key: OPENROUTER_API_KEY
+        sync: false        # Render จะถาม value ตอน deploy
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: LINE_NOTIFY_TOKEN
+        sync: false
+
+      # Crawler defaults (override ได้ใน dashboard)
+      - key: TARGET_URL
+        value: https://npa.krungthai.com
+      - key: MAX_PAGES
+        value: "56"        # ดึงทั้งหมด 2,789 listings
+      - key: MAX_LISTINGS
+        value: "2000"
+      - key: CONCURRENCY
+        value: "3"
+
+      # FastAPI
+      - key: PORT
+        value: "8000"

@@ -26,6 +26,18 @@ def _get_client() -> "Client | None":
     return create_client(url, key)
 
 
+DEALS_COLUMNS = frozenset({
+    "listing_url", "source_domain", "source_type",
+    "property_type", "project_name", "address", "location",
+    "title_deed", "bedrooms", "bathrooms", "floors",
+    "condition", "features", "auction_date", "contact",
+    "price", "area_sqm", "usable_area_sqm", "land_area_sqm",
+    "roi_valid", "roi_percent", "roi_flag", "priority",
+    "estimated_profit", "total_cost", "market_value", "reno_cost_total",
+    "scraped_at", "updated_at", "raw_data",
+})
+
+
 class SupabaseWriter:
     """Async-friendly Supabase writer for RE:DD crawler."""
 
@@ -45,8 +57,8 @@ class SupabaseWriter:
 
         Args:
             deal: Dict with keys matching the `deals` schema.
-                  Required: source_url, price, area_sqm, location, property_type
-                  Optional: roi_percent, condition, source_site, raw_html_hash, ...
+                  Required: listing_url, price, area_sqm, location, property_type
+                  Optional: roi_percent, condition, source_domain, raw_data, ...
 
         Returns:
             True on success, False on failure (logs error, does not raise).
@@ -59,12 +71,15 @@ class SupabaseWriter:
             # Ensure timestamp
             deal.setdefault("updated_at", datetime.now(timezone.utc).isoformat())
 
+            # Strip fields not in the deals schema (e.g. ROI engine internals)
+            clean = {k: v for k, v in deal.items() if k in DEALS_COLUMNS and v is not None}
+
             result = (
                 self._client.table("deals")
-                .upsert(deal, on_conflict="source_url")
+                .upsert(clean, on_conflict="listing_url")
                 .execute()
             )
-            logger.debug(f"upsert_deal OK — url={deal.get('source_url', '?')[:60]}")
+            logger.debug(f"upsert_deal OK — url={clean.get('listing_url', '?')[:60]}")
             return True
         except Exception as exc:
             logger.error(f"upsert_deal FAILED: {exc}")
@@ -92,7 +107,7 @@ class SupabaseWriter:
             job.setdefault("created_at", datetime.now(timezone.utc).isoformat())
 
             self._client.table("crawl_jobs").insert(job).execute()
-            logger.debug(f"log_crawl_job OK — site={job.get('site_url', '?')[:60]}")
+            logger.debug(f"log_crawl_job OK — site={job.get('base_url', '?')[:60]}")
             return True
         except Exception as exc:
             logger.error(f"log_crawl_job FAILED: {exc}")
@@ -102,8 +117,17 @@ class SupabaseWriter:
     # Scrape Cache
     # ------------------------------------------------------------------ #
 
-    async def cache_page(self, url: str, html_hash: str, html_content: str) -> bool:
-        """Cache a scraped page in the `scrape_cache` table."""
+    async def cache_page(self, url: str, content_hash: str,
+                          etag: str | None = None,
+                          last_modified: str | None = None) -> bool:
+        """Cache a scraped page's hash in the `scrape_cache` table.
+
+        Args:
+            url:           The page URL (primary key).
+            content_hash:  MD5/SHA of the raw HTML — used to detect changes.
+            etag:          HTTP ETag header value, if any.
+            last_modified: HTTP Last-Modified header value, if any.
+        """
         if not self.enabled:
             return False
 
@@ -111,9 +135,10 @@ class SupabaseWriter:
             self._client.table("scrape_cache").upsert(
                 {
                     "url": url,
-                    "html_hash": html_hash,
-                    "html_content": html_content,
-                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                    "content_hash": content_hash,
+                    "etag": etag,
+                    "last_modified": last_modified,
+                    "checked_at": datetime.now(timezone.utc).isoformat(),
                 },
                 on_conflict="url",
             ).execute()
@@ -122,19 +147,20 @@ class SupabaseWriter:
             logger.error(f"cache_page FAILED: {exc}")
             return False
 
-    async def get_cached_page(self, url: str) -> str | None:
-        """Return cached HTML content for a URL, or None if not cached."""
+    async def is_page_changed(self, url: str, new_hash: str) -> bool:
+        """Return True if the page hash differs from what's cached (or not cached yet)."""
         if not self.enabled:
-            return None
+            return True  # assume changed if DB disabled
 
         try:
             result = (
                 self._client.table("scrape_cache")
-                .select("html_content")
+                .select("content_hash")
                 .eq("url", url)
                 .single()
                 .execute()
             )
-            return result.data.get("html_content") if result.data else None
+            cached_hash = result.data.get("content_hash") if result.data else None
+            return cached_hash != new_hash
         except Exception:
-            return None
+            return True  # treat errors as "changed" so we re-scrape
