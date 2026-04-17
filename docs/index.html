@@ -1131,11 +1131,11 @@ async function triggerScan(dryRun=false) {
   addLog("success","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   addLog("success","🚀 RE:DD AUTONOMOUS CRAWLER — เริ่มทำงาน");
   if (dryRun) addLog("warn","🧪 DRY RUN — ไม่ save ข้อมูลจริง");
-  addLog("info",`📡 Scanning ${TARGET_SITES.filter(s=>s.type==="bank_npa").length} NPA sources | max 2,000 listings`);
+  addLog("info",`📡 Scanning ${TARGET_SITES.filter(s=>s.type==="bank_npa").length} NPA sources | unlimited — crawl ทั้งเว็บ`);
   try {
     const resp = await fetch(API+"/scan",{
       method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({dry_run:dryRun,max_pages:56,max_listings:2000})
+      body:JSON.stringify({dry_run:dryRun})
     });
     const d = await resp.json();
     const started = d.status==="started"||d.status==="running"||(d.message||"").toLowerCase().includes("started");
