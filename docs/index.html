@@ -421,7 +421,7 @@ input,select{font-family:var(--font)}
         <div id="log-dot"></div>
         <span class="log-title">AGENT LOG</span>
         <span id="log-count" style="margin-left:auto">0 events</span>
-        <button onclick="logs=[];document.getElementById('log-body').innerHTML='<div class=log-empty>Log cleared</div>';document.getElementById(\'log-count\').textContent=\'0 events\'" style="background:transparent;border:none;color:var(--gray);font-size:10px;cursor:pointer;margin-left:8px">🗑 ล้าง</button>
+        <button onclick="clearLog()" style="background:transparent;border:none;color:var(--gray);font-size:10px;cursor:pointer;margin-left:8px">🗑 ล้าง</button>
       </div>
       <div id="log-body"><div class="log-empty">📡 กด "เริ่มสแกน" เพื่อดู live log</div></div>
     </div>
@@ -481,14 +481,24 @@ let searchQuery="", viewMode="card", curPage=1;
 let logs=[], scanPhase=0, pollInterval=null, isRunning=false;
 let _wakeAttempt=0;
 
+function clearLog() {
+  logs = [];
+  const lb = document.getElementById("log-body");
+  const lc = document.getElementById("log-count");
+  if (lb) lb.innerHTML = '<div class="log-empty">Log cleared</div>';
+  if (lc) lc.textContent = "0 events";
+}
+
 // ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
-  renderPipeline();
-  renderSources();
-  document.getElementById("pane-deals").style.display = "none";
-  document.getElementById("wake-banner").style.display = "flex";
+  try { renderPipeline(); } catch(e) { console.error("renderPipeline:", e); }
+  try { renderSources(); } catch(e) { console.error("renderSources:", e); }
+  const paneDeals = document.getElementById("pane-deals");
+  if (paneDeals) paneDeals.style.display = "none";
+  const wakeBanner = document.getElementById("wake-banner");
+  if (wakeBanner) wakeBanner.style.display = "flex";
   checkAPI();
 });
 
