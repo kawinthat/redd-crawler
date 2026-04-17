@@ -209,10 +209,13 @@ class AutonomousCrawler:
                 max_pages=config.max_pages,
                 max_listings=config.max_listings,
             )
-            urls = [x["source_url"] for x in listings][:config.max_listings]
+            # Support both 'source_url' (old harvesters) and 'listing_url' (new harvesters)
+            def _get_url(x: dict) -> str:
+                return x.get("listing_url") or x.get("source_url") or ""
+            urls = [_get_url(x) for x in listings if _get_url(x)][:config.max_listings]
             # Build url → api_data map (price, location, type from API)
             api_data: dict[str, dict] = {
-                x["source_url"]: x for x in listings if x.get("source_url")
+                _get_url(x): x for x in listings if _get_url(x)
             }
             self._stats["pages_crawled"] = len(listings)
             logger.info(f"  ✅ {type(api_harvester).__name__}: {len(urls)} listings")
@@ -359,16 +362,19 @@ class AutonomousCrawler:
                     for k, v in record.items()
                     if k not in ("raw",) and v is not None}
 
+        # ── listing_url ──────────────────────────────────────────────────
+        listing_url = (record.get("listing_url") or record.get("source_url") or "").strip()
+
         result: dict = {
-            "listing_url":  record.get("source_url") or record.get("listing_url", ""),
+            "listing_url":   listing_url,
             "source_domain": source_domain,
-            "source_type":  source_type,
+            "source_type":   source_type,
             "property_type": ptype,
-            "location":     location or None,
-            "price":        price,
-            "condition":    condition,
-            "scraped_at":   datetime.now(timezone.utc).isoformat(),
-            "raw_data":     raw_dict,
+            "location":      location or None,
+            "price":         price,
+            "condition":     condition,
+            "scraped_at":    datetime.now(timezone.utc).isoformat(),
+            "raw_data":      raw_dict,
         }
         if title:
             result["project_name"] = title
@@ -376,6 +382,9 @@ class AutonomousCrawler:
             result["area_sqm"] = area_sqm
         if land_area_sqm and land_area_sqm > 0:
             result["land_area_sqm"] = land_area_sqm
+        # Pass through raw_data dict if already set correctly by harvester
+        if isinstance(record.get("raw_data"), dict):
+            result["raw_data"] = record["raw_data"]
 
         return result
 

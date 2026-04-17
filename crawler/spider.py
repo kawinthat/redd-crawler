@@ -340,11 +340,13 @@ class RealEstateCrawler:
     # เว็บที่มี API harvester พิเศษ (domain → harvester class name)
     API_ROUTES: dict = {
         # ── NPA Sites ────────────────────────────────────────────
-        "npa.krungthai.com":     "KrungthaiHarvester",
-        "www.scbnpa.com":        "SCBNPAHarvester",
-        "scbnpa.com":            "SCBNPAHarvester",
-        "www.ghbhomecenter.com": "GHBankHarvester",
-        "ghbhomecenter.com":     "GHBankHarvester",
+        "npa.krungthai.com":          "KrungthaiHarvester",
+        "www.ghbhomecenter.com":      "GHBankHarvester",
+        "ghbhomecenter.com":          "GHBankHarvester",
+        "www.bam.co.th":              "BAMHarvester",
+        "bam.co.th":                  "BAMHarvester",
+        "www.krungsriproperty.com":   "KrungsriHarvester",
+        "krungsriproperty.com":       "KrungsriHarvester",
         # ── กรมบังคับคดี ────────────────────────────────────────
         "www.led.go.th":         "LEDHarvester",
         "led.go.th":             "LEDHarvester",
@@ -371,12 +373,15 @@ class RealEstateCrawler:
         if harvester_name == "KrungthaiHarvester":
             from crawler.krungthai_harvester import KrungthaiHarvester
             return KrungthaiHarvester(rows_per_page=50, delay=0.8)
-        elif harvester_name == "SCBNPAHarvester":
-            from crawler.scbnpa_harvester import SCBNPAHarvester
-            return SCBNPAHarvester(rows_per_page=50, delay=1.0)
         elif harvester_name == "GHBankHarvester":
             from crawler.ghbank_harvester import GHBankHarvester
-            return GHBankHarvester(rows_per_page=50, delay=1.0)
+            return GHBankHarvester(per_page=40, delay=1.2)
+        elif harvester_name == "BAMHarvester":
+            from crawler.bam_harvester import BAMHarvester
+            return BAMHarvester(page_size=100, delay=1.0)
+        elif harvester_name == "KrungsriHarvester":
+            from crawler.krungsri_harvester import KrungsriHarvester
+            return KrungsriHarvester(delay=1.5)
         elif harvester_name == "LEDHarvester":
             from crawler.led_harvester import LEDHarvester
             return LEDHarvester(rows_per_page=20, delay=2.0)

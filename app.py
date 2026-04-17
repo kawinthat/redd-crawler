@@ -60,9 +60,15 @@ _scan_lock = asyncio.Lock()
 # ─────────────────────────────────────────────
 
 NPA_SITES = [
+    # ── ธนาคารกรุงไทย (Krungthai) — REST API ✅
     "https://npa.krungthai.com",
-    "https://www.scbnpa.com",
+    # ── ธ.อาคารสงเคราะห์ (GH Bank) — HTML scraper ✅
     "https://www.ghbhomecenter.com",
+    # ── BAM บริหารสินทรัพย์กรุงเทพ — REST API ✅ (~16k assets)
+    "https://www.bam.co.th/npa",
+    # ── ธนาคารกรุงศรี (Krungsri) — HTML scraper ✅ (~1.7k assets)
+    "https://www.krungsriproperty.com/search-result",
+    # ── กรมบังคับคดี — REST API ✅
     "https://www.led.go.th",
 ]
 
