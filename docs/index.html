@@ -1031,8 +1031,8 @@ function renderPipeline() {
   const nodes = PIPE_STEPS.map((s,i) => {
     const state = scanPhase>i+1?"done":scanPhase===i+1?"active":"";
     return `<div class="pipe-node">
-      <div class="pipe-icon${state?" "+state}">${state==="done"?"✓":s.icon}</div>
-      <div class="pipe-lbl${state?" "+state}">${s.label.replace("\n","<br>")}</div>
+      <div class="pipe-icon${state?" "+state:""}">${state==="done"?"✓":s.icon}</div>
+      <div class="pipe-lbl${state?" "+state:""}">${s.label.replace("\n","<br>")}</div>
     </div>`;
   });
   // Interleave lines
@@ -1041,7 +1041,7 @@ function renderPipeline() {
     html += n;
     if (i < nodes.length-1) {
       const lineState = scanPhase>i+1?"done":scanPhase===i+1?"active":"";
-      html += `<div class="pipe-line${lineState?" "+lineState}"></div>`;
+      html += `<div class="pipe-line${lineState?" "+lineState:""}"></div>`;
     }
   });
   html += "</div>";
