@@ -597,7 +597,7 @@ function dealCard(d) {
     : areaSqm > 0 ? `${areaSqm} ตร.ม.` : "—";
 
   const src = d.source_domain || "—";
-  const url = d.url || "#";
+  const url = d.listing_url || d.url || "#";
   const pType = d.property_type || "other";
   const loc = d.location || "";
   const locShort = loc.split(/[,\/]/)[0].trim() || "—";
