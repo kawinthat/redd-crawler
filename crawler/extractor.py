@@ -4,10 +4,11 @@ extractor.py — Detail Page Extractor + ROI Engine
 """
 
 import json
+import os
 import re
 from typing import Optional
 
-import anthropic
+import httpx
 from bs4 import BeautifulSoup
 
 
@@ -92,32 +93,63 @@ PROPERTY_SCHEMA = """{
 }"""
 
 
-class DetailExtractor:
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL = "anthropic/claude-haiku-4-5"   # Claude Haiku via OpenRouter
+OPENROUTER_FALLBACK = "anthropic/claude-3-haiku"  # fallback model name
 
-    def __init__(self, api_key: str):
-        self.client = anthropic.Anthropic(api_key=api_key)
+
+class DetailExtractor:
+    """
+    AI-powered property detail extractor.
+    ใช้ OpenRouter API (รองรับ OPENROUTER_API_KEY หรือ ANTHROPIC_API_KEY)
+    """
+
+    def __init__(self, api_key: Optional[str] = None):
+        # Priority: arg → OPENROUTER_API_KEY → ANTHROPIC_API_KEY
+        self.api_key = (
+            api_key
+            or os.getenv("OPENROUTER_API_KEY")
+            or os.getenv("ANTHROPIC_API_KEY")
+        )
+        if not self.api_key:
+            raise ValueError("ต้องตั้งค่า OPENROUTER_API_KEY หรือ ANTHROPIC_API_KEY")
         self.cleaner = HtmlCleaner()
 
     async def extract_batch(
-        self, listings: list[dict], batch_size: int = 10
-    ) -> list[dict]:
+        self, listings: list, batch_size: int = 5
+    ) -> list:
         """
         ส่ง N listings ต่อ 1 API call
         listings = [{"url": str, "html": str}, ...]
         """
         results = []
-
         for i in range(0, len(listings), batch_size):
             batch = listings[i:i + batch_size]
             batch_results = await self._extract_one_batch(batch)
             results.extend(batch_results)
-
-            print(f"  🤖 Extracted batch {i//batch_size + 1}: "
-                  f"{len(batch_results)} listings")
-
+            print(f"  🤖 Extracted batch {i // batch_size + 1}: {len(batch_results)} listings")
         return results
 
-    async def _extract_one_batch(self, batch: list[dict]) -> list[dict]:
+    async def _call_openrouter(self, prompt: str, model: str) -> str:
+        """POST ไปยัง OpenRouter และคืน text response"""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/redd-crawler",
+            "X-Title": "RE:DD Real Estate Crawler",
+        }
+        body = {
+            "model": model,
+            "max_tokens": 2000,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(OPENROUTER_URL, json=body, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            return data["choices"][0]["message"]["content"].strip()
+
+    async def _extract_one_batch(self, batch: list) -> list:
         # Clean HTML ทุกชิ้น
         cleaned = []
         for item in batch:
@@ -142,32 +174,39 @@ Schema ต่อ object:
 Listings:
 {combined}"""
 
-        try:
-            msg = self.client.messages.create(
-                model="claude-haiku-4-5",
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            raw = msg.content[0].text.strip()
+        # ลอง model หลัก ถ้าไม่มีใน OpenRouter ลอง fallback
+        for model in [OPENROUTER_MODEL, OPENROUTER_FALLBACK]:
+            try:
+                raw = await self._call_openrouter(prompt, model)
 
-            # Clean JSON fences
-            raw = re.sub(r'^```json\s*', '', raw)
-            raw = re.sub(r'\s*```$', '', raw)
+                # Clean JSON fences
+                raw = re.sub(r'^```json\s*', '', raw)
+                raw = re.sub(r'\s*```$', '', raw)
+                raw = raw.strip()
 
-            extracted = json.loads(raw)
+                extracted = json.loads(raw)
+                if not isinstance(extracted, list):
+                    extracted = [extracted]
 
-            # Merge back URL
-            for j, item in enumerate(batch):
-                if j < len(extracted):
-                    extracted[j]["listing_url"] = item["url"]
-                    extracted[j]["source_domain"] = item.get("source_domain", "")
+                # Merge back URL + source
+                for j, item in enumerate(batch):
+                    if j < len(extracted):
+                        extracted[j]["listing_url"] = item["url"]
+                        extracted[j]["source_domain"] = item.get("source_domain", "")
 
-            return extracted
+                return extracted
 
-        except Exception as e:
-            print(f"  ❌ Batch extraction error: {e}")
-            # Fallback: return empty records with URLs
-            return [{"listing_url": item["url"], "error": str(e)} for item in batch]
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404 and model == OPENROUTER_MODEL:
+                    print(f"  ⚠️  Model {model} ไม่พบ — ลอง {OPENROUTER_FALLBACK}")
+                    continue
+                print(f"  ❌ HTTP error {e.response.status_code}: {e.response.text[:200]}")
+                break
+            except Exception as e:
+                print(f"  ❌ Batch extraction error ({model}): {e}")
+                break
+
+        return [{"listing_url": item["url"], "error": "extraction_failed"} for item in batch]
 
 
 # ─────────────────────────────────────────────
