@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RE:DD — Autonomous Deal Scanner</title>
+<style>
+  :root {
+    --bg:#0a1a22; --panel:#0f2530; --border:#1e3d4f;
+    --petrol:#1A3C4A; --gold:#C9A84C; --goldLight:#e0c06e;
+    --white:#F8F6F2; --gray:#5a7a8a; --grayLight:#8a9ba8;
+    --green:#27c97a; --yellow:#f0b429; --red:#e05555;
+    --blue:#3b9eff; --purple:#9b6dff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--white);font-family:'IBM Plex Sans Thai','Noto Sans Thai',system-ui,sans-serif;min-height:100vh}
+  button{cursor:pointer;font-family:inherit}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{color:var(--gold)}
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:#060f15}
+  ::-webkit-scrollbar-thumb{background:#1e3d4f;border-radius:3px}
+
+  /* HEADER */
+  #header{background:linear-gradient(135deg,#060f15,var(--petrol));border-bottom:2px solid var(--gold);padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+  .brand-name{color:var(--gold);font-size:22px;font-weight:800}
+  .brand-sub{color:var(--grayLight);font-size:12px;margin-left:10px}
+  .brand-desc{color:var(--gray);font-size:10px;margin-top:3px}
+  #live-badge{color:var(--green);font-size:11px;font-weight:700;margin-left:8px;display:none}
+  #api-status{font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;gap:6px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--gray)}
+  .dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+  .dot.error{background:var(--red)}
+
+  /* BUTTONS */
+  #btn-scan{background:linear-gradient(135deg,var(--gold),var(--goldLight));color:var(--petrol);border:none;border-radius:8px;padding:9px 22px;font-weight:800;font-size:13px}
+  #btn-scan:disabled{opacity:0.5;cursor:not-allowed}
+  #btn-stop{background:#2a1010;color:var(--red);border:1px solid #e0555544;border-radius:8px;padding:8px 16px;font-weight:700;font-size:12px;display:none}
+  #btn-dryrun{background:transparent;color:var(--grayLight);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:11px;display:none}
+
+  /* STATS BAR */
+  #stats-bar{background:#060f15;border-bottom:1px solid var(--border);display:flex;gap:32px;padding:10px 28px;overflow-x:auto}
+  .stat-item{text-align:center;flex-shrink:0}
+  .stat-val{font-size:26px;font-weight:800;line-height:1}
+  .stat-lbl{color:var(--gray);font-size:10px;margin-top:4px}
+
+  /* PIPELINE */
+  #pipeline{background:var(--panel);border-bottom:1px solid var(--border);padding:14px 28px}
+  .pipe-title{color:var(--gold);font-size:10px;font-weight:700;margin-bottom:10px;letter-spacing:1px}
+  .pipe-steps{display:flex;gap:4;position:relative}
+  .pipe-step{flex:1;display:flex;flex-direction:column;align-items:center;position:relative}
+  .pipe-step-line{position:absolute;left:50%;top:20px;width:100%;height:2px;background:var(--border);z-index:0;transition:background 0.5s}
+  .pipe-step-line.active{background:var(--gold)}
+  .pipe-step-icon{width:40px;height:40px;border-radius:50%;background:#071218;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;z-index:1;transition:all 0.4s;position:relative}
+  .pipe-step-icon.done{background:var(--gold);border-color:var(--gold);color:var(--petrol)}
+  .pipe-step-icon.active{background:var(--petrol);border-color:var(--goldLight);box-shadow:0 0 14px #C9A84C55}
+  .pipe-step-lbl{color:var(--gray);font-size:9px;margin-top:6px;text-align:center;line-height:1.4}
+  .pipe-step-lbl.done{color:var(--gold)}
+  .pipe-step-lbl.active{color:var(--white)}
+
+  /* TABS */
+  #tabs{display:flex;border-bottom:1px solid var(--border);background:var(--panel);padding:0 20px}
+  .tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--gray);padding:11px 18px;font-size:12px;font-weight:400;margin-bottom:-1px;transition:all 0.2s}
+  .tab.active{border-bottom-color:var(--gold);color:var(--gold);font-weight:700}
+
+  /* CONTENT */
+  #content{padding:20px}
+
+  /* SOURCES */
+  .type-section{margin-bottom:24px}
+  .type-header{font-size:11px;font-weight:700;margin-bottom:10px;letter-spacing:0.5px;display:flex;align-items:center;gap:8px}
+  .type-divider{flex:1;height:1px;opacity:0.2}
+  .sites-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}
+  .site-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;transition:all 0.3s}
+  .site-card.scanning{box-shadow:0 0 14px rgba(58,158,255,0.15)}
+  .site-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+  .site-name{font-weight:700;font-size:14px;margin-bottom:4px}
+  .site-desc{color:var(--grayLight);font-size:11px;margin-bottom:12px;line-height:1.5}
+  .url-box{background:#060f15;border-radius:8px;padding:10px 12px;margin-bottom:10px}
+  .url-label{color:var(--gray);font-size:9px;font-weight:700;margin-bottom:6px;letter-spacing:0.5px}
+  .url-row{display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:10px}
+  .url-key{color:var(--gray);width:48px;flex-shrink:0}
+  .site-prog{font-size:10px;color:var(--gray)}
+  .site-prog span{color:var(--gold);font-weight:700}
+
+  /* TAG */
+  .tag{border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;display:inline-block}
+
+  /* LOG */
+  #log-container{background:var(--panel);border-radius:10px;border:1px solid var(--border);overflow:hidden}
+  #log-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  #log-dot{width:7px;height:7px;border-radius:50%;background:var(--gray)}
+  #log-title{color:var(--gold);font-size:12px;font-weight:700}
+  #log-count{color:var(--gray);font-size:11px;margin-left:auto}
+  #log-body{height:440px;overflow-y:auto;padding:14px;font-family:'JetBrains Mono','Courier New',monospace;font-size:11px;line-height:1.7}
+  .log-line{margin-bottom:1px}
+  .log-ts{color:#1e3d4f;margin-right:8px;font-size:10px}
+  .log-empty{color:var(--gray);text-align:center;padding-top:80px}
+
+  /* DEALS */
+  #deal-filters{display:flex;gap:8px;margin-bottom:16px;align-items:center}
+  .filter-label{color:var(--gray);font-size:11px}
+  .filter-btn{background:transparent;color:var(--gray);border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;transition:all 0.2s}
+  .filter-btn.active{background:var(--gold);color:var(--petrol);border-color:var(--gold)}
+  #deals-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+  .deal-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .deal-card.hot{background:linear-gradient(135deg,var(--panel),#0a2015);border-color:#27c97a44;box-shadow:0 0 16px rgba(39,201,122,0.08)}
+  .deal-title{font-weight:700;font-size:13px;margin-bottom:2px}
+  .deal-location{color:var(--gray);font-size:10px;margin-bottom:8px}
+  .deal-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+  .deal-field{background:#060f15;border-radius:6px;padding:6px 10px}
+  .deal-field-lbl{color:var(--gray);font-size:9px}
+  .deal-field-val{font-weight:700;font-size:12px;margin-top:2px}
+  .deal-source{background:#060f15;border-radius:6px;padding:7px 10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+  .deal-source-lbl{color:var(--gray);font-size:9px;margin-bottom:3px}
+  .deal-roi{display:flex;justify-content:space-between;align-items:center;font-size:12px}
+  .hot-badge{margin-top:10px;background:rgba(39,201,122,0.08);border:1px solid rgba(39,201,122,0.2);border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center}
+  #deals-empty{color:var(--gray);text-align:center;padding:60px 0;font-size:13px}
+
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  .scanning-pulse{animation:pulse 1s infinite}
+</style>
+</head>
+<body>
+
+<!-- WAKE BANNER -->
+<div id="wake-banner" style="display:none;background:#0d1f2a;border-bottom:1px solid #f0b42933;padding:7px 24px;align-items:center;gap:12px">
+  <div style="width:7px;height:7px;border-radius:50%;background:#f0b429;animation:pulse 1s infinite;flex-shrink:0"></div>
+  <span style="color:#f0b429;font-size:11px;font-weight:600">กำลังเชื่อมต่อ server...</span>
+  <span style="color:var(--gray);font-size:10px">ถ้ารอนานกว่า 30 วินาที ให้รีเฟรชหน้านี้</span>
+  <button onclick="_wakeAttempt=0;checkAPI();" style="margin-left:auto;background:transparent;color:#f0b429;border:1px solid #f0b42966;border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer">🔄 ลองใหม่</button>
+</div>
+
+<!-- HEADER -->
+<div id="header">
+  <div>
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <span class="brand-name">RE:DD</span>
+      <span class="brand-sub">Autonomous Deal Scanner</span>
+      <span id="live-badge">● LIVE</span>
+    </div>
+    <div class="brand-desc">100% Autonomous — ระบบ scan อสังหาฯ NPA ทุก 6 ชั่วโมงอัตโนมัติ</div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <div id="api-status">
+      <div class="dot" id="api-dot"></div>
+      <span id="api-label" style="color:var(--grayLight)">กำลังเชื่อมต่อ...</span>
+    </div>
+    <button id="btn-dryrun" onclick="triggerScan(true)">🧪 Dry Run</button>
+    <button id="btn-stop" onclick="stopScan()">⏹ หยุด</button>
+    <button id="btn-scan" onclick="triggerScan(false)" disabled>⏳ รอ server ตื่น...</button>
+  </div>
+</div>
+
+<!-- STATS BAR -->
+<div id="stats-bar">
+  <div class="stat-item"><div class="stat-val" id="s-total" style="color:var(--white)">—</div><div class="stat-lbl">Total Deals</div></div>
+  <div class="stat-item"><div class="stat-val" id="s-hot" style="color:var(--green)">—</div><div class="stat-lbl">🔥 HOT &gt;30%</div></div>
+  <div class="stat-item"><div class="stat-val" id="s-medium" style="color:var(--yellow)">—</div><div class="stat-lbl">🟡 MEDIUM &gt;15%</div></div>
+  <div class="stat-item"><div class="stat-val" id="s-avg" style="color:var(--goldLight)">—</div><div class="stat-lbl">Avg ROI %</div></div>
+  <div class="stat-item"><div class="stat-val" id="s-pages" style="color:var(--white)">—</div><div class="stat-lbl">Pages Crawled</div></div>
+  <div class="stat-item"><div class="stat-val" id="s-scraped" style="color:var(--blue)">—</div><div class="stat-lbl">Scraped</div></div>
+</div>
+
+<!-- PIPELINE -->
+<div id="pipeline">
+  <div class="pipe-title">PIPELINE</div>
+  <div class="pipe-steps" id="pipeline-steps">
+    <!-- filled by JS -->
+  </div>
+</div>
+
+<!-- TABS -->
+<div id="tabs">
+  <button class="tab active" onclick="switchTab('sources')" id="tab-sources">🔗 แหล่งข้อมูล (8)</button>
+  <button class="tab" onclick="switchTab('live')" id="tab-live">📡 Live Log</button>
+  <button class="tab" onclick="switchTab('deals')" id="tab-deals">📋 Deals</button>
+</div>
+
+<!-- CONTENT -->
+<div id="content">
+  <div id="pane-sources"></div>
+  <div id="pane-live" style="display:none"></div>
+  <div id="pane-deals" style="display:none"></div>
+</div>
+
+<script>
+const API = "https://redd-crawler.onrender.com";
+
+const TARGET_SITES = [
+  { url:"https://npa.krungthai.com", label:"Krungthai NPA", type:"bank_npa", desc:"ทรัพย์ NPA ธนาคารกรุงไทย — 56 pages, REST API" },
+  { url:"https://led.go.th/assets", label:"กรมบังคับคดี", type:"enforcement", desc:"ทรัพย์ขายทอดตลาดบังคับคดี — ราคาต่ำกว่าตลาดมากที่สุด" },
+  { url:"https://kbankasset.com", label:"KBank Asset", type:"bank_npa", desc:"ทรัพย์ NPA ธนาคารกสิกรไทย" },
+  { url:"https://www.scbnpa.com", label:"SCB NPA", type:"bank_npa", desc:"ทรัพย์ NPA ธนาคารไทยพาณิชย์" },
+  { url:"https://ghbhomecenter.com", label:"GH Bank", type:"bank_npa", desc:"ทรัพย์ NPA ธนาคารอาคารสงเคราะห์" },
+  { url:"https://www.ddproperty.com/buy", label:"DDProperty", type:"marketplace", desc:"ตลาดอสังหาฯ — market price benchmark" },
+  { url:"https://hipflat.co.th/sale", label:"Hipflat", type:"marketplace", desc:"ตลาดคอนโดมือสอง" },
+  { url:"https://baania.com/th/property/buy", label:"Baania", type:"marketplace", desc:"ตลาดอสังหาฯ + AI valuation" },
+];
+
+const TYPE_COLOR = { bank_npa:"#3b9eff", enforcement:"#e05555", marketplace:"#9b6dff" };
+const TYPE_LABEL = { bank_npa:"NPA", enforcement:"บังคับคดี", marketplace:"ตลาด" };
+const COND_COLOR = { poor:"#e05555", fair:"#f0b429", good:"#27c97a", new:"#27c97a" };
+const PIPE_STEPS = [
+  {icon:"🌐",label:"Crawl\nListing"},
+  {icon:"📄",label:"Scrape\nDetail"},
+  {icon:"🤖",label:"AI\nExtract"},
+  {icon:"📈",label:"ROI\nCalc"},
+  {icon:"💾",label:"Save\nDB"},
+];
+
+let logs = [], deals = [], hotDeals = [], dealFilter = "all";
+let scanPhase = 0, pollInterval = null, isRunning = false;
+
+// ── INIT ──────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  renderPipeline();
+  renderSources();
+  renderLog();
+  renderDeals();
+  // Show wake banner immediately, hide once online
+  document.getElementById("wake-banner").style.display = "flex";
+  checkAPI();
+});
+
+let _wakeAttempt = 0;
+async function checkAPI() {
+  _wakeAttempt++;
+  const waking = _wakeAttempt > 1;
+  if (waking) {
+    setAPIStatus(false, `กำลังปลุก server... (${_wakeAttempt})`);
+  }
+  try {
+    const r = await fetch(API + "/health", {signal: AbortSignal.timeout(12000)});
+    const d = await r.json();
+    if (d.status === "ok") {
+      _wakeAttempt = 0;
+      setAPIStatus(true, "API Online ✓");
+      document.getElementById("btn-scan").disabled = false;
+      document.getElementById("btn-scan").textContent = "▶ เริ่มสแกน";
+      document.getElementById("btn-dryrun").style.display = "";
+      document.getElementById("wake-banner").style.display = "none";
+      loadDeals();
+      loadStats();
+    } else {
+      scheduleRetry();
+    }
+  } catch(e) {
+    setAPIStatus(false, _wakeAttempt <= 1 ? "Offline / Starting..." : `กำลัง wake up... (${_wakeAttempt}/10)`);
+    document.getElementById("btn-scan").disabled = true;
+    document.getElementById("btn-scan").textContent = "⏳ รอ server ตื่น...";
+    document.getElementById("wake-banner").style.display = "";
+    scheduleRetry();
+  }
+}
+
+function scheduleRetry() {
+  if (_wakeAttempt < 15) {
+    setTimeout(checkAPI, 4000);
+  } else {
+    setAPIStatus(false, "❌ ไม่สามารถเชื่อมต่อได้");
+    document.getElementById("btn-scan").disabled = false;
+    document.getElementById("btn-scan").textContent = "🔄 ลองใหม่";
+    document.getElementById("btn-scan").onclick = () => { _wakeAttempt = 0; checkAPI(); };
+  }
+}
+
+function setAPIStatus(ok, text) {
+  const dot = document.getElementById("api-dot");
+  const lbl = document.getElementById("api-label");
+  dot.className = "dot " + (ok ? "online" : "error");
+  lbl.textContent = text;
+  lbl.style.color = ok ? "#27c97a" : "#e05555";
+}
+
+// ── DATA LOAD ─────────────────────────────────────────
+async function loadDeals() {
+  try {
+    const [allR, hotR] = await Promise.all([
+      fetch(API + "/deals?per_page=200").then(r=>r.json()),
+      fetch(API + "/deals/hot?limit=200").then(r=>r.json()),
+    ]);
+    deals = allR.data || [];
+    hotDeals = hotR.data || [];
+    renderDeals();
+    updateDealTab();
+  } catch(e) {
+    console.error("loadDeals:", e);
+  }
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch(API + "/deals/stats");
+    const d = await r.json();
+    document.getElementById("s-total").textContent = d.total ?? "—";
+    document.getElementById("s-hot").textContent = d.hot ?? "—";
+    document.getElementById("s-medium").textContent = d.medium ?? "—";
+    document.getElementById("s-avg").textContent = d.avg_roi != null ? d.avg_roi.toFixed(1) + "%" : "—";
+  } catch(e) {}
+}
+
+// ── SCAN ──────────────────────────────────────────────
+async function triggerScan(dryRun=false) {
+  if (isRunning) return;
+  isRunning = true;
+  scanPhase = 0;
+  logs = [];
+  document.getElementById("btn-scan").disabled = true;
+  document.getElementById("btn-stop").style.display = "";
+  document.getElementById("live-badge").style.display = "";
+  document.getElementById("btn-dryrun").style.display = "none";
+  switchTab("live");
+  addLog("success", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  addLog("success", "🚀 RE:DD AUTONOMOUS CRAWLER — เริ่มทำงาน");
+  if (dryRun) addLog("warn", "🧪 DRY RUN MODE — ไม่ save ข้อมูลจริง");
+  addLog("info", `📡 Target: https://npa.krungthai.com | Pages: 56 | Max: 2,000`);
+
+  try {
+    const resp = await fetch(API + "/scan", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({dry_run: dryRun, max_pages: 56, max_listings: 2000})
+    });
+    const d = await resp.json();
+    if (d.status === "started" || d.status === "running") {
+      addLog("success", `✅ Scan started — job_id: ${d.job_id || "—"}`);
+      scanPhase = 1;
+      renderPipeline();
+      startPolling();
+    } else {
+      addLog("error", `❌ ${d.detail || JSON.stringify(d)}`);
+      scanDone();
+    }
+  } catch(e) {
+    addLog("error", `❌ Cannot connect: ${e.message}`);
+    scanDone();
+  }
+}
+
+function startPolling() {
+  let lastStatus = "";
+  let pollCount = 0;
+  document.getElementById("s-pages").textContent = "…";
+  document.getElementById("s-scraped").textContent = "…";
+
+  pollInterval = setInterval(async () => {
+    pollCount++;
+    try {
+      const r = await fetch(API + "/scan/status");
+      const d = await r.json();
+      const status = d.status;
+      const stats = d.stats || {};
+
+      // Update stats bar
+      if (stats.pages !== undefined) document.getElementById("s-pages").textContent = stats.pages;
+      if (stats.scraped !== undefined) document.getElementById("s-scraped").textContent = stats.scraped;
+
+      // Update pipeline phase
+      if (status === "running") {
+        const prog = stats.progress || "";
+        const newPhase = prog.includes("extract") ? 3 : prog.includes("scrape") ? 2 : 1;
+        if (newPhase !== scanPhase) { scanPhase = newPhase; renderPipeline(); }
+        if (pollCount % 3 === 0) {
+          addLog("info", `⏳ กำลัง scan... pages=${stats.pages||0} scraped=${stats.scraped||0} saved=${stats.saved||0}`);
+        }
+      }
+
+      if (status === "done") {
+        scanPhase = 5;
+        renderPipeline();
+        const s = stats;
+        addLog("success", `\n✅ DONE — Pages: ${s.pages||0} | Scraped: ${s.scraped||0} | Saved: ${s.saved||0} | HOT: ${s.hot||0}`);
+        clearInterval(pollInterval);
+        await loadDeals();
+        await loadStats();
+        scanDone();
+        switchTab("deals");
+      } else if (status === "failed") {
+        addLog("error", `❌ Scan failed: ${d.error || "unknown error"}`);
+        clearInterval(pollInterval);
+        scanDone();
+      } else if (status === "idle" && pollCount > 5) {
+        // scan may have finished very fast
+        clearInterval(pollInterval);
+        await loadDeals();
+        await loadStats();
+        scanDone();
+        switchTab("deals");
+      }
+
+      if (status !== lastStatus) {
+        lastStatus = status;
+        addLog("info", `📊 Status: ${status}`);
+      }
+    } catch(e) {
+      addLog("warn", `⚠️ Poll error: ${e.message}`);
+    }
+  }, 3000);
+}
+
+function stopScan() {
+  clearInterval(pollInterval);
+  addLog("warn", "⏹ หยุด (scan อาจทำงานต่อบน server)");
+  scanDone();
+}
+
+function scanDone() {
+  isRunning = false;
+  document.getElementById("btn-scan").disabled = false;
+  document.getElementById("btn-stop").style.display = "none";
+  document.getElementById("live-badge").style.display = "none";
+  document.getElementById("btn-dryrun").style.display = "";
+}
+
+// ── LOG ───────────────────────────────────────────────
+function addLog(type, msg) {
+  const colors = {
+    info:"#8a9ba8", success:"#27c97a", warn:"#f0b429",
+    ai:"#e0c06e", hot:"#27c97a", error:"#e05555"
+  };
+  const now = new Date().toLocaleTimeString("th-TH");
+  logs.push({type, msg, color: colors[type]||"#8a9ba8", ts: now});
+  if (logs.length > 200) logs.shift();
+  renderLogLine(logs[logs.length-1]);
+  const body = document.getElementById("log-body");
+  if (body) body.scrollTop = body.scrollHeight;
+  document.getElementById("log-count").textContent = logs.length + " events";
+}
+
+function renderLog() {
+  document.getElementById("pane-live").innerHTML = `
+    <div id="log-container">
+      <div id="log-header">
+        <div id="log-dot"></div>
+        <span id="log-title">AGENT LOG</span>
+        <span id="log-count" style="color:var(--gray);font-size:11px;margin-left:auto">0 events</span>
+      </div>
+      <div id="log-body"><div class="log-empty">กด "เริ่มสแกน" เพื่อดู live log</div></div>
+    </div>`;
+}
+
+function renderLogLine(l) {
+  const body = document.getElementById("log-body");
+  if (!body) return;
+  const empty = body.querySelector(".log-empty");
+  if (empty) empty.remove();
+  const div = document.createElement("div");
+  div.className = "log-line";
+  div.style.color = l.color;
+  const urlRegex = /(https?:\/\/\S+)/g;
+  const parts = l.msg.split(urlRegex);
+  let html = `<span class="log-ts">${l.ts}</span>`;
+  parts.forEach(p => {
+    if (p.match(/^https?:\/\//)) {
+      const short = p.length > 55 ? p.slice(0,55)+"…" : p;
+      html += `<a href="${p}" target="_blank" style="color:var(--blue);border-bottom:1px solid #3b9eff44">${short}</a>`;
+    } else {
+      html += p.replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+  });
+  div.innerHTML = html;
+  body.appendChild(div);
+}
+
+// ── PIPELINE ──────────────────────────────────────────
+function renderPipeline() {
+  const el = document.getElementById("pipeline-steps");
+  el.innerHTML = PIPE_STEPS.map((s,i) => {
+    const state = scanPhase > i+1 ? "done" : scanPhase === i+1 ? "active" : "";
+    const lineActive = scanPhase > i+1;
+    return `
+      <div class="pipe-step">
+        ${i < 4 ? `<div class="pipe-step-line${lineActive?" active":""}"></div>` : ""}
+        <div class="pipe-step-icon${state?" "+state:""}">${state==="done"?"✓":s.icon}</div>
+        <div class="pipe-step-lbl${state?" "+state:""}">${s.label.replace("\n","<br>")}</div>
+      </div>`;
+  }).join("");
+}
+
+// ── SOURCES ───────────────────────────────────────────
+function renderSources() {
+  const groups = [
+    { type:"bank_npa", title:"🏦  NPA ธนาคาร — Non-Performing Assets" },
+    { type:"enforcement", title:"🏛️  กรมบังคับคดี — Distressed Assets" },
+    { type:"marketplace", title:"🏠  ตลาดอสังหาฯ — Market Price Reference" },
+  ];
+  document.getElementById("pane-sources").innerHTML = `
+    <div style="color:var(--gray);font-size:11px;margin-bottom:16px">
+      แหล่งข้อมูลที่ระบบ crawl อัตโนมัติ — คลิก 🔗 เพื่อเปิดเว็บต้นทาง
+    </div>` +
+    groups.map(g => {
+      const sites = TARGET_SITES.filter(s => s.type === g.type);
+      const col = TYPE_COLOR[g.type];
+      return `
+        <div class="type-section">
+          <div class="type-header" style="color:${col}">
+            ${g.title}
+            <div class="type-divider" style="background:${col}"></div>
+          </div>
+          <div class="sites-grid">
+            ${sites.map(site => `
+              <div class="site-card">
+                <div class="site-header">
+                  <div>
+                    <div class="site-name">${site.label}</div>
+                    <span class="tag" style="background:${col}22;color:${col};border:1px solid ${col}44">${TYPE_LABEL[site.type]}</span>
+                  </div>
+                </div>
+                <div class="site-desc">${site.desc}</div>
+                <div class="url-box">
+                  <div class="url-label">TARGET URL</div>
+                  <div class="url-row">
+                    <span class="url-key">ที่มา:</span>
+                    <a href="${site.url}" target="_blank" style="color:var(--blue);font-size:10px;border-bottom:1px solid #3b9eff44">🔗 ${site.url.replace(/https?:\/\/(www\.)?/,"").split("/")[0]}</a>
+                  </div>
+                </div>
+                <div class="site-prog">สถานะ: <span>รอสแกน</span></div>
+              </div>
+            `).join("")}
+          </div>
+        </div>`;
+    }).join("");
+}
+
+// ── DEALS ─────────────────────────────────────────────
+function renderDeals() {
+  const pane = document.getElementById("pane-deals");
+  if (!pane) return;
+  const filtered = dealFilter === "hot" ? deals.filter(d => d.roi_percent >= 30) : deals;
+  const sorted = [...filtered].sort((a,b) => (b.roi_percent||0) - (a.roi_percent||0));
+
+  pane.innerHTML = `
+    <div id="deal-filters">
+      <span class="filter-label">แสดง:</span>
+      <button class="filter-btn${dealFilter==="all"?" active":""}" onclick="setFilter('all')">ทั้งหมด (${deals.length})</button>
+      <button class="filter-btn${dealFilter==="hot"?" active":""}" onclick="setFilter('hot')">🔥 HOT เท่านั้น (${hotDeals.length})</button>
+    </div>
+    <div id="deals-grid">
+      ${sorted.length === 0 ?
+        `<div id="deals-empty" style="grid-column:1/-1">${deals.length === 0 ? "ยังไม่มีดีล — กด ▶ เริ่มสแกน เพื่อดึงข้อมูล" : "ไม่พบ HOT deal ที่ ROI &gt; 30%"}</div>`
+        : sorted.map(d => dealCard(d)).join("")
+      }
+    </div>`;
+}
+
+function dealCard(d) {
+  const roi = d.roi_percent || 0;
+  const hot = roi >= 30;
+  const priority = d.priority || "LOW";
+  const srcCol = d.source_domain?.includes("krungthai") ? "#3b9eff" :
+                 d.source_domain?.includes("led.go") ? "#e05555" : "#9b6dff";
+  const cond = d.condition || "—";
+  const condCol = COND_COLOR[cond] || "#8a9ba8";
+  const priceM = d.price ? (d.price/1e6).toFixed(2) : "—";
+  const area = d.area_sqm ? d.area_sqm + " ตร.ม." : "—";
+  const src = d.source_domain || "—";
+  const url = d.url || "#";
+  const title = d.title || "ทรัพย์ไม่ระบุชื่อ";
+  const loc = d.location || "—";
+  const roiColor = roi >= 30 ? "#27c97a" : roi >= 15 ? "#f0b429" : "#e05555";
+  const roiLabel = roi >= 30 ? "🟢 ควรซื้อ" : roi >= 15 ? "🟡 พิจารณา" : "🔴 ข้าม";
+
+  return `
+    <div class="deal-card${hot?" hot":""}">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div class="deal-title">${title}</div>
+          <div class="deal-location">📍 ${loc} · ${area}</div>
+        </div>
+        <span class="tag" style="background:${srcCol}22;color:${srcCol};border:1px solid ${srcCol}44;flex-shrink:0;margin-left:8px">${src.split(".")[0]}</span>
+      </div>
+      <div class="deal-meta">
+        <div class="deal-field">
+          <div class="deal-field-lbl">ราคาซื้อ</div>
+          <div class="deal-field-val">฿${priceM}M</div>
+        </div>
+        <div class="deal-field">
+          <div class="deal-field-lbl">สภาพทรัพย์</div>
+          <div class="deal-field-val" style="color:${condCol}">${cond}</div>
+        </div>
+      </div>
+      <div class="deal-source">
+        <div>
+          <div class="deal-source-lbl">แหล่งที่มา</div>
+          <a href="${url}" target="_blank" style="font-size:11px;border-bottom:1px solid #3b9eff44">🔗 ${src}</a>
+        </div>
+        <span style="color:var(--gray);font-size:9px">${d.property_type || ""}</span>
+      </div>
+      <div class="deal-roi">
+        <span style="color:var(--gray);font-size:10px">ROI Calculated</span>
+        <span style="color:${roiColor};font-weight:700">${roiLabel} ${roi.toFixed(1)}%</span>
+      </div>
+      ${hot ? `
+      <div class="hot-badge">
+        <span style="color:var(--green);font-size:10px;font-weight:700">🔥 HOT DEAL — ROI ${roi.toFixed(1)}%</span>
+        <a href="${url}" target="_blank" style="color:var(--blue);font-size:10px;border-bottom:1px solid #3b9eff44">ดูทรัพย์ →</a>
+      </div>` : ""}
+    </div>`;
+}
+
+function setFilter(f) {
+  dealFilter = f;
+  renderDeals();
+}
+
+function updateDealTab() {
+  const hot = deals.filter(d => d.roi_percent >= 30);
+  document.getElementById("tab-deals").textContent = `📋 Deals${hot.length ? ` 🔥${hot.length}` : ""}`;
+}
+
+// ── TABS ──────────────────────────────────────────────
+function switchTab(name) {
+  ["sources","live","deals"].forEach(t => {
+    document.getElementById("pane-"+t).style.display = t===name ? "" : "none";
+    document.getElementById("tab-"+t).classList.toggle("active", t===name);
+  });
+}
+</script>
+</body>
+</html>
