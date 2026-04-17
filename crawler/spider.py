@@ -347,6 +347,8 @@ class RealEstateCrawler:
         "bam.co.th":                  "BAMHarvester",
         "www.krungsriproperty.com":   "KrungsriHarvester",
         "krungsriproperty.com":       "KrungsriHarvester",
+        "npa-assets.gsb.or.th":       "GSBHarvester",
+        "asset.home.scb":             "SCBHarvester",
         # ── กรมบังคับคดี ────────────────────────────────────────
         "www.led.go.th":         "LEDHarvester",
         "led.go.th":             "LEDHarvester",
@@ -382,6 +384,12 @@ class RealEstateCrawler:
         elif harvester_name == "KrungsriHarvester":
             from crawler.krungsri_harvester import KrungsriHarvester
             return KrungsriHarvester(delay=1.5)
+        elif harvester_name == "GSBHarvester":
+            from crawler.gsb_harvester import GSBHarvester
+            return GSBHarvester(delay=2.0)
+        elif harvester_name == "SCBHarvester":
+            from crawler.scb_harvester import SCBHarvester
+            return SCBHarvester(limit=100, delay=1.5)
         elif harvester_name == "LEDHarvester":
             from crawler.led_harvester import LEDHarvester
             return LEDHarvester(rows_per_page=20, delay=2.0)

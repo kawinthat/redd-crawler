@@ -68,6 +68,10 @@ NPA_SITES = [
     "https://www.bam.co.th/npa",
     # ── ธนาคารกรุงศรี (Krungsri) — HTML scraper ✅ (~1.7k assets)
     "https://www.krungsriproperty.com/search-result",
+    # ── ธนาคารออมสิน (GSB) — SSR scraper ✅ (~3k+ assets)
+    "https://npa-assets.gsb.or.th",
+    # ── SCB Asset (ไทยพาณิชย์) — REST API ✅ (~4k assets)
+    "https://asset.home.scb/project",
     # ── กรมบังคับคดี — REST API ✅
     "https://www.led.go.th",
 ]

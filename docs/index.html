@@ -733,9 +733,12 @@ function dealCard(d) {
   const roiSuspect = rawRoi > 999; // likely land area bug
   const hot = rawRoi >= 30 && !roiSuspect;
   const srcCol = d.source_domain?.includes("krungthai") ? "#3b9eff" :
-                 d.source_domain?.includes("led.go") ? "#e05555" :
-                 d.source_domain?.includes("bam") ? "#C9A84C" :
-                 d.source_domain?.includes("krungsri") ? "#9b6dff" : "#9b6dff";
+                 d.source_domain?.includes("led.go")    ? "#e05555" :
+                 d.source_domain?.includes("bam")       ? "#C9A84C" :
+                 d.source_domain?.includes("krungsri")  ? "#9b6dff" :
+                 d.source_domain?.includes("gsb")       ? "#f59e0b" :
+                 d.source_domain?.includes("scb")       ? "#6b21a8" :
+                 d.source_domain?.includes("ghb")       ? "#16a34a" : "#64748b";
   const cond = d.condition || "—";
   const condCol = COND_COLOR[cond] || "#8a9ba8";
   const priceM = d.price ? (d.price/1e6).toFixed(2) : "—";
