@@ -339,7 +339,11 @@ class RealEstateCrawler:
 
     # เว็บที่มี API harvester พิเศษ (domain → harvester class name)
     API_ROUTES: dict = {
-        "npa.krungthai.com": "KrungthaiHarvester",
+        "npa.krungthai.com":   "KrungthaiHarvester",
+        "www.scbnpa.com":      "SCBNPAHarvester",
+        "scbnpa.com":          "SCBNPAHarvester",
+        "www.ghbhomecenter.com": "GHBankHarvester",
+        "ghbhomecenter.com":   "GHBankHarvester",
     }
 
     def __init__(self, config: Optional[CrawlConfig] = None):
@@ -351,9 +355,16 @@ class RealEstateCrawler:
         """คืน API harvester instance ถ้าเว็บนี้รองรับ"""
         from urllib.parse import urlparse
         domain = urlparse(base_url).netloc
-        if domain in self.API_ROUTES:
+        harvester_name = self.API_ROUTES.get(domain)
+        if harvester_name == "KrungthaiHarvester":
             from crawler.krungthai_harvester import KrungthaiHarvester
             return KrungthaiHarvester(rows_per_page=50, delay=0.8)
+        elif harvester_name == "SCBNPAHarvester":
+            from crawler.scbnpa_harvester import SCBNPAHarvester
+            return SCBNPAHarvester(rows_per_page=50, delay=1.0)
+        elif harvester_name == "GHBankHarvester":
+            from crawler.ghbank_harvester import GHBankHarvester
+            return GHBankHarvester(rows_per_page=50, delay=1.0)
         return None
 
     async def harvest(self, base_url: str,

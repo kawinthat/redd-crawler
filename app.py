@@ -59,8 +59,15 @@ _scan_lock = asyncio.Lock()
 # SCHEMAS
 # ─────────────────────────────────────────────
 
+NPA_SITES = [
+    "https://npa.krungthai.com",
+    "https://www.scbnpa.com",
+    "https://www.ghbhomecenter.com",
+]
+
 class ScanRequest(BaseModel):
-    url: str              = os.getenv("TARGET_URL", "https://npa.krungthai.com")
+    url: str              = os.getenv("TARGET_URL", "")  # empty = scan all NPA_SITES
+    urls: list[str]       = []                           # explicit list override
     max_pages: int        = int(os.getenv("MAX_PAGES", "56"))
     max_listings: int     = int(os.getenv("MAX_LISTINGS", "2000"))
     concurrency: int      = int(os.getenv("CONCURRENCY", "3"))
@@ -81,23 +88,45 @@ async def _run_scan(req: ScanRequest):
     _scan_state["stats"]      = {}
     _scan_state["error"]      = None
 
-    try:
-        config = CrawlConfig(
-            base_url      = req.url,
-            max_pages     = req.max_pages,
-            max_listings  = req.max_listings,
-            concurrency   = req.concurrency,
-            delay_min     = 0.5,
-            delay_max     = 1.5,
-        )
+    # Determine which URLs to scan
+    if req.urls:
+        target_urls = req.urls
+    elif req.url:
+        target_urls = [req.url]
+    else:
+        target_urls = NPA_SITES  # scan all NPA sites
 
+    try:
         crawler = AutonomousCrawler(
             dry_run    = req.dry_run,
             line_token = os.getenv("LINE_NOTIFY_TOKEN"),
         )
 
-        stats = await crawler.run(req.url, config)
-        _scan_state["stats"]       = stats
+        combined_stats = {"pages": 0, "scraped": 0, "saved": 0, "hot": 0, "sites": []}
+
+        for site_url in target_urls:
+            logger.info(f"Scanning: {site_url}")
+            _scan_state["stats"]["current_site"] = site_url
+            config = CrawlConfig(
+                base_url     = site_url,
+                max_pages    = req.max_pages,
+                max_listings = req.max_listings // len(target_urls),
+                concurrency  = req.concurrency,
+                delay_min    = 0.5,
+                delay_max    = 1.5,
+            )
+            try:
+                stats = await crawler.run(site_url, config)
+                combined_stats["pages"]   += stats.get("pages_crawled", 0)
+                combined_stats["scraped"] += stats.get("scraped", 0)
+                combined_stats["saved"]   += stats.get("saved", 0)
+                combined_stats["hot"]     += stats.get("hot_deals", 0)
+                combined_stats["sites"].append({"url": site_url, "status": "ok", **stats})
+            except Exception as site_err:
+                logger.error(f"Site {site_url} failed: {site_err}")
+                combined_stats["sites"].append({"url": site_url, "status": "error", "error": str(site_err)})
+
+        _scan_state["stats"]       = combined_stats
         _scan_state["status"]      = "done"
         _scan_state["finished_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -136,12 +165,16 @@ async def trigger_scan(req: ScanRequest, background_tasks: BackgroundTasks):
     if _scan_state["status"] == "running":
         raise HTTPException(409, "Scan already running")
 
+    target_urls = req.urls or ([req.url] if req.url else NPA_SITES)
     background_tasks.add_task(_run_scan, req)
     return {
-        "message":  "Scan started",
-        "url":      req.url,
-        "dry_run":  req.dry_run,
+        "message":      "Scan started",
+        "status":       "started",
+        "urls":         target_urls,
+        "url":          target_urls[0] if target_urls else "",
+        "dry_run":      req.dry_run,
         "max_listings": req.max_listings,
+        "sites_count":  len(target_urls),
     }
 
 
