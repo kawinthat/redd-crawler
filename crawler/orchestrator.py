@@ -67,6 +67,8 @@ class AutonomousCrawler:
 
     async def run(self, base_url: str, config: CrawlConfig) -> dict:
         domain = base_url.split("/")[2]
+        # Reset in-scan dedup state for this site
+        self.db.reset_dedup()
         self._stats = {
             "base_url":      base_url,
             "dry_run":       self.dry_run,
@@ -79,6 +81,7 @@ class AutonomousCrawler:
             "hot_deals":     0,
             "skipped":       0,
             "errors":        0,
+            "dedup_skipped": 0,
         }
 
         mode = "🧪 DRY-RUN" if self.dry_run else "🚀 LIVE"
@@ -175,8 +178,13 @@ class AutonomousCrawler:
         finally:
             await self.fetcher.stop()
 
-        self._stats["finished_at"] = datetime.now(timezone.utc).isoformat()
-        logger.success(f"{'[DRY-RUN] ' if self.dry_run else ''}สแกนเสร็จ — {self._stats}")
+        self._stats["finished_at"]   = datetime.now(timezone.utc).isoformat()
+        self._stats["dedup_skipped"] = self.db._dedup_skipped
+        logger.success(
+            f"{'[DRY-RUN] ' if self.dry_run else ''}สแกนเสร็จ — "
+            f"saved={self._stats['saved']} dedup_skipped={self._stats['dedup_skipped']} "
+            f"hot={self._stats['hot_deals']}"
+        )
         return self._stats
 
     # ─────────────────────────────────────────

@@ -4,11 +4,41 @@ Handles upsert of deals and crawl job logging.
 
 from __future__ import annotations
 
+import hashlib
 import os
 from datetime import datetime, timezone
 from typing import Any
 
 from loguru import logger
+
+
+# ─────────────────────────────────────────────
+# DEDUP FINGERPRINT
+# ─────────────────────────────────────────────
+
+def make_dedup_key(deal: dict) -> str:
+    """สร้าง fingerprint สำหรับตรวจ duplicate ข้ามไซต์ (95% similarity).
+
+    Logic:
+    - price bucket: ปัดเข้าหาหลัก 50,000 บาทที่ใกล้ที่สุด
+    - area bucket : ปัดเข้าหาหลัก 5 ตร.ม. ที่ใกล้ที่สุด
+    - property_type: ตรงตัว
+    - province    : คำแรกของ location (เขต/จังหวัด)
+
+    Returns 16-char hex string (MD5 prefix).
+    """
+    price = deal.get("price") or 0
+    area  = (deal.get("area_sqm") or deal.get("usable_area_sqm")
+             or deal.get("land_area_sqm") or 0)
+    ptype = (deal.get("property_type") or "").strip()
+    loc   = (deal.get("location") or "").strip().split()[0] if deal.get("location") else ""
+
+    # Buckets — เผื่อ ±5%
+    price_bucket = round(price / 50_000) if price else 0
+    area_bucket  = round(area  / 5)      if area  else 0
+
+    raw = f"{price_bucket}:{area_bucket}:{ptype}:{loc}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
 try:
     from supabase import create_client, Client
@@ -34,6 +64,8 @@ DEALS_COLUMNS = frozenset({
     "price", "area_sqm", "usable_area_sqm", "land_area_sqm",
     "roi_valid", "roi_percent", "roi_flag", "priority",
     "estimated_profit", "total_cost", "market_value", "reno_cost_total",
+    "reno_cost_sqm", "transfer_fee", "market_price_sqm", "buy_price",
+    "dedup_key", "is_duplicate",
     "scraped_at", "updated_at", "raw_data",
 })
 
@@ -43,10 +75,18 @@ class SupabaseWriter:
 
     def __init__(self) -> None:
         self._client = _get_client()
+        # In-scan dedup: track (dedup_key, source_domain) pairs seen this session
+        self._seen_keys: dict[str, str] = {}   # dedup_key → first listing_url seen
+        self._dedup_skipped: int = 0
 
     @property
     def enabled(self) -> bool:
         return self._client is not None
+
+    def reset_dedup(self) -> None:
+        """เรียกต้นสแกนใหม่ทุกครั้ง เพื่อ clear in-memory dedup state."""
+        self._seen_keys.clear()
+        self._dedup_skipped = 0
 
     # ------------------------------------------------------------------ #
     # Deals
@@ -62,23 +102,64 @@ class SupabaseWriter:
 
         Returns:
             True on success, False on failure (logs error, does not raise).
+            Returns False (no error) for detected duplicates — use is_duplicate flag.
         """
         if not self.enabled:
             logger.debug("DB disabled — skipping upsert_deal")
             return False
 
         try:
-            # Ensure timestamp
+            # ── Generate dedup fingerprint ──
+            dkey = make_dedup_key(deal)
+            deal["dedup_key"] = dkey
+
+            # ── In-scan dedup: ตรวจ duplicate ใน scan เดียวกัน ──
+            existing_url = self._seen_keys.get(dkey)
+            if existing_url and existing_url != deal.get("listing_url", ""):
+                self._dedup_skipped += 1
+                logger.debug(
+                    f"DEDUP skip — {deal.get('listing_url','')[:50]}\n"
+                    f"  ≈ {existing_url[:50]} (key={dkey})"
+                )
+                return False   # skip duplicate, not an error
+
+            # ── Register in seen map ──
+            self._seen_keys[dkey] = deal.get("listing_url", "")
+
+            # ── DB-level cross-scan dedup: ตรวจ dedup_key ใน DB ──
+            if self.enabled and deal.get("listing_url"):
+                try:
+                    existing = (
+                        self._client.table("deals")
+                        .select("listing_url, source_domain")
+                        .eq("dedup_key", dkey)
+                        .neq("listing_url", deal["listing_url"])
+                        .limit(1)
+                        .execute()
+                    )
+                    if existing.data:
+                        ex = existing.data[0]
+                        # Same source domain → let it upsert (price update)
+                        # Different source domain → cross-site duplicate → skip
+                        if ex.get("source_domain") != deal.get("source_domain"):
+                            self._dedup_skipped += 1
+                            logger.info(
+                                f"CROSS-SITE DEDUP — skip {deal.get('source_domain','')} "
+                                f"(ซ้ำกับ {ex.get('source_domain','')} url={ex.get('listing_url','')[:50]})"
+                            )
+                            return False
+                except Exception:
+                    pass  # DB dedup failed → proceed with upsert
+
+            # ── Ensure timestamp ──
             deal.setdefault("updated_at", datetime.now(timezone.utc).isoformat())
 
-            # Strip fields not in the deals schema (e.g. ROI engine internals)
+            # ── Strip fields not in the deals schema ──
             clean = {k: v for k, v in deal.items() if k in DEALS_COLUMNS and v is not None}
 
-            result = (
-                self._client.table("deals")
-                .upsert(clean, on_conflict="listing_url")
+            self._client.table("deals") \
+                .upsert(clean, on_conflict="listing_url") \
                 .execute()
-            )
             logger.debug(f"upsert_deal OK — url={clean.get('listing_url', '?')[:60]}")
             return True
         except Exception as exc:
