@@ -631,13 +631,13 @@ function dealCard(d) {
           <div class="deal-field-val" style="color:${condCol}">${cond}</div>
         </div>
       </div>
-      <div class="deal-source" style="cursor:pointer" onclick="window.open('${url}','_blank')">
+      <a href="${url}" target="_blank" rel="noopener noreferrer" class="deal-source" style="text-decoration:none;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onmouseover="this.style.background='#1e3d4f'" onmouseout="this.style.background='#060f15'">
         <div>
-          <div class="deal-source-lbl">แหล่งที่มา — คลิกเพื่อดูทรัพย์</div>
-          <span style="color:var(--blue);font-size:11px;border-bottom:1px solid #3b9eff44">🔗 ${src}</span>
+          <div class="deal-source-lbl">แหล่งที่มา — คลิกเพื่อดูทรัพย์ ↗</div>
+          <span style="color:var(--blue);font-size:11px">🔗 ${url !== "#" ? url.replace("https://","").split("?")[0].slice(0,50) : src}</span>
         </div>
-        <span style="color:var(--blue);font-size:18px;opacity:0.6">↗</span>
-      </div>
+        <span style="color:var(--blue);font-size:20px;font-weight:300">↗</span>
+      </a>
       <div class="deal-roi">
         <span style="color:var(--gray);font-size:10px">ROI</span>
         <span style="color:${roiColor};font-weight:700">${roiLabel} ${roiDisplay}</span>
@@ -645,7 +645,7 @@ function dealCard(d) {
       ${hot ? `
       <div class="hot-badge">
         <span style="color:var(--green);font-size:10px;font-weight:700">🔥 HOT DEAL — ROI ${rawRoi.toFixed(1)}%</span>
-        <span onclick="window.open('${url}','_blank')" style="color:var(--blue);font-size:10px;cursor:pointer;border-bottom:1px solid #3b9eff44">ดูทรัพย์ →</span>
+        <a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--blue);font-size:10px;border-bottom:1px solid #3b9eff44">ดูทรัพย์ →</a>
       </div>` : ""}
       ${roiSuspect ? `
       <div style="margin-top:8px;background:#1e3d4f33;border-radius:5px;padding:5px 8px;font-size:9px;color:var(--gray)">
