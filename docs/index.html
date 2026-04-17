@@ -317,13 +317,27 @@ function setAPIStatus(ok, text) {
 }
 
 // ── DATA LOAD ─────────────────────────────────────────
+async function fetchAllDeals() {
+  // Paginate through all pages (backend cap = 200/page)
+  const PER = 200;
+  let page = 1, all = [];
+  while (true) {
+    const r = await fetch(`${API}/deals?per_page=${PER}&page=${page}`).then(r=>r.json());
+    const batch = r.data || [];
+    all = all.concat(batch);
+    if (batch.length < PER || all.length >= (r.total || Infinity)) break;
+    page++;
+  }
+  return all;
+}
+
 async function loadDeals() {
   try {
-    const [allR, hotR] = await Promise.all([
-      fetch(API + "/deals?per_page=200").then(r=>r.json()),
+    const [allDeals, hotR] = await Promise.all([
+      fetchAllDeals(),
       fetch(API + "/deals/hot?limit=200").then(r=>r.json()),
     ]);
-    deals = allR.data || [];
+    deals = allDeals;
     hotDeals = hotR.data || [];
     renderDeals();
     updateDealTab();

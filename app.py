@@ -243,7 +243,7 @@ def scan_status():
 @app.get("/deals")
 def list_deals(
     page: int       = Query(1, ge=1),
-    per_page: int   = Query(50, ge=1, le=200),
+    per_page: int   = Query(200, ge=1, le=500),
     priority: Optional[str] = Query(None, description="HIGH | MEDIUM | LOW"),
     source: Optional[str]   = Query(None),
 ):
@@ -280,7 +280,7 @@ def list_deals(
 
 
 @app.get("/deals/hot")
-def hot_deals(limit: int = Query(50, ge=1, le=200)):
+def hot_deals(limit: int = Query(200, ge=1, le=5000)):
     """Return HOT deals (ROI > 30%) sorted by ROI descending."""
     db = _get_supabase()
     result = (
