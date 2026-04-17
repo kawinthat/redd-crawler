@@ -117,6 +117,16 @@
   .hot-badge{margin-top:10px;background:rgba(39,201,122,0.08);border:1px solid rgba(39,201,122,0.2);border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center}
   #deals-empty{color:var(--gray);text-align:center;padding:60px 0;font-size:13px}
 
+  /* FILTER BAR */
+  #filter-bar{margin-bottom:16px}
+  .filter-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  #search-box{background:#060f15;border:1px solid var(--border);border-radius:8px;padding:7px 14px;color:var(--white);font-size:12px;font-family:inherit;flex:1;min-width:220px;max-width:420px;outline:none;transition:border 0.2s}
+  #search-box:focus{border-color:#C9A84C66;box-shadow:0 0 0 2px #C9A84C1a}
+  #search-box::placeholder{color:var(--gray)}
+  #province-select{background:#060f15;border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white);font-size:11px;font-family:inherit;outline:none;cursor:pointer;transition:border 0.2s}
+  #province-select:focus{border-color:#C9A84C66}
+  .filter-count{color:var(--gold);font-size:10px;font-weight:700;padding:3px 8px;background:#C9A84C15;border-radius:4px;white-space:nowrap}
+
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
   .scanning-pulse{animation:pulse 1s infinite}
 </style>
@@ -211,6 +221,37 @@ const PIPE_STEPS = [
 
 let logs = [], deals = [], hotDeals = [], dealFilter = "all";
 let scanPhase = 0, pollInterval = null, isRunning = false;
+let searchQuery = "", filterProvince = "", filterType = "";
+
+// ── FILTER HELPERS ────────────────────────────────────
+function getProvince(loc) {
+  if (!loc) return "";
+  // "สงขลา อำเภอสะเดา" → "สงขลา" | "กรุงเทพมหานคร เขตสายไหม" → "กรุงเทพมหานคร"
+  return loc.split(/\s+(?:อำเภอ|เขต)/)[0].trim();
+}
+function getDistrict(loc) {
+  if (!loc) return "";
+  const m = loc.match(/(?:อำเภอ|เขต)\s*([^\s,]+(?:\s[^\s,]+)?)/);
+  return m ? m[1].trim() : "";
+}
+function applyFilters(list) {
+  return list.filter(d => {
+    if (dealFilter === "hot" && (d.roi_percent || 0) < 30) return false;
+    if (filterType && d.property_type !== filterType) return false;
+    if (filterProvince && getProvince(d.location || "") !== filterProvince) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const hay = [d.project_name, d.location, d.property_type, d.source_domain, d.address]
+        .filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function resetFilters() {
+  searchQuery = ""; filterProvince = ""; filterType = ""; dealFilter = "all";
+  renderDeals();
+}
 
 // ── INIT ──────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
@@ -560,24 +601,76 @@ function renderSources() {
 function renderDeals() {
   const pane = document.getElementById("pane-deals");
   if (!pane) return;
-  const filtered = dealFilter === "hot" ? deals.filter(d => d.roi_percent >= 30) : deals;
+
+  // Dynamic province list from current data
+  const provinces = [...new Set(
+    deals.map(d => getProvince(d.location || "")).filter(Boolean)
+  )].sort((a,b) => a.localeCompare(b, "th"));
+
+  const TYPES = [
+    { val:"",            label:"ทั้งหมด" },
+    { val:"house",       label:"🏠 บ้านเดี่ยว" },
+    { val:"townhouse",   label:"🏘 ทาวน์เฮ้าส์" },
+    { val:"condo",       label:"🏢 คอนโด" },
+    { val:"land",        label:"🌾 ที่ดิน" },
+    { val:"commercial",  label:"🏬 อาคารพาณิชย์" },
+    { val:"other",       label:"📦 อื่นๆ" },
+  ];
+
+  // Count per type
+  const typeCounts = {};
+  deals.forEach(d => { typeCounts[d.property_type || "other"] = (typeCounts[d.property_type||"other"]||0)+1; });
+
+  // Apply all filters
+  const filtered = applyFilters(deals);
   const sorted = [...filtered].sort((a,b) => (b.roi_percent||0) - (a.roi_percent||0));
+  const hasActiveFilter = searchQuery || filterProvince || filterType || dealFilter === "hot";
 
   pane.innerHTML = `
-    <div id="deal-filters">
-      <span class="filter-label">แสดง:</span>
-      <button class="filter-btn${dealFilter==="all"?" active":""}" onclick="setFilter('all')">ทั้งหมด (${deals.length})</button>
-      <button class="filter-btn${dealFilter==="hot"?" active":""}" onclick="setFilter('hot')">🔥 HOT เท่านั้น (${hotDeals.length})</button>
+    <div id="filter-bar">
+      <div class="filter-row">
+        <input type="text" id="search-box"
+          placeholder="🔍 ค้นหาโครงการ, ทำเล, ประเภท..."
+          value="${searchQuery.replace(/"/g,'&quot;')}"
+          oninput="searchQuery=this.value;renderDeals()" />
+        <select id="province-select" onchange="filterProvince=this.value;renderDeals()">
+          <option value="">🗺 ทุกจังหวัด</option>
+          ${provinces.map(p =>
+            `<option value="${p}" ${filterProvince===p?"selected":""}>${p}</option>`
+          ).join("")}
+        </select>
+        ${hasActiveFilter ? `<button class="filter-btn" onclick="resetFilters()" style="color:var(--red);border-color:#e0555533">✕ ล้างตัวกรอง</button>` : ""}
+        <span class="filter-count">${filtered.length} / ${deals.length} ทรัพย์</span>
+      </div>
+      <div class="filter-row">
+        ${TYPES.map(t => {
+          const cnt = t.val === "" ? deals.length : (typeCounts[t.val]||0);
+          if (t.val !== "" && cnt === 0) return "";
+          return `<button class="filter-btn${filterType===t.val?" active":""}"
+            onclick="filterType='${t.val}';renderDeals()"
+            title="${cnt} รายการ">
+            ${t.label}${t.val !== "" ? ` <span style="opacity:0.6;font-size:10px">(${cnt})</span>` : ""}
+          </button>`;
+        }).join("")}
+        <button class="filter-btn${dealFilter==="hot"?" active":""}"
+          onclick="dealFilter=dealFilter==='hot'?'all':'hot';renderDeals()">
+          🔥 HOT (${hotDeals.length})
+        </button>
+      </div>
     </div>
     <div id="deals-grid">
       ${sorted.length === 0 ?
-        `<div id="deals-empty" style="grid-column:1/-1">${deals.length === 0 ? "ยังไม่มีดีล — กด ▶ เริ่มสแกน เพื่อดึงข้อมูล" : "ไม่พบ HOT deal ที่ ROI &gt; 30%"}</div>`
+        `<div id="deals-empty" style="grid-column:1/-1">
+          ${deals.length === 0
+            ? "ยังไม่มีดีล — กด ▶ เริ่มสแกน เพื่อดึงข้อมูล"
+            : `ไม่พบทรัพย์ที่ตรงกับตัวกรอง — <a href="#" onclick="resetFilters();return false" style="color:var(--gold)">ล้างตัวกรอง</a>`}
+        </div>`
         : sorted.map(d => dealCard(d)).join("")
       }
     </div>`;
 }
 
-const TYPE_TH = { land:"ที่ดิน", condo:"คอนโด", house:"บ้านเดี่ยว", townhouse:"ทาวน์เฮาส์", other:"ทรัพย์" };
+const TYPE_TH = { land:"ที่ดิน", condo:"คอนโด", house:"บ้านเดี่ยว", townhouse:"ทาวน์เฮาส์", commercial:"อาคารพาณิชย์", other:"ทรัพย์" };
 
 function dealCard(d) {
   const rawRoi = d.roi_percent || 0;
@@ -652,11 +745,6 @@ function dealCard(d) {
         ⚠️ ที่ดิน — ROI อาจสูงเกินจริง (ระบบคำนวณ Rai/ตร.ม. กำลังปรับปรุง)
       </div>` : ""}
     </div>`;
-}
-
-function setFilter(f) {
-  dealFilter = f;
-  renderDeals();
 }
 
 function updateDealTab() {

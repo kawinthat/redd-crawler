@@ -287,6 +287,67 @@ def hot_deals(limit: int = Query(50, ge=1, le=200)):
     return {"data": result.data, "count": len(result.data)}
 
 
+@app.post("/analyze")
+async def trigger_analysis(
+    background_tasks: BackgroundTasks,
+    limit: int = Query(50, ge=1, le=200, description="จำนวน deals สูงสุดที่ analyze ต่อ batch"),
+    hot_only: bool = Query(False, description="วิเคราะห์เฉพาะ HOT deals (ROI ≥ 30%)"),
+):
+    """
+    เรียก Perplexity Sonar วิเคราะห์ deals ที่ยังไม่ analyze (ai_analyzed_at IS NULL)
+
+    Token Efficiency:
+    - ใช้ sonar (standard) สำหรับ deals ทั่วไป
+    - ใช้ sonar-pro เฉพาะ HOT deals (ROI ≥ 30%)
+    - Skip deals ที่ analyze แล้ว อัตโนมัติ
+    """
+    perplexity_key = os.getenv("PERPLEXITY_API_KEY", "")
+    if not perplexity_key or perplexity_key.startswith("pplx-your"):
+        raise HTTPException(503, "PERPLEXITY_API_KEY ยังไม่ได้ตั้งค่า — ดู .env.example")
+
+    background_tasks.add_task(_run_analysis, limit, hot_only)
+    return {"message": "Analysis started", "limit": limit, "hot_only": hot_only}
+
+
+async def _run_analysis(limit: int, hot_only: bool):
+    """Background task: fetch pending deals → Perplexity analyze → save back."""
+    from crawler.perplexity_analyzer import PerplexityAnalyzer
+
+    db = _get_supabase()
+    analyzer = PerplexityAnalyzer()
+
+    try:
+        # ดึง deals ที่ยังไม่ analyze
+        q = db.table("deals").select(
+            "id,listing_url,source_domain,property_type,project_name,"
+            "location,price,area_sqm,land_area_sqm,roi_percent,priority,ai_analyzed_at"
+        ).is_("ai_analyzed_at", "null")
+
+        if hot_only:
+            q = q.gte("roi_percent", 30)
+
+        pending = q.order("scraped_at", desc=True).limit(limit).execute().data or []
+        logger.info(f"Analyze batch: {len(pending)} pending deals")
+
+        enriched = 0
+        for deal in pending:
+            result = await analyzer.analyze_deal(deal)
+            if result:
+                deal_id = deal["id"]
+                update_data = {k: v for k, v in result.items()
+                               if k not in ("ai_analysis",)}
+                # Save ai_analysis as JSONB
+                update_data["ai_analysis"] = result.get("ai_analysis")
+                update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+                db.table("deals").update(update_data).eq("id", deal_id).execute()
+                enriched += 1
+
+        logger.success(f"Analysis done: {enriched}/{len(pending)} deals enriched")
+
+    except Exception as e:
+        logger.error(f"Analysis batch failed: {e}")
+
+
 @app.get("/deals/stats")
 def deal_stats():
     """Summary stats: total deals, HOT count, avg ROI, by source."""

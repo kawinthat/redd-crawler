@@ -1,121 +1,217 @@
 """
-GH Bank NPA Harvester — REST API (ghbhomecenter.com)
-API: https://www.ghbhomecenter.com/api/property/search
+GHB Home Center Harvester — HTML scraper (ghbhomecenter.com)
+ไม่มี public REST API → scrape HTML ด้วย httpx + regex
+
+Listing page: https://www.ghbhomecenter.com/property-for-sale?page=X
+  → ดึง property links รูปแบบ /property-XXXXXX (40 รายการ/หน้า)
+
+Detail page:  https://www.ghbhomecenter.com/property-XXXXXX
+  → ดึง OG title (type + area + project), OG description (location),
+    price จาก body HTML (rendered server-side, ไม่ต้อง Playwright)
 """
 import asyncio
-import httpx
-import logging
+import re
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+import httpx
+from loguru import logger
 
-BASE_URL   = "https://www.ghbhomecenter.com"
-SEARCH_API = f"{BASE_URL}/api/property/search"
-DETAIL_URL = f"{BASE_URL}/property/detail/{{prop_id}}"
-
-# Property type mapping
-TYPE_MAP = {
-    "1": "house", "2": "condo", "3": "townhouse",
-    "4": "land",  "5": "other"
-}
-
-COND_MAP = {
-    "1": "good", "2": "fair", "3": "poor", "good": "good",
-    "fair": "fair", "poor": "poor", "ดี": "good", "พอใช้": "fair", "ต้องซ่อม": "poor"
-}
+BASE_URL = "https://www.ghbhomecenter.com"
+LIST_URL = BASE_URL + "/property-for-sale"
 
 HEADERS = {
-    "Accept": "application/json",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
     "Accept-Language": "th-TH,th;q=0.9,en;q=0.8",
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
     "Referer": BASE_URL,
 }
+
+TYPE_MAP = {
+    "คอนโด": "condo",   "ห้องชุด": "condo",   "คอนโดมิเนียม": "condo",
+    "บ้านเดี่ยว": "house", "บ้าน": "house",
+    "ทาวน์เฮ้าส์": "townhouse", "ทาวน์โฮม": "townhouse", "ทาวน์เฮาส์": "townhouse",
+    "ที่ดิน": "land",
+    "อาคาร": "commercial", "อาคารพาณิชย์": "commercial", "ตึกแถว": "commercial",
+    "สิ่งปลูกสร้าง": "other",
+    "condo": "condo", "house": "house", "townhouse": "townhouse",
+    "land": "land",   "commercial": "commercial", "other": "other",
+}
+
+
+def _parse_type(text: str) -> str:
+    for kw, ptype in TYPE_MAP.items():
+        if kw.lower() in text.lower():
+            return ptype
+    return "other"
+
+
+def _parse_area_sqm(text: str) -> Optional[float]:
+    """Extract area from Thai text: 'ตร.ว.' × 4 → sqm  |  'ตร.ม.' direct."""
+    m = re.search(r"([\d,]+\.?\d*)\s*ตร\.?ว", text)
+    if m:
+        try:
+            return round(float(m.group(1).replace(",", "")) * 4, 2)
+        except ValueError:
+            pass
+    m = re.search(r"([\d,]+\.?\d*)\s*ตร\.?ม", text)
+    if m:
+        try:
+            return round(float(m.group(1).replace(",", "")), 2)
+        except ValueError:
+            pass
+    return None
+
+
+def _parse_price(html: str) -> Optional[int]:
+    """Extract sale price from GHB detail page body (100,000 – 500,000,000 ฿)."""
+    patterns = [
+        r'class="[^"]*price[^"]*"[^>]*>\s*฿?\s*([\d,]+)',
+        r'(?:ราคา|Price)[^฿\d]{0,30}฿?\s*([\d,]{6,})',
+        r'฿\s*([\d,]{6,})',
+        r'([\d,]{7,})\s*(?:บาท|฿)',
+    ]
+    for pat in patterns:
+        for m in re.finditer(pat, html, re.IGNORECASE):
+            try:
+                price = int(m.group(1).replace(",", ""))
+                if 100_000 < price < 500_000_000:
+                    return price
+            except ValueError:
+                pass
+    return None
+
+
+def _parse_location(og_desc: str) -> str:
+    """'... เมืองปทุมธานี ปทุมธานี จากธนาคาร...' → 'ปทุมธานี เมืองปทุมธานี'"""
+    m = re.search(
+        r"(?:อำเภอ|เขต)\s*([ก-๙a-zA-Z ]+?)\s+(?:จังหวัด\s*)?([ก-๙a-zA-Z ]+?)(?:\s*จาก|\s*$)",
+        og_desc,
+    )
+    if m:
+        return f"{m.group(2).strip()} {m.group(1).strip()}"
+    m2 = re.search(r"(?:จังหวัด)\s*([ก-๙a-zA-Z]+)", og_desc)
+    if m2:
+        return m2.group(1).strip()
+    return ""
 
 
 class GHBankHarvester:
     """
-    Harvest NPA listings from GH Bank via REST API.
-    No Playwright needed — pure httpx.
+    Harvest NPA listings from GH Bank Home Center via HTML scraping.
+    No Playwright needed — httpx only.
+
+    Flow:
+      1. Paginate /property-for-sale?page=X → collect /property-XXXXXX URLs
+      2. Scrape each detail page concurrently → extract price/type/area/location
     """
 
-    def __init__(self, rows_per_page: int = 50, delay: float = 1.0):
-        self.rows_per_page = rows_per_page
-        self.delay = delay
+    def __init__(self, per_page: int = 40, delay: float = 1.2, concurrency: int = 5):
+        self.per_page    = per_page
+        self.delay       = delay
+        self.concurrency = concurrency
 
     async def fetch_all(
         self,
-        max_pages: int = 30,
-        max_listings: int = 1000,
+        max_pages: int = 25,
+        max_listings: int = 500,
     ) -> list[dict]:
-        """
-        Returns list of normalized dicts:
-        {source_url, price, area_sqm, property_type, condition, location, title, source_domain}
-        """
-        results: list[dict] = []
-        async with httpx.AsyncClient(headers=HEADERS, timeout=20, follow_redirects=True) as client:
+        listing_urls: list[str] = []
+
+        async with httpx.AsyncClient(headers=HEADERS, timeout=25, follow_redirects=True) as client:
+            # ── Phase 1: collect property URLs ──────────────────────
             for page in range(1, max_pages + 1):
-                if len(results) >= max_listings:
+                if len(listing_urls) >= max_listings:
                     break
                 try:
-                    payload = {
-                        "page": page,
-                        "limit": self.rows_per_page,
-                        "propertyType": "",
-                        "province": "",
-                        "minPrice": 0,
-                        "maxPrice": 0,
-                    }
-                    resp = await client.post(SEARCH_API, json=payload)
+                    resp = await client.get(LIST_URL, params={"page": page})
                     if resp.status_code != 200:
-                        logger.warning(f"GHBank page {page}: HTTP {resp.status_code}")
+                        logger.warning(f"GHB listing page {page}: HTTP {resp.status_code}")
                         break
-                    data = resp.json()
-                    items = data.get("data") or data.get("items") or data.get("result") or []
-                    if not items:
-                        break
-                    for item in items:
-                        normalized = self._normalize(item)
-                        if normalized:
-                            results.append(normalized)
-                    total = data.get("total") or data.get("totalCount") or 0
-                    logger.info(f"GHBank page {page}: +{len(items)} (total {len(results)}/{total})")
-                    if len(items) < self.rows_per_page:
+
+                    found = re.findall(
+                        r'href="(https://www\.ghbhomecenter\.com/property-(\d+))"',
+                        resp.text,
+                    )
+                    seen = set(listing_urls)
+                    new_urls = [url for url, _ in found if url not in seen]
+                    listing_urls.extend(new_urls)
+                    logger.info(f"GHB page {page}: +{len(new_urls)} URLs (total {len(listing_urls)})")
+
+                    if len(new_urls) < 5:
                         break
                     await asyncio.sleep(self.delay)
-                except Exception as e:
-                    logger.error(f"GHBank page {page} error: {e}")
-                    break
-        return results[:max_listings]
 
-    def _normalize(self, item: dict) -> Optional[dict]:
-        try:
-            prop_id = item.get("propertyId") or item.get("id") or item.get("propId") or ""
-            if not prop_id:
-                return None
-            price = float(item.get("price") or item.get("salePrice") or item.get("askingPrice") or 0)
-            area  = float(item.get("areaSqm") or item.get("area") or item.get("usableArea") or 0)
-            ptype_raw = str(item.get("propertyType") or item.get("typeCode") or "5")
-            ptype = TYPE_MAP.get(ptype_raw, "other")
-            cond_raw = str(item.get("condition") or item.get("conditionCode") or item.get("assetCondition") or "fair").lower()
-            cond = COND_MAP.get(cond_raw, "fair")
-            province = item.get("province") or item.get("provinceName") or ""
-            district = item.get("district") or item.get("districtName") or ""
-            location = ", ".join(filter(None, [district, province]))
-            title = item.get("title") or item.get("assetName") or item.get("name") or ""
-            return {
-                "source_url":    DETAIL_URL.format(prop_id=prop_id),
-                "price":         price,
-                "area_sqm":      area,
-                "property_type": ptype,
-                "condition":     cond,
-                "location":      location,
-                "title":         title,
-                "source_domain": "ghbhomecenter.com",
-            }
-        except Exception as e:
-            logger.debug(f"GHBank normalize error: {e}")
+                except Exception as e:
+                    logger.error(f"GHB listing page {page}: {e}")
+                    break
+
+            listing_urls = listing_urls[:max_listings]
+            if not listing_urls:
+                logger.warning("GHB: ไม่พบ property URLs บน listing page")
+                return []
+
+            # ── Phase 2: scrape detail pages ────────────────────────
+            sem = asyncio.Semaphore(self.concurrency)
+            results: list[dict] = []
+
+            async def _scrape_one(url: str) -> Optional[dict]:
+                async with sem:
+                    try:
+                        r = await client.get(url)
+                        if r.status_code == 200:
+                            deal = self._parse_detail(r.text, url)
+                            await asyncio.sleep(0.3)
+                            return deal
+                        return None
+                    except Exception as e:
+                        logger.debug(f"GHB detail {url[:60]}: {e}")
+                        return None
+
+            raw = await asyncio.gather(*[_scrape_one(u) for u in listing_urls])
+            results = [r for r in raw if r is not None]
+
+        logger.info(f"GHB: scrape สำเร็จ {len(results)}/{len(listing_urls)} รายการ")
+        return results
+
+    # ────────────────────────────────────────────────────
+    def _parse_detail(self, html: str, url: str) -> Optional[dict]:
+        """OG tags + price from body → normalized deal dict."""
+        og_title = og_desc = ""
+        m = re.search(r'<meta property="og:title"\s+content="([^"]+)"', html)
+        if m: og_title = m.group(1)
+        m = re.search(r'<meta property="og:description"\s+content="([^"]+)"', html)
+        if m: og_desc = m.group(1)
+
+        if not og_title:
             return None
 
-    async def fetch_urls_only(self, max_pages: int = 30) -> list[str]:
-        listings = await self.fetch_all(max_pages=max_pages)
-        return [x["source_url"] for x in listings]
+        ptype    = _parse_type(og_title)
+        area_sqm = _parse_area_sqm(og_title) or _parse_area_sqm(og_desc)
+        location = _parse_location(og_desc)
+        price    = _parse_price(html)
+
+        # Clean title: remove type keyword prefix
+        title = re.sub(
+            r'^(?:ขาย(?:ด่วน)?|บ้าน|คอนโด|ทาวน์เฮ้าส์|ที่ดิน|อาคาร|สิ่งปลูกสร้าง)\s*',
+            "", og_title
+        ).strip()
+
+        if not price:
+            return None  # ไม่มีราคา → skip (deals schema requires price > 0)
+
+        result: dict = {
+            "source_url":    url,
+            "source_domain": "ghbhomecenter.com",
+            "property_type": ptype,
+            "location":      location,
+            "title":         title[:200],
+            "price":         price,
+            "condition":     "fair",
+            "is_benchmark":  False,
+        }
+        if area_sqm and area_sqm > 0:
+            result["area_sqm"] = area_sqm
+
+        return result
