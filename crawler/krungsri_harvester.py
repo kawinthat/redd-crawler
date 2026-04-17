@@ -136,10 +136,18 @@ def _parse_page(html_raw: str) -> list[dict]:
         area_sqm = _parse_area_wa(size_m.group(1).strip()) if size_m else None
 
         # Price: prefer promoPrice (discounted), fallback to originalPrice
-        promo_m = re.search(rf'_{code}_promoPrice[^>]*>([\d,\s]+(?:บาท|฿))', block)
-        orig_m = re.search(rf'_{code}_originalPrice[^>]*>([\d,\s]+(?:บาท|฿))', block)
-        price = _parse_price(promo_m.group(1) if promo_m else "") or \
-                _parse_price(orig_m.group(1) if orig_m else "")
+        # Note: Krungsri HTML-encodes Thai chars (บาท = &#xE1A;&#xE32;&#xE17;)
+        # so we match the number directly without requiring ฿/บาท suffix
+        promo_m = re.search(rf'_{code}_promoPrice[^>]*>\s*([\d,]+)', block)
+        orig_m  = re.search(rf'_{code}_originalPrice[^>]*>\s*([\d,]+)', block)
+        def _safe_int(m) -> Optional[int]:
+            if not m: return None
+            try:
+                v = int(m.group(1).replace(",", ""))
+                return v if 100_000 < v < 500_000_000 else None
+            except (ValueError, AttributeError):
+                return None
+        price = _safe_int(promo_m) or _safe_int(orig_m)
 
         if not price or price <= 0:
             continue
