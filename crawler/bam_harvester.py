@@ -106,6 +106,19 @@ def _record_to_deal(item: dict) -> Optional[dict]:
     else:
         condition = "fair"
 
+    # Image URLs from albumProperty (prefer small thumbnails for speed)
+    images = []
+    for img in (item.get("albumProperty") or []):
+        u = img.get("url") or ""
+        if u and u.startswith("http") and img.get("display", True):
+            images.append(u)
+    # Fallback to map image
+    if not images:
+        for img in (item.get("map", {}).get("imageUrl") or []):
+            u = img.get("url") or ""
+            if u and u.startswith("http"):
+                images.append(u)
+
     deal: dict = {
         "listing_url":   listing_url,
         "source_domain": "bam.co.th",
@@ -122,6 +135,7 @@ def _record_to_deal(item: dict) -> Optional[dict]:
             "bedroom":    item.get("bedroom"),
             "bathroom":   item.get("bathroom"),
             "is_hot_deal": item.get("isHotDeal"),
+            "images":     images[:8],    # max 8 photos per deal
         },
     }
     if area_sqm and area_sqm > 0:

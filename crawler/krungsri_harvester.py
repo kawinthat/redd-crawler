@@ -144,6 +144,12 @@ def _parse_page(html_raw: str) -> list[dict]:
         if not price or price <= 0:
             continue
 
+        # Cover image from <img> src inside the card
+        img_m = re.search(r'result-card-image"[^>]*src="(/images/[^"]+)"', block)
+        images = []
+        if img_m:
+            images = [f"{BASE_URL}{img_m.group(1)}"]
+
         deal: dict = {
             "listing_url":   f"{DETAIL_BASE}{code}",
             "source_domain": "krungsriproperty.com",
@@ -155,10 +161,11 @@ def _parse_page(html_raw: str) -> list[dict]:
             "condition":     "fair",
             "is_benchmark":  False,
             "raw_data": {
-                "code": code,
-                "type_th": type_th,
-                "bedroom": bedroom,
+                "code":     code,
+                "type_th":  type_th,
+                "bedroom":  bedroom,
                 "bathroom": bathroom,
+                "images":   images,
             },
         }
         if area_sqm and area_sqm > 0:
