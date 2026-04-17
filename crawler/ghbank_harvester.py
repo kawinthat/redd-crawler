@@ -134,8 +134,8 @@ class GHBankHarvester:
 
     async def fetch_all(
         self,
-        max_pages: int = 25,
-        max_listings: int = 500,
+        max_pages: int = 999999,
+        max_listings: int = 999999,
     ) -> list[dict]:
         listing_urls: list[str] = []
 

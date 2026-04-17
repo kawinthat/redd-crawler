@@ -95,8 +95,8 @@ class KrungthaiHarvester:
 
     async def fetch_all(
         self,
-        max_pages: int = 140,
-        max_listings: int = 2000,
+        max_pages: int = 999999,
+        max_listings: int = 999999,
         endpoint: str = "/homePage",
     ) -> list[dict]:
         """
@@ -142,7 +142,7 @@ class KrungthaiHarvester:
         logger.success(f"KrungthaiHarvester done: {len(results)} listings")
         return results[:max_listings]
 
-    async def fetch_urls_only(self, max_pages: int = 140) -> list[str]:
+    async def fetch_urls_only(self, max_pages: int = 999999) -> list[str]:
         """คืนแค่ list[str] ของ detail URLs"""
         listings = await self.fetch_all(max_pages=max_pages)
         return [x["source_url"] for x in listings]

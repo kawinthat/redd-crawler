@@ -165,8 +165,8 @@ class SCBHarvester:
 
     async def fetch_all(
         self,
-        max_pages: int = 60,
-        max_listings: int = 5000,
+        max_pages: int = 999999,
+        max_listings: int = 999999,
     ) -> list[dict]:
         results: list[dict] = []
         total_remote = 0

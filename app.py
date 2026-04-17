@@ -83,38 +83,16 @@ MARKET_SITES = [
     "https://www.baania.com",
 ]
 
-# ─────────────────────────────────────────────
-# PER-SOURCE CAPACITY (full-web scraping)
-# ─────────────────────────────────────────────
-SOURCE_LIMITS: dict[str, dict] = {
-    # domain_keyword → max_pages, max_listings (based on known total inventory)
-    "npa.krungthai.com":    {"max_pages": 140, "max_listings": 7000},   # ~5-7k assets
-    "ghbhomecenter.com":    {"max_pages": 100, "max_listings": 4000},   # ~3k assets
-    "bam.co.th":            {"max_pages": 500, "max_listings": 16000},  # ~16k assets
-    "krungsriproperty.com": {"max_pages": 200, "max_listings": 2000},   # ~1.7k assets
-    "npa-assets.gsb.or.th": {"max_pages": 100, "max_listings": 4000},  # ~3k+ assets
-    "asset.home.scb":       {"max_pages":  60, "max_listings": 5000},   # ~4k assets
-    "led.go.th":            {"max_pages":  30, "max_listings": 1000},   # WAF limited
-}
-
-def _get_source_limits(site_url: str) -> dict:
-    """หา per-source limits จาก SOURCE_LIMITS โดย match domain keyword."""
-    from urllib.parse import urlparse
-    domain = urlparse(site_url).netloc.replace("www.", "")
-    for key, limits in SOURCE_LIMITS.items():
-        if key in domain or key in site_url:
-            return limits
-    return {"max_pages": int(os.getenv("MAX_PAGES", "100")),
-            "max_listings": int(os.getenv("MAX_LISTINGS", "3000"))}
+UNLIMITED = 999_999  # ไม่จำกัด — หยุดเมื่อเว็บไม่มีหน้าต่อไปเอง
 
 
 class ScanRequest(BaseModel):
-    url: str              = os.getenv("TARGET_URL", "")  # empty = scan all NPA_SITES
-    urls: list[str]       = []                           # explicit list override
-    max_pages: int        = int(os.getenv("MAX_PAGES", "500"))     # used only if no per-source limit
-    max_listings: int     = int(os.getenv("MAX_LISTINGS", "16000"))  # used only if no per-source limit
-    concurrency: int      = int(os.getenv("CONCURRENCY", "3"))
-    dry_run: bool         = False
+    url: str          = os.getenv("TARGET_URL", "")
+    urls: list[str]   = []
+    max_pages: int    = UNLIMITED   # ไม่จำกัดหน้า
+    max_listings: int = UNLIMITED   # ไม่จำกัดจำนวน listing
+    concurrency: int  = int(os.getenv("CONCURRENCY", "3"))
+    dry_run: bool     = False
 
 
 # ─────────────────────────────────────────────
@@ -149,26 +127,13 @@ async def _run_scan(req: ScanRequest):
         combined_stats = {"pages": 0, "scraped": 0, "saved": 0, "hot": 0, "sites": []}
 
         for site_url in target_urls:
-            logger.info(f"Scanning: {site_url}")
+            logger.info(f"Scanning (unlimited): {site_url}")
             _scan_state["stats"]["current_site"] = site_url
-
-            # ── ใช้ per-source limits (full capacity) ──
-            limits = _get_source_limits(site_url)
-            site_max_pages    = limits["max_pages"]
-            site_max_listings = limits["max_listings"]
-
-            # Allow manual override via ScanRequest (ถ้าต่ำกว่า per-source ให้ใช้ manual)
-            if req.max_listings < 16000:  # user overrode to lower value
-                site_max_listings = min(site_max_listings, req.max_listings)
-            if req.max_pages < 500:
-                site_max_pages = min(site_max_pages, req.max_pages)
-
-            logger.info(f"  → max_pages={site_max_pages}, max_listings={site_max_listings}")
 
             config = CrawlConfig(
                 base_url     = site_url,
-                max_pages    = site_max_pages,
-                max_listings = site_max_listings,
+                max_pages    = req.max_pages,    # UNLIMITED by default
+                max_listings = req.max_listings, # UNLIMITED by default
                 concurrency  = req.concurrency,
                 delay_min    = 0.5,
                 delay_max    = 1.5,
