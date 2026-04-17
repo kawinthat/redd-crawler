@@ -301,9 +301,9 @@ async def trigger_analysis(
     - ใช้ sonar-pro เฉพาะ HOT deals (ROI ≥ 30%)
     - Skip deals ที่ analyze แล้ว อัตโนมัติ
     """
-    perplexity_key = os.getenv("PERPLEXITY_API_KEY", "")
-    if not perplexity_key or perplexity_key.startswith("pplx-your"):
-        raise HTTPException(503, "PERPLEXITY_API_KEY ยังไม่ได้ตั้งค่า — ดู .env.example")
+    perplexity_key = os.getenv("OPENROUTER_API_KEY", "")
+    if not perplexity_key or not perplexity_key.startswith("sk-or-"):
+        raise HTTPException(503, "OPENROUTER_API_KEY ยังไม่ได้ตั้งค่า หรือไม่ถูกต้อง")
 
     background_tasks.add_task(_run_analysis, limit, hot_only)
     return {"message": "Analysis started", "limit": limit, "hot_only": hot_only}

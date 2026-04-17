@@ -1,19 +1,19 @@
 """
 perplexity_analyzer.py — RE:DD AI Market Intelligence Engine
-ใช้ Perplexity Sonar วิเคราะห์แต่ละทรัพย์:
+ใช้ Perplexity Sonar ผ่าน OpenRouter API วิเคราะห์แต่ละทรัพย์:
   - ราคาตลาดก่อน/หลังรีโนเวท
   - ค่าประมาณรีโนเวท
   - กลุ่มลูกค้าเป้าหมาย (อาชีพ, รายได้, ทำเล)
   - ROI คาดการณ์
 
-Token Efficiency Strategy:
-  1. ขอ JSON output เท่านั้น (ไม่มีข้อความอื่น) — ประหยัด ~60% tokens
-  2. ใช้ sonar (ไม่ใช่ sonar-pro) สำหรับ batch — ถูก 5× กว่า
-  3. Skip deals ที่ analyze แล้ว (ดู ai_analyzed_at ใน DB)
-  4. Queue เฉพาะ deals ที่มี project_name หรือ location (มีข้อมูลพอวิเคราะห์)
-  5. Rate limit: 10 req/min (Perplexity free tier)
+ใช้ OpenRouter (OPENROUTER_API_KEY) เพื่อเข้าถึง Perplexity Sonar
+ที่มี real-time web search — ไม่ต้องสมัคร Perplexity account แยก
 
-ใช้ sonar-pro เฉพาะ HOT deals (ROI > 30%) ที่ต้องการข้อมูลแม่นยำ
+Token Efficiency Strategy:
+  1. ขอ JSON output เท่านั้น — ประหยัด ~60% tokens
+  2. perplexity/sonar สำหรับ batch (ถูก), sonar-pro เฉพาะ HOT deals
+  3. Skip deals ที่ analyze แล้ว
+  4. Rate limit: 10 req/min
 """
 from __future__ import annotations
 
@@ -26,11 +26,12 @@ from typing import Any, Optional
 import httpx
 from loguru import logger
 
-PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
+# ── OpenRouter endpoint (รองรับ Perplexity Sonar + Claude + Llama ฯลฯ) ──────
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# ── Models ──────────────────────────────────────────────
-MODEL_STANDARD = "sonar"            # ถูก — ใช้สำหรับ batch ทั่วไป
-MODEL_PRO       = "sonar-pro"       # แม่น — ใช้สำหรับ HOT deals เท่านั้น
+# ── Models via OpenRouter ────────────────────────────────
+MODEL_STANDARD = "perplexity/sonar"      # มี web search, ราคาถูก
+MODEL_PRO       = "perplexity/sonar-pro" # แม่นกว่า, เฉพาะ HOT deals
 
 # ── Prompt Template (token-efficient JSON-only) ──────────
 PROMPT_TEMPLATE = """\
@@ -102,14 +103,15 @@ class PerplexityAnalyzer:
         rate_limit_per_min: int = 10,
         use_pro_for_hot: bool = True,
     ):
-        self.api_key = api_key or os.getenv("PERPLEXITY_API_KEY", "")
+        # ใช้ OPENROUTER_API_KEY (มีอยู่แล้ว) — ไม่ต้องสมัคร Perplexity แยก
+        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY", "")
         self._min_interval = 60.0 / rate_limit_per_min
         self._last_call_ts = 0.0
         self.use_pro_for_hot = use_pro_for_hot
 
     @property
     def enabled(self) -> bool:
-        return bool(self.api_key) and not self.api_key.startswith("pplx-your")
+        return bool(self.api_key) and self.api_key.startswith("sk-or-")
 
     async def analyze_deal(self, deal: dict) -> Optional[dict]:
         """
@@ -147,10 +149,12 @@ class PerplexityAnalyzer:
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
-                    PERPLEXITY_API_URL,
+                    OPENROUTER_API_URL,
                     headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type":  "application/json",
+                        "Authorization":  f"Bearer {self.api_key}",
+                        "Content-Type":   "application/json",
+                        "HTTP-Referer":   "https://redd-crawler.onrender.com",
+                        "X-Title":        "RE:DD Real Estate Analyzer",
                     },
                     json={
                         "model":    model,
@@ -159,9 +163,8 @@ class PerplexityAnalyzer:
                              "You are a Thai real estate expert. Respond with valid JSON only, no other text."},
                             {"role": "user", "content": prompt},
                         ],
-                        "max_tokens":     400,
-                        "temperature":    0.2,
-                        "return_citations": False,
+                        "max_tokens": 450,
+                        "temperature": 0.2,
                     },
                 )
                 resp.raise_for_status()
