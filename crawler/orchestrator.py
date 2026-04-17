@@ -119,6 +119,8 @@ class AutonomousCrawler:
                         ok = await self.db.upsert_deal(merged)
                         if ok:
                             self._stats["saved"] += 1
+                        else:
+                            self._stats["errors"] += 1  # count failed upserts
                     else:
                         self._stats["saved"] += 1
 

@@ -168,6 +168,47 @@ def health():
     return {"status": "ok", "service": "redd-crawler", "time": datetime.now(timezone.utc).isoformat()}
 
 
+@app.get("/test_db")
+async def test_db():
+    """ทดสอบ Supabase write โดยตรง — ใช้สำหรับ debug เท่านั้น"""
+    import traceback
+    result = {"supabase_url_set": bool(os.getenv("SUPABASE_URL")),
+              "supabase_key_set": bool(os.getenv("SUPABASE_KEY"))}
+    try:
+        db = _get_supabase()
+        # ทดสอบ read
+        read_r = db.table("deals").select("id").limit(1).execute()
+        result["read_ok"] = True
+        result["existing_rows"] = len(read_r.data) if read_r.data else 0
+
+        # ทดสอบ write
+        test_deal = {
+            "listing_url": "__test_deal_delete_me__",
+            "source_domain": "test",
+            "source_type": "NPA",
+            "property_type": "condo",
+            "location": "กรุงเทพ",
+            "price": 1000000.0,
+            "area_sqm": 30.0,
+            "condition": "good",
+            "roi_valid": False,
+            "scraped_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        write_r = db.table("deals").upsert(test_deal, on_conflict="listing_url").execute()
+        result["write_ok"] = True
+        result["write_data"] = str(write_r.data)[:200] if write_r.data else "no data returned"
+
+        # ลบ test record
+        db.table("deals").delete().eq("listing_url", "__test_deal_delete_me__").execute()
+        result["cleanup_ok"] = True
+
+    except Exception as e:
+        result["error"] = str(e)
+        result["traceback"] = traceback.format_exc()[-500:]
+    return result
+
+
 @app.post("/scan")
 async def trigger_scan(req: ScanRequest, background_tasks: BackgroundTasks):
     """Trigger a full crawl in the background. Returns immediately."""
