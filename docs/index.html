@@ -5,229 +5,465 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RE:DD — Autonomous Deal Scanner</title>
 <style>
-  :root {
-    --bg:#0a1a22; --panel:#0f2530; --border:#1e3d4f;
-    --petrol:#1A3C4A; --gold:#C9A84C; --goldLight:#e0c06e;
-    --white:#F8F6F2; --gray:#5a7a8a; --grayLight:#8a9ba8;
-    --green:#27c97a; --yellow:#f0b429; --red:#e05555;
-    --blue:#3b9eff; --purple:#9b6dff;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--white);font-family:'IBM Plex Sans Thai','Noto Sans Thai',system-ui,sans-serif;min-height:100vh}
-  button{cursor:pointer;font-family:inherit}
-  a{color:var(--blue);text-decoration:none}
-  a:hover{color:var(--gold)}
-  ::-webkit-scrollbar{width:5px;height:5px}
-  ::-webkit-scrollbar-track{background:#060f15}
-  ::-webkit-scrollbar-thumb{background:#1e3d4f;border-radius:3px}
+:root {
+  --bg:#070e14; --panel:#0d1c26; --panel2:#111f2c; --border:#1c3040; --border2:#243d50;
+  --petrol:#1A3C4A; --gold:#C9A84C; --goldLight:#e0c06e; --goldDim:#8a6b2a;
+  --white:#F0EDE8; --gray:#4e6a7a; --grayMid:#6b8a9b; --grayLight:#9ab0bd;
+  --green:#22d07a; --greenDim:#0d3320; --yellow:#f0b429; --red:#e05555; --redDim:#2a1010;
+  --blue:#3b9eff; --purple:#9b6dff; --amber:#f59e0b; --teal:#14b8a6;
+  --font:'IBM Plex Sans Thai','Noto Sans Thai',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--white);font-family:var(--font);min-height:100vh;font-size:14px}
+button{cursor:pointer;font-family:inherit}
+a{color:var(--blue);text-decoration:none;transition:color .15s}
+a:hover{color:var(--goldLight)}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+input,select{font-family:var(--font)}
 
-  /* HEADER */
-  #header{background:linear-gradient(135deg,#060f15,var(--petrol));border-bottom:2px solid var(--gold);padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
-  .brand-name{color:var(--gold);font-size:22px;font-weight:800}
-  .brand-sub{color:var(--grayLight);font-size:12px;margin-left:10px}
-  .brand-desc{color:var(--gray);font-size:10px;margin-top:3px}
-  #live-badge{color:var(--green);font-size:11px;font-weight:700;margin-left:8px;display:none}
-  #api-status{font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;gap:6px}
-  .dot{width:7px;height:7px;border-radius:50%;background:var(--gray)}
-  .dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
-  .dot.error{background:var(--red)}
+/* ── WAKE BANNER ── */
+#wake-banner{display:none;background:#0a1920;border-bottom:1px solid #f0b42922;padding:8px 20px;align-items:center;gap:10px;font-size:11px}
+#wake-banner .wb-dot{width:6px;height:6px;border-radius:50%;background:var(--yellow);flex-shrink:0;animation:pulse 1.2s infinite}
 
-  /* BUTTONS */
-  #btn-scan{background:linear-gradient(135deg,var(--gold),var(--goldLight));color:var(--petrol);border:none;border-radius:8px;padding:9px 22px;font-weight:800;font-size:13px}
-  #btn-scan:disabled{opacity:0.5;cursor:not-allowed}
-  #btn-stop{background:#2a1010;color:var(--red);border:1px solid #e0555544;border-radius:8px;padding:8px 16px;font-weight:700;font-size:12px;display:none}
-  #btn-dryrun{background:transparent;color:var(--grayLight);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:11px;display:none}
+/* ── HEADER ── */
+#header{background:linear-gradient(120deg,#050b10 0%,#0d1c26 60%,#101e2b 100%);border-bottom:1px solid var(--border);padding:0 20px;display:flex;justify-content:space-between;align-items:center;height:56px;position:sticky;top:0;z-index:100}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand-logo{color:var(--gold);font-size:20px;font-weight:900;letter-spacing:-0.5px}
+.brand-sep{color:var(--border2);font-weight:300}
+.brand-sub{color:var(--grayMid);font-size:12px;font-weight:400}
+#live-badge{background:var(--greenDim);border:1px solid #22d07a44;color:var(--green);font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;display:none;animation:pulse 2s infinite}
+.hdr-right{display:flex;gap:8px;align-items:center}
+#api-chip{display:flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:10px}
+.chip-dot{width:6px;height:6px;border-radius:50%;background:var(--gray);transition:all .4s}
+.chip-dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+.chip-dot.error{background:var(--red)}
+#api-label{color:var(--grayLight)}
 
-  /* STATS BAR */
-  #stats-bar{background:#060f15;border-bottom:1px solid var(--border);display:flex;gap:32px;padding:10px 28px;overflow-x:auto}
-  .stat-item{text-align:center;flex-shrink:0}
-  .stat-val{font-size:26px;font-weight:800;line-height:1}
-  .stat-lbl{color:var(--gray);font-size:10px;margin-top:4px}
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;font-family:var(--font);white-space:nowrap}
+.btn-primary{background:linear-gradient(135deg,var(--gold),var(--goldLight));color:#0d1c26}
+.btn-primary:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn-ghost{background:transparent;color:var(--grayLight);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--gold);color:var(--goldLight)}
+.btn-danger{background:var(--redDim);color:var(--red);border:1px solid #e0555533;display:none}
+.btn-danger:hover{background:#3a1515}
+.btn-teal{background:#0d2f2c;color:var(--teal);border:1px solid #14b8a633}
+.btn-teal:hover{background:#113534}
 
-  /* PIPELINE */
-  #pipeline{background:var(--panel);border-bottom:1px solid var(--border);padding:14px 28px}
-  .pipe-title{color:var(--gold);font-size:10px;font-weight:700;margin-bottom:10px;letter-spacing:1px}
-  .pipe-steps{display:flex;gap:4;position:relative}
-  .pipe-step{flex:1;display:flex;flex-direction:column;align-items:center;position:relative}
-  .pipe-step-line{position:absolute;left:50%;top:20px;width:100%;height:2px;background:var(--border);z-index:0;transition:background 0.5s}
-  .pipe-step-line.active{background:var(--gold)}
-  .pipe-step-icon{width:40px;height:40px;border-radius:50%;background:#071218;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;z-index:1;transition:all 0.4s;position:relative}
-  .pipe-step-icon.done{background:var(--gold);border-color:var(--gold);color:var(--petrol)}
-  .pipe-step-icon.active{background:var(--petrol);border-color:var(--goldLight);box-shadow:0 0 14px #C9A84C55}
-  .pipe-step-lbl{color:var(--gray);font-size:9px;margin-top:6px;text-align:center;line-height:1.4}
-  .pipe-step-lbl.done{color:var(--gold)}
-  .pipe-step-lbl.active{color:var(--white)}
+/* ── STATS RIBBON ── */
+#stats-ribbon{background:var(--panel);border-bottom:1px solid var(--border);padding:0 20px;display:flex;gap:0;overflow-x:auto}
+.stat-cell{padding:10px 20px 10px 0;display:flex;flex-direction:column;border-right:1px solid var(--border);margin-right:20px;flex-shrink:0;min-width:90px}
+.stat-cell:last-child{border-right:none}
+.stat-val{font-size:22px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat-lbl{color:var(--gray);font-size:9px;margin-top:3px;font-weight:500;letter-spacing:.4px}
+.stat-sub{font-size:9px;margin-top:2px;font-weight:500}
+.scan-meta{margin-left:auto;padding:10px 0;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:4px;flex-shrink:0}
+.scan-meta-lbl{color:var(--gray);font-size:9px}
+.scan-meta-val{color:var(--grayLight);font-size:10px}
 
-  /* TABS */
-  #tabs{display:flex;border-bottom:1px solid var(--border);background:var(--panel);padding:0 20px}
-  .tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--gray);padding:11px 18px;font-size:12px;font-weight:400;margin-bottom:-1px;transition:all 0.2s}
-  .tab.active{border-bottom-color:var(--gold);color:var(--gold);font-weight:700}
+/* ── PIPELINE ── */
+#pipeline{background:var(--panel2);border-bottom:1px solid var(--border);padding:10px 20px}
+.pipe-wrap{display:flex;align-items:center;gap:0;position:relative}
+.pipe-node{display:flex;flex-direction:column;align-items:center;flex:1;position:relative;z-index:1}
+.pipe-line{flex:1;height:2px;background:var(--border);transition:background .4s;margin:0 -2px;position:relative;top:-14px;z-index:0}
+.pipe-line.done{background:var(--gold)}
+.pipe-line.active{background:linear-gradient(90deg,var(--gold),var(--border))}
+.pipe-icon{width:36px;height:36px;border-radius:50%;background:var(--bg);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .4s}
+.pipe-icon.done{background:var(--gold);border-color:var(--gold);color:#0d1c26;font-size:12px;font-weight:800}
+.pipe-icon.active{border-color:var(--goldLight);box-shadow:0 0 16px #C9A84C44;animation:pulse 1.5s infinite}
+.pipe-lbl{font-size:8.5px;color:var(--gray);margin-top:5px;text-align:center;line-height:1.3;max-width:52px;transition:color .4s}
+.pipe-lbl.done{color:var(--gold)}
+.pipe-lbl.active{color:var(--white)}
 
-  /* CONTENT */
-  #content{padding:20px}
+/* ── TABS ── */
+#tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--border);padding:0 16px;gap:2px}
+.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--grayMid);padding:10px 16px;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;white-space:nowrap;font-family:var(--font)}
+.tab:hover{color:var(--white)}
+.tab.active{border-bottom-color:var(--gold);color:var(--gold);font-weight:700}
+.tab-badge{background:var(--greenDim);color:var(--green);border:1px solid #22d07a33;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:5px}
+.tab-badge.red{background:var(--redDim);color:var(--red);border-color:#e0555533}
 
-  /* SOURCES */
-  .type-section{margin-bottom:24px}
-  .type-header{font-size:11px;font-weight:700;margin-bottom:10px;letter-spacing:0.5px;display:flex;align-items:center;gap:8px}
-  .type-divider{flex:1;height:1px;opacity:0.2}
-  .sites-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}
-  .site-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;transition:all 0.3s}
-  .site-card.scanning{box-shadow:0 0 14px rgba(58,158,255,0.15)}
-  .site-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
-  .site-name{font-weight:700;font-size:14px;margin-bottom:4px}
-  .site-desc{color:var(--grayLight);font-size:11px;margin-bottom:12px;line-height:1.5}
-  .url-box{background:#060f15;border-radius:8px;padding:10px 12px;margin-bottom:10px}
-  .url-label{color:var(--gray);font-size:9px;font-weight:700;margin-bottom:6px;letter-spacing:0.5px}
-  .url-row{display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:10px}
-  .url-key{color:var(--gray);width:48px;flex-shrink:0}
-  .site-prog{font-size:10px;color:var(--gray)}
-  .site-prog span{color:var(--gold);font-weight:700}
+/* ── CONTENT AREA ── */
+#content{padding:16px 20px;min-height:calc(100vh - 200px)}
 
-  /* TAG */
-  .tag{border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;display:inline-block}
+/* ── SOURCE CARDS ── */
+.source-section{margin-bottom:20px}
+.section-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.section-title{font-size:11px;font-weight:700;letter-spacing:.6px}
+.section-line{flex:1;height:1px;opacity:.15}
+.src-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.src-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;transition:border-color .2s}
+.src-card:hover{border-color:var(--border2)}
+.src-card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.src-name{font-weight:700;font-size:13px;margin-bottom:3px}
+.src-desc{color:var(--grayMid);font-size:10px;line-height:1.5;margin-bottom:10px}
+.src-url-row{background:#040a0f;border-radius:6px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center}
+.src-url{font-size:10px;color:var(--blue)}
+.src-url:hover{color:var(--goldLight)}
+.src-stat{display:flex;gap:12px;margin-top:10px}
+.src-stat-item{text-align:center}
+.src-stat-val{font-weight:700;font-size:14px}
+.src-stat-lbl{color:var(--gray);font-size:9px;margin-top:1px}
 
-  /* LOG */
-  #log-container{background:var(--panel);border-radius:10px;border:1px solid var(--border);overflow:hidden}
-  #log-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
-  #log-dot{width:7px;height:7px;border-radius:50%;background:var(--gray)}
-  #log-title{color:var(--gold);font-size:12px;font-weight:700}
-  #log-count{color:var(--gray);font-size:11px;margin-left:auto}
-  #log-body{height:440px;overflow-y:auto;padding:14px;font-family:'JetBrains Mono','Courier New',monospace;font-size:11px;line-height:1.7}
-  .log-line{margin-bottom:1px}
-  .log-ts{color:#1e3d4f;margin-right:8px;font-size:10px}
-  .log-empty{color:var(--gray);text-align:center;padding-top:80px}
+/* ── DEAL FILTERS ── */
+#deal-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.search-wrap{position:relative;flex:1;min-width:200px;max-width:380px}
+.search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--gray);pointer-events:none}
+#search-box{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 12px 7px 32px;color:var(--white);font-size:12px;outline:none;transition:border .2s}
+#search-box:focus{border-color:#C9A84C55}
+#search-box::placeholder{color:var(--gray)}
+.select-wrap select{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--white);font-size:11px;outline:none;cursor:pointer;transition:border .2s}
+.select-wrap select:focus{border-color:#C9A84C55}
+.filter-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{background:transparent;border:1px solid var(--border);border-radius:16px;padding:3px 10px;font-size:11px;color:var(--grayMid);cursor:pointer;transition:all .2s;font-family:var(--font);white-space:nowrap}
+.chip:hover{border-color:var(--gold);color:var(--goldLight)}
+.chip.active{background:var(--gold);color:#0d1c26;border-color:var(--gold);font-weight:700}
+.chip.hot.active{background:var(--green);border-color:var(--green);color:#071810}
+.result-count{color:var(--gold);font-size:11px;font-weight:700;padding:3px 10px;background:#C9A84C12;border:1px solid #C9A84C22;border-radius:12px;white-space:nowrap}
+.view-toggle{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.view-btn{background:transparent;border:none;color:var(--gray);padding:6px 10px;font-size:13px;cursor:pointer;transition:all .2s}
+.view-btn.active{background:var(--panel2);color:var(--gold)}
 
-  /* DEALS */
-  #deal-filters{display:flex;gap:8px;margin-bottom:16px;align-items:center}
-  .filter-label{color:var(--gray);font-size:11px}
-  .filter-btn{background:transparent;color:var(--gray);border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;transition:all 0.2s}
-  .filter-btn.active{background:var(--gold);color:var(--petrol);border-color:var(--gold)}
-  #deals-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
-  .deal-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
-  .deal-card.hot{background:linear-gradient(135deg,var(--panel),#0a2015);border-color:#27c97a44;box-shadow:0 0 16px rgba(39,201,122,0.08)}
-  .deal-card-body{padding:14px 16px 16px;flex:1;display:flex;flex-direction:column}
+/* ── SORT ROW ── */
+.sort-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.sort-label{color:var(--gray);font-size:10px;font-weight:600}
+.sort-chip{background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:10px;color:var(--grayMid);cursor:pointer;transition:all .2s;font-family:var(--font)}
+.sort-chip.active{border-color:var(--goldDim);color:var(--goldLight);background:#C9A84C0f}
 
-  /* IMAGE SLIDESHOW */
-  .img-slide{position:relative;width:100%;height:180px;background:#060f15;overflow:hidden;flex-shrink:0}
-  .img-slide img{width:100%;height:100%;object-fit:cover;display:block;transition:opacity 0.3s}
-  .img-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#1e3d4f;font-size:36px;background:linear-gradient(135deg,#060f15,#0f2530)}
-  .slide-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.55);border:none;color:white;font-size:16px;width:28px;height:40px;border-radius:4px;cursor:pointer;z-index:2;transition:background 0.2s;display:flex;align-items:center;justify-content:center}
-  .slide-btn:hover{background:rgba(0,0,0,0.8)}
-  .slide-btn.prev{left:6px}
-  .slide-btn.next{right:6px}
-  .slide-dots{position:absolute;bottom:6px;left:0;right:0;display:flex;justify-content:center;gap:4px;z-index:2}
-  .slide-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.4);cursor:pointer;border:none;padding:0;transition:background 0.2s}
-  .slide-dot.active{background:#fff}
-  .slide-count{position:absolute;top:7px;right:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;z-index:2}
-  .deal-title{font-weight:700;font-size:13px;margin-bottom:2px}
-  .deal-location{color:var(--gray);font-size:10px;margin-bottom:8px}
-  .deal-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
-  .deal-field{background:#060f15;border-radius:6px;padding:6px 10px}
-  .deal-field-lbl{color:var(--gray);font-size:9px}
-  .deal-field-val{font-weight:700;font-size:12px;margin-top:2px}
-  .deal-source{background:#060f15;border-radius:6px;padding:7px 10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-  .deal-source-lbl{color:var(--gray);font-size:9px;margin-bottom:3px}
-  .deal-roi{display:flex;justify-content:space-between;align-items:center;font-size:12px}
-  .hot-badge{margin-top:10px;background:rgba(39,201,122,0.08);border:1px solid rgba(39,201,122,0.2);border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center}
-  #deals-empty{color:var(--gray);text-align:center;padding:60px 0;font-size:13px}
+/* ── DEAL CARDS ── */
+#deals-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.deal-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;transition:transform .15s,border-color .2s}
+.deal-card:hover{transform:translateY(-2px);border-color:var(--border2)}
+.deal-card.hot{border-color:#22d07a33;background:linear-gradient(160deg,var(--panel),#0a2017)}
+.deal-card.hot:hover{border-color:#22d07a66}
 
-  /* FILTER BAR */
-  #filter-bar{margin-bottom:16px}
-  .filter-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-  #search-box{background:#060f15;border:1px solid var(--border);border-radius:8px;padding:7px 14px;color:var(--white);font-size:12px;font-family:inherit;flex:1;min-width:220px;max-width:420px;outline:none;transition:border 0.2s}
-  #search-box:focus{border-color:#C9A84C66;box-shadow:0 0 0 2px #C9A84C1a}
-  #search-box::placeholder{color:var(--gray)}
-  #province-select{background:#060f15;border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white);font-size:11px;font-family:inherit;outline:none;cursor:pointer;transition:border 0.2s}
-  #province-select:focus{border-color:#C9A84C66}
-  .filter-count{color:var(--gold);font-size:10px;font-weight:700;padding:3px 8px;background:#C9A84C15;border-radius:4px;white-space:nowrap}
+/* image */
+.img-wrap{position:relative;width:100%;height:168px;background:#040a0f;overflow:hidden;flex-shrink:0}
+.img-wrap img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s}
+.deal-card:hover .img-wrap img{transform:scale(1.03)}
+.img-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--border2);font-size:40px;background:linear-gradient(135deg,#040a0f,#0d1c26)}
+.slide-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.6);border:none;color:#fff;font-size:15px;width:26px;height:38px;border-radius:4px;cursor:pointer;z-index:2;display:flex;align-items:center;justify-content:center}
+.slide-btn.prev{left:5px}
+.slide-btn.next{right:5px}
+.slide-dots{position:absolute;bottom:5px;left:0;right:0;display:flex;justify-content:center;gap:4px;z-index:2}
+.sdot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.35);cursor:pointer;border:none;padding:0;transition:background .2s}
+.sdot.active{background:#fff;width:12px;border-radius:3px}
+.img-count{position:absolute;top:6px;right:7px;background:rgba(0,0,0,.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;z-index:2}
+.img-src-badge{position:absolute;top:6px;left:7px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;z-index:2}
 
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-  .scanning-pulse{animation:pulse 1s infinite}
+/* card body */
+.card-body{padding:12px 14px 14px;flex:1;display:flex;flex-direction:column;gap:0}
+.card-title{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.card-loc{color:var(--grayMid);font-size:10px;margin-bottom:10px;display:flex;align-items:center;gap:4px}
+.card-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px}
+.cf{background:#040a0f;border-radius:6px;padding:6px 8px}
+.cf-lbl{color:var(--gray);font-size:8.5px;font-weight:600;letter-spacing:.3px}
+.cf-val{font-weight:700;font-size:12px;margin-top:2px}
+.roi-bar-wrap{margin-bottom:10px}
+.roi-bar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.roi-bar-lbl{font-size:9px;color:var(--gray);font-weight:600}
+.roi-flag{font-size:11px;font-weight:700}
+.roi-bar-track{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.roi-bar-fill{height:100%;border-radius:3px;transition:width .5s}
+.card-source{background:#040a0f;border-radius:6px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;text-decoration:none;transition:background .2s;margin-bottom:8px}
+.card-source:hover{background:#0a1620}
+.card-src-lbl{color:var(--gray);font-size:8.5px;margin-bottom:2px}
+.card-src-url{font-size:10px;color:var(--blue)}
+.roi-breakdown{background:#040a0f;border-radius:6px;padding:8px 10px;margin-bottom:8px;display:none}
+.roi-breakdown.open{display:block}
+.rb-row{display:flex;justify-content:space-between;font-size:10px;padding:2px 0}
+.rb-lbl{color:var(--gray)}
+.rb-val{font-weight:600}
+.rb-total{border-top:1px solid var(--border);margin-top:4px;padding-top:4px;font-weight:700}
+.card-actions{display:flex;gap:6px;margin-top:auto}
+.card-action-btn{flex:1;background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:10px;color:var(--grayMid);cursor:pointer;transition:all .2s;font-family:var(--font);text-align:center;text-decoration:none;display:block}
+.card-action-btn:hover{border-color:var(--gold);color:var(--goldLight)}
+.card-action-btn.primary-action{background:var(--gold);color:#0d1c26;border-color:var(--gold);font-weight:700}
+.card-action-btn.primary-action:hover{filter:brightness(1.1)}
+.hot-banner{background:linear-gradient(90deg,#0a2017,#0d2a1a);border:1px solid #22d07a22;border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+
+/* ── TABLE VIEW ── */
+#deals-table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
+#deals-table{width:100%;border-collapse:collapse;font-size:11px}
+#deals-table th{background:#040a0f;color:var(--grayMid);font-weight:600;font-size:10px;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.4px}
+#deals-table th:hover{color:var(--goldLight)}
+#deals-table th .sort-arrow{margin-left:4px;color:var(--border2)}
+#deals-table th.sorted .sort-arrow{color:var(--gold)}
+#deals-table td{padding:8px 12px;border-bottom:1px solid #0a1520;vertical-align:middle}
+#deals-table tr:last-child td{border-bottom:none}
+#deals-table tr:hover td{background:#0a1520}
+.tbl-title{font-weight:600;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbl-loc{color:var(--grayMid);font-size:10px}
+.tbl-src-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;flex-shrink:0}
+.roi-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap}
+.roi-pill.hot{background:#22d07a15;color:var(--green);border:1px solid #22d07a33}
+.roi-pill.medium{background:#f0b42915;color:var(--yellow);border:1px solid #f0b42933}
+.roi-pill.low{background:#e0555515;color:var(--red);border:1px solid #e0555533}
+.roi-pill.suspect{background:#1c304022;color:var(--grayMid)}
+
+/* ── LOG ── */
+#log-wrap{background:var(--panel);border-radius:10px;border:1px solid var(--border);overflow:hidden}
+.log-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+#log-dot{width:6px;height:6px;border-radius:50%;background:var(--gray)}
+.log-title{color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.5px}
+#log-count{color:var(--gray);font-size:10px;margin-left:auto}
+#log-body{height:420px;overflow-y:auto;padding:12px 14px;font-family:'JetBrains Mono','Fira Mono','Courier New',monospace;font-size:10.5px;line-height:1.8}
+.ll{margin-bottom:0}
+.ll-ts{color:var(--border2);margin-right:8px;font-size:9.5px;user-select:none}
+.log-empty{color:var(--gray);text-align:center;padding-top:80px;font-size:12px}
+
+/* ── ANALYZE PANEL ── */
+#analyze-panel{background:var(--panel);border-radius:10px;border:1px solid var(--border);padding:14px;margin-bottom:14px;display:none}
+#analyze-panel.show{display:block}
+.analyze-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.analyze-title{color:var(--teal);font-size:12px;font-weight:700}
+.analyze-status{font-size:11px;color:var(--grayLight)}
+
+/* ── EMPTY ── */
+.empty-state{text-align:center;padding:60px 20px;color:var(--gray)}
+.empty-icon{font-size:40px;margin-bottom:12px;display:block}
+.empty-msg{font-size:13px;margin-bottom:8px;color:var(--grayMid)}
+.empty-sub{font-size:11px}
+
+/* ── PAGINATION ── */
+#pagination{display:flex;justify-content:center;align-items:center;gap:6px;margin-top:16px}
+.pg-btn{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;color:var(--grayMid);cursor:pointer;font-family:var(--font);transition:all .2s}
+.pg-btn:hover:not(:disabled){border-color:var(--gold);color:var(--goldLight)}
+.pg-btn:disabled{opacity:.4;cursor:not-allowed}
+.pg-btn.active{background:var(--gold);color:#0d1c26;border-color:var(--gold);font-weight:700}
+.pg-info{color:var(--gray);font-size:11px;margin:0 4px}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:20px;right:20px;background:#0d2530;border:1px solid var(--gold);border-radius:8px;padding:10px 16px;font-size:12px;color:var(--goldLight);z-index:999;transform:translateY(100px);transition:transform .3s;max-width:300px}
+#toast.show{transform:translateY(0)}
+
+/* ── ANIMATIONS ── */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{display:inline-block;width:10px;height:10px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
+.scanning-pulse{animation:pulse 1s infinite}
+
+/* ── RESPONSIVE ── */
+@media(max-width:600px){
+  #header{padding:0 12px;height:52px}
+  .brand-sub,.brand-desc{display:none}
+  #stats-ribbon{padding:0 12px;gap:0}
+  .stat-cell{padding:8px 12px 8px 0;min-width:70px}
+  .stat-val{font-size:18px}
+  #content{padding:12px}
+  #deals-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
 
 <!-- WAKE BANNER -->
-<div id="wake-banner" style="display:none;background:#0d1f2a;border-bottom:1px solid #f0b42933;padding:7px 24px;align-items:center;gap:12px">
-  <div style="width:7px;height:7px;border-radius:50%;background:#f0b429;animation:pulse 1s infinite;flex-shrink:0"></div>
-  <span style="color:#f0b429;font-size:11px;font-weight:600">กำลังเชื่อมต่อ server...</span>
-  <span style="color:var(--gray);font-size:10px">ถ้ารอนานกว่า 30 วินาที ให้รีเฟรชหน้านี้</span>
-  <button onclick="_wakeAttempt=0;checkAPI();" style="margin-left:auto;background:transparent;color:#f0b429;border:1px solid #f0b42966;border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer">🔄 ลองใหม่</button>
+<div id="wake-banner">
+  <div class="wb-dot"></div>
+  <span style="color:var(--yellow);font-weight:600">กำลังเชื่อมต่อ server...</span>
+  <span style="color:var(--gray)">Render.com อาจใช้เวลา 30-60 วินาทีในการ boot</span>
+  <button onclick="_wakeAttempt=0;checkAPI()" style="margin-left:auto;background:transparent;color:var(--yellow);border:1px solid #f0b42966;border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer">🔄 ลองใหม่</button>
 </div>
 
 <!-- HEADER -->
 <div id="header">
-  <div>
-    <div style="display:flex;align-items:baseline;gap:8px">
-      <span class="brand-name">RE:DD</span>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="brand">
+      <span class="brand-logo">RE:DD</span>
+      <span class="brand-sep">|</span>
       <span class="brand-sub">Autonomous Deal Scanner</span>
-      <span id="live-badge">● LIVE</span>
     </div>
-    <div class="brand-desc">100% Autonomous — ระบบ scan อสังหาฯ NPA ทุก 6 ชั่วโมงอัตโนมัติ</div>
+    <span id="live-badge">● LIVE</span>
   </div>
-  <div style="display:flex;gap:10px;align-items:center">
-    <div id="api-status">
-      <div class="dot" id="api-dot"></div>
-      <span id="api-label" style="color:var(--grayLight)">กำลังเชื่อมต่อ...</span>
+  <div class="hdr-right">
+    <div id="api-chip">
+      <div class="chip-dot" id="api-dot"></div>
+      <span id="api-label">กำลังเชื่อมต่อ...</span>
     </div>
-    <button id="btn-dryrun" onclick="triggerScan(true)">🧪 Dry Run</button>
-    <button id="btn-stop" onclick="stopScan()">⏹ หยุด</button>
-    <button id="btn-scan" onclick="triggerScan(false)" disabled>⏳ รอ server ตื่น...</button>
+    <button class="btn btn-teal" id="btn-analyze" onclick="openAnalyze()" style="display:none" title="วิเคราะห์ deals ด้วย AI Perplexity">🧠 Analyze</button>
+    <button class="btn btn-ghost" id="btn-dryrun" onclick="triggerScan(true)" style="display:none">🧪 Dry Run</button>
+    <button class="btn btn-danger" id="btn-stop" onclick="stopScan()">⏹ หยุด</button>
+    <button class="btn btn-primary" id="btn-scan" onclick="triggerScan(false)" disabled>⏳ รอ server...</button>
   </div>
 </div>
 
-<!-- STATS BAR -->
-<div id="stats-bar">
-  <div class="stat-item"><div class="stat-val" id="s-total" style="color:var(--white)">—</div><div class="stat-lbl">Total Deals</div></div>
-  <div class="stat-item"><div class="stat-val" id="s-hot" style="color:var(--green)">—</div><div class="stat-lbl">🔥 HOT &gt;30%</div></div>
-  <div class="stat-item"><div class="stat-val" id="s-medium" style="color:var(--yellow)">—</div><div class="stat-lbl">🟡 MEDIUM &gt;15%</div></div>
-  <div class="stat-item"><div class="stat-val" id="s-avg" style="color:var(--goldLight)">—</div><div class="stat-lbl">Avg ROI %</div></div>
-  <div class="stat-item"><div class="stat-val" id="s-pages" style="color:var(--white)">—</div><div class="stat-lbl">Pages Crawled</div></div>
-  <div class="stat-item"><div class="stat-val" id="s-scraped" style="color:var(--blue)">—</div><div class="stat-lbl">Scraped</div></div>
+<!-- STATS RIBBON -->
+<div id="stats-ribbon">
+  <div class="stat-cell"><div class="stat-val" id="s-total" style="color:var(--white)">—</div><div class="stat-lbl">TOTAL DEALS</div></div>
+  <div class="stat-cell"><div class="stat-val" id="s-hot" style="color:var(--green)">—</div><div class="stat-lbl">🔥 HOT ≥30%</div><div class="stat-sub" style="color:var(--green)" id="s-hot-pct"></div></div>
+  <div class="stat-cell"><div class="stat-val" id="s-medium" style="color:var(--yellow)">—</div><div class="stat-lbl">🟡 MEDIUM ≥15%</div></div>
+  <div class="stat-cell"><div class="stat-val" id="s-avg" style="color:var(--goldLight)">—</div><div class="stat-lbl">AVG ROI</div></div>
+  <div class="stat-cell"><div class="stat-val" id="s-pages" style="color:var(--white)">—</div><div class="stat-lbl">PAGES CRAWLED</div></div>
+  <div class="stat-cell"><div class="stat-val" id="s-scraped" style="color:var(--blue)">—</div><div class="stat-lbl">SCRAPED</div></div>
+  <div class="scan-meta">
+    <div class="scan-meta-lbl">สแกนล่าสุด</div>
+    <div class="scan-meta-val" id="s-lastscan">—</div>
+    <div class="scan-meta-lbl" style="margin-top:2px">สถานะ</div>
+    <div class="scan-meta-val" id="s-status">—</div>
+  </div>
 </div>
 
 <!-- PIPELINE -->
 <div id="pipeline">
-  <div class="pipe-title">PIPELINE</div>
-  <div class="pipe-steps" id="pipeline-steps">
-    <!-- filled by JS -->
-  </div>
+  <div id="pipeline-inner"></div>
 </div>
 
 <!-- TABS -->
 <div id="tabs">
-  <button class="tab active" onclick="switchTab('sources')" id="tab-sources">🔗 แหล่งข้อมูล (11)</button>
-  <button class="tab" onclick="switchTab('live')" id="tab-live">📡 Live Log</button>
+  <button class="tab active" onclick="switchTab('sources')" id="tab-sources">🔗 แหล่งข้อมูล</button>
   <button class="tab" onclick="switchTab('deals')" id="tab-deals">📋 Deals</button>
+  <button class="tab" onclick="switchTab('live')" id="tab-live">📡 Live Log</button>
 </div>
 
 <!-- CONTENT -->
 <div id="content">
+  <!-- SOURCES PANE -->
   <div id="pane-sources"></div>
-  <div id="pane-live" style="display:none"></div>
-  <div id="pane-deals" style="display:none"></div>
+
+  <!-- DEALS PANE -->
+  <div id="pane-deals" style="display:none">
+
+    <!-- Analyze panel -->
+    <div id="analyze-panel">
+      <div class="analyze-head">
+        <span class="analyze-title">🧠 AI Analysis — Perplexity Sonar</span>
+        <span id="analyze-status" class="analyze-status">ยังไม่ได้เริ่ม</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-teal" id="btn-run-analyze" onclick="runAnalyze(false)">▶ วิเคราะห์ทั้งหมด</button>
+        <button class="btn btn-ghost" onclick="runAnalyze(true)">🔥 เฉพาะ HOT deals</button>
+        <input type="number" id="analyze-limit" value="50" min="1" max="200"
+          style="width:70px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--white);font-size:11px;outline:none" title="จำนวนสูงสุด">
+        <span style="color:var(--gray);font-size:10px">deals/batch</span>
+        <button class="btn btn-ghost" style="margin-left:auto;font-size:11px" onclick="document.getElementById('analyze-panel').classList.remove('show')">✕ ปิด</button>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div id="deal-toolbar">
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="search-box" placeholder="ค้นหาโครงการ, ทำเล, ประเภท..." oninput="onSearch(this.value)" />
+      </div>
+      <div class="select-wrap">
+        <select id="province-select" onchange="filterProvince=this.value;curPage=1;renderDeals()">
+          <option value="">🗺 ทุกจังหวัด</option>
+        </select>
+      </div>
+      <div class="select-wrap">
+        <select id="source-select" onchange="filterSource=this.value;curPage=1;renderDeals()">
+          <option value="">🏦 ทุกแหล่ง</option>
+        </select>
+      </div>
+      <div class="view-toggle">
+        <button class="view-btn active" id="vbtn-card" onclick="setView('card')" title="Card view">⊞</button>
+        <button class="view-btn" id="vbtn-table" onclick="setView('table')" title="Table view">☰</button>
+      </div>
+      <button class="btn btn-ghost" style="font-size:11px" onclick="exportCSV()" title="Export to CSV">⬇ CSV</button>
+    </div>
+
+    <!-- Filter chips row -->
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px">
+      <span style="color:var(--gray);font-size:10px;font-weight:600">ประเภท:</span>
+      <button class="chip active" id="chip-all" onclick="setTypeChip('')">ทั้งหมด</button>
+      <button class="chip" id="chip-house" onclick="setTypeChip('house')">🏠 บ้านเดี่ยว</button>
+      <button class="chip" id="chip-townhouse" onclick="setTypeChip('townhouse')">🏘 ทาวน์เฮ้าส์</button>
+      <button class="chip" id="chip-condo" onclick="setTypeChip('condo')">🏢 คอนโด</button>
+      <button class="chip" id="chip-land" onclick="setTypeChip('land')">🌾 ที่ดิน</button>
+      <button class="chip" id="chip-commercial" onclick="setTypeChip('commercial')">🏬 พาณิชย์</button>
+      <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
+        <button class="chip hot" id="chip-hot" onclick="toggleHot()">🔥 HOT</button>
+        <button class="chip" id="chip-reset" onclick="resetFilters()" style="display:none;color:var(--red);border-color:#e0555544">✕ ล้าง</button>
+        <span class="result-count" id="result-count">0 ทรัพย์</span>
+      </span>
+    </div>
+
+    <!-- Sort row -->
+    <div class="sort-row">
+      <span class="sort-label">เรียงตาม:</span>
+      <button class="sort-chip active" id="sort-roi" onclick="setSort('roi')">ROI สูง-ต่ำ</button>
+      <button class="sort-chip" id="sort-price-asc" onclick="setSort('price-asc')">ราคาต่ำ-สูง</button>
+      <button class="sort-chip" id="sort-price-desc" onclick="setSort('price-desc')">ราคาสูง-ต่ำ</button>
+      <button class="sort-chip" id="sort-area" onclick="setSort('area')">พื้นที่ใหญ่-เล็ก</button>
+      <button class="sort-chip" id="sort-new" onclick="setSort('new')">ใหม่ล่าสุด</button>
+    </div>
+
+    <!-- Deals view -->
+    <div id="deals-card-view"><div id="deals-grid"></div></div>
+    <div id="deals-table-wrap" style="display:none">
+      <table id="deals-table">
+        <thead>
+          <tr>
+            <th onclick="setSort('roi')" id="th-roi">ROI <span class="sort-arrow">↕</span></th>
+            <th>ทรัพย์</th>
+            <th onclick="setSort('price-asc')" id="th-price">ราคา <span class="sort-arrow">↕</span></th>
+            <th onclick="setSort('area')" id="th-area">พื้นที่ <span class="sort-arrow">↕</span></th>
+            <th>สภาพ</th>
+            <th>แหล่งที่มา</th>
+            <th>ลิงก์</th>
+          </tr>
+        </thead>
+        <tbody id="deals-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div id="pagination"></div>
+  </div>
+
+  <!-- LOG PANE -->
+  <div id="pane-live" style="display:none">
+    <div id="log-wrap">
+      <div class="log-head">
+        <div id="log-dot"></div>
+        <span class="log-title">AGENT LOG</span>
+        <span id="log-count" style="margin-left:auto">0 events</span>
+        <button onclick="logs=[];document.getElementById('log-body').innerHTML='<div class=log-empty>Log cleared</div>';document.getElementById(\'log-count\').textContent=\'0 events\'" style="background:transparent;border:none;color:var(--gray);font-size:10px;cursor:pointer;margin-left:8px">🗑 ล้าง</button>
+      </div>
+      <div id="log-body"><div class="log-empty">📡 กด "เริ่มสแกน" เพื่อดู live log</div></div>
+    </div>
+  </div>
 </div>
 
+<!-- TOAST -->
+<div id="toast"></div>
+
 <script>
+// ─────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────
 const API = "https://redd-crawler.onrender.com";
+const PAGE_SIZE = 50;
 
 const TARGET_SITES = [
-  { url:"https://npa.krungthai.com",                                                       label:"Krungthai NPA",  type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารกรุงไทย — REST API ~5k ทรัพย์" },
-  { url:"https://www.ghbhomecenter.com",                                                   label:"GH Bank",        type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารอาคารสงเคราะห์ — HTML scraper ~3k ทรัพย์" },
-  { url:"https://www.bam.co.th/npa",                                                       label:"BAM",            type:"bank_npa",     desc:"ทรัพย์ NPA บริษัทบริหารสินทรัพย์กรุงเทพ — REST API ~16k ทรัพย์" },
-  { url:"https://www.krungsriproperty.com/home",                                           label:"Krungsri",       type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารกรุงศรีอยุธยา — HTML scraper ~1.7k ทรัพย์" },
-  { url:"https://npa-assets.gsb.or.th",                                                    label:"GSB (ออมสิน)",   type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารออมสิน — SSR scraper ~3k+ ทรัพย์" },
-  { url:"https://asset.home.scb/project",                                                  label:"SCB Asset",      type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารไทยพาณิชย์ — REST API ~4k ทรัพย์" },
-  { url:"https://www.kasikornbank.com/th/propertyforsale/search/pages/index.aspx",         label:"KBank",          type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารกสิกรไทย — WAF blocked (deferred)" },
-  { url:"https://www.led.go.th",                                                           label:"กรมบังคับคดี",  type:"enforcement",  desc:"ทรัพย์ขายทอดตลาดบังคับคดี — REST API ราคาต่ำกว่าตลาดมากที่สุด" },
-  { url:"https://www.ddproperty.com",                                                      label:"DDProperty",     type:"marketplace",  desc:"ตลาดอสังหาฯ — market price benchmark" },
-  { url:"https://www.hipflat.co.th",                                                       label:"Hipflat",        type:"marketplace",  desc:"ตลาดคอนโดมือสอง" },
-  { url:"https://www.baania.com",                                                          label:"Baania",         type:"marketplace",  desc:"ตลาดอสังหาฯ + AI valuation" },
+  { url:"https://npa.krungthai.com",           label:"Krungthai NPA",  type:"bank_npa",    domain:"npa.krungthai.com",    desc:"ทรัพย์ NPA ธนาคารกรุงไทย — REST API ~5k ทรัพย์" },
+  { url:"https://www.ghbhomecenter.com",        label:"GH Bank",        type:"bank_npa",    domain:"ghbhomecenter.com",    desc:"ทรัพย์ NPA ธนาคารอาคารสงเคราะห์ — HTML scraper ~3k ทรัพย์" },
+  { url:"https://www.bam.co.th/npa",            label:"BAM",            type:"bank_npa",    domain:"bam.co.th",            desc:"ทรัพย์ NPA บริษัทบริหารสินทรัพย์กรุงเทพ — REST API ~16k ทรัพย์" },
+  { url:"https://www.krungsriproperty.com/home",label:"Krungsri",       type:"bank_npa",    domain:"krungsriproperty.com", desc:"ทรัพย์ NPA ธนาคารกรุงศรีอยุธยา — HTML scraper ~1.7k ทรัพย์" },
+  { url:"https://npa-assets.gsb.or.th",         label:"GSB (ออมสิน)",   type:"bank_npa",    domain:"npa-assets.gsb.or.th", desc:"ทรัพย์ NPA ธนาคารออมสิน — SSR scraper ~3k+ ทรัพย์" },
+  { url:"https://asset.home.scb/project",       label:"SCB Asset",      type:"bank_npa",    domain:"asset.home.scb",       desc:"ทรัพย์ NPA ธนาคารไทยพาณิชย์ — REST API ~4k ทรัพย์" },
+  { url:"https://www.kasikornbank.com/th/propertyforsale/search/pages/index.aspx", label:"KBank", type:"bank_npa", domain:"kasikornbank.com", desc:"ทรัพย์ NPA ธนาคารกสิกรไทย — WAF (Incapsula) — deferred Playwright" },
+  { url:"https://www.led.go.th",                label:"กรมบังคับคดี",  type:"enforcement", domain:"led.go.th",             desc:"ทรัพย์ขายทอดตลาดบังคับคดี — REST API (WAF deferred)" },
+  { url:"https://www.ddproperty.com",           label:"DDProperty",     type:"marketplace", domain:"ddproperty.com",        desc:"ตลาดอสังหาฯ — market price benchmark" },
+  { url:"https://www.hipflat.co.th",            label:"Hipflat",        type:"marketplace", domain:"hipflat.co.th",         desc:"ตลาดคอนโดมือสอง — price reference" },
+  { url:"https://www.baania.com",               label:"Baania",         type:"marketplace", domain:"baania.com",            desc:"ตลาดอสังหาฯ + AI valuation" },
 ];
 
-const TYPE_COLOR = { bank_npa:"#3b9eff", enforcement:"#e05555", marketplace:"#9b6dff" };
-const TYPE_LABEL = { bank_npa:"NPA", enforcement:"บังคับคดี", marketplace:"ตลาด" };
-const COND_COLOR = { poor:"#e05555", fair:"#f0b429", good:"#27c97a", new:"#27c97a" };
+const SRC_COLORS = {
+  "npa.krungthai":"#3b9eff","krungthai":"#3b9eff",
+  "ghb":"#16a34a","ghbhome":"#16a34a",
+  "bam":"#C9A84C",
+  "krungsri":"#9b6dff",
+  "gsb":"#f59e0b",
+  "scb":"#a855f7",
+  "led":"#e05555",
+  "ddproperty":"#06b6d4","hipflat":"#0ea5e9","baania":"#8b5cf6",
+};
+const COND_COL = {poor:"#e05555",fair:"#f0b429",good:"#22d07a",new:"#22d07a"};
+const TYPE_TH  = {land:"ที่ดิน",condo:"คอนโด",house:"บ้านเดี่ยว",townhouse:"ทาวน์เฮาส์",commercial:"อาคารพาณิชย์",other:"ทรัพย์"};
 const PIPE_STEPS = [
   {icon:"🌐",label:"Crawl\nListing"},
   {icon:"📄",label:"Scrape\nDetail"},
@@ -236,60 +472,33 @@ const PIPE_STEPS = [
   {icon:"💾",label:"Save\nDB"},
 ];
 
-let logs = [], deals = [], hotDeals = [], dealFilter = "all";
-let scanPhase = 0, pollInterval = null, isRunning = false;
-let searchQuery = "", filterProvince = "", filterType = "";
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let deals=[], hotDeals=[], srcStats={};
+let dealFilter="all", filterType="", filterProvince="", filterSource="", sortBy="roi";
+let searchQuery="", viewMode="card", curPage=1;
+let logs=[], scanPhase=0, pollInterval=null, isRunning=false;
+let _wakeAttempt=0;
 
-// ── FILTER HELPERS ────────────────────────────────────
-function getProvince(loc) {
-  if (!loc) return "";
-  // "สงขลา อำเภอสะเดา" → "สงขลา" | "กรุงเทพมหานคร เขตสายไหม" → "กรุงเทพมหานคร"
-  return loc.split(/\s+(?:อำเภอ|เขต)/)[0].trim();
-}
-function getDistrict(loc) {
-  if (!loc) return "";
-  const m = loc.match(/(?:อำเภอ|เขต)\s*([^\s,]+(?:\s[^\s,]+)?)/);
-  return m ? m[1].trim() : "";
-}
-function applyFilters(list) {
-  return list.filter(d => {
-    if (dealFilter === "hot" && (d.roi_percent || 0) < 30) return false;
-    if (filterType && d.property_type !== filterType) return false;
-    if (filterProvince && getProvince(d.location || "") !== filterProvince) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const hay = [d.project_name, d.location, d.property_type, d.source_domain, d.address]
-        .filter(Boolean).join(" ").toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
-}
-function resetFilters() {
-  searchQuery = ""; filterProvince = ""; filterType = ""; dealFilter = "all";
-  renderDeals();
-}
-
-// ── INIT ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   renderPipeline();
   renderSources();
-  renderLog();
-  renderDeals();
-  // Show wake banner immediately, hide once online
+  document.getElementById("pane-deals").style.display = "none";
   document.getElementById("wake-banner").style.display = "flex";
   checkAPI();
 });
 
-let _wakeAttempt = 0;
+// ─────────────────────────────────────────────
+// API HEALTH
+// ─────────────────────────────────────────────
 async function checkAPI() {
   _wakeAttempt++;
-  const waking = _wakeAttempt > 1;
-  if (waking) {
-    setAPIStatus(false, `กำลังปลุก server... (${_wakeAttempt})`);
-  }
   try {
-    const r = await fetch(API + "/health", {signal: AbortSignal.timeout(12000)});
+    const r = await fetch(API + "/health", {signal: AbortSignal.timeout(14000)});
     const d = await r.json();
     if (d.status === "ok") {
       _wakeAttempt = 0;
@@ -297,51 +506,52 @@ async function checkAPI() {
       document.getElementById("btn-scan").disabled = false;
       document.getElementById("btn-scan").textContent = "▶ เริ่มสแกน";
       document.getElementById("btn-dryrun").style.display = "";
+      document.getElementById("btn-analyze").style.display = "";
       document.getElementById("wake-banner").style.display = "none";
-      loadDeals();
-      loadStats();
-      // Auto-check: if scan is already running, start monitoring
+      loadAll();
       checkScanStatusOnLoad();
-    } else {
-      scheduleRetry();
-    }
+    } else { scheduleRetry(); }
   } catch(e) {
-    setAPIStatus(false, _wakeAttempt <= 1 ? "Offline / Starting..." : `กำลัง wake up... (${_wakeAttempt}/10)`);
+    setAPIStatus(false, _wakeAttempt <= 1 ? "Offline / Starting..." : `กำลัง wake up... (${_wakeAttempt}/15)`);
     document.getElementById("btn-scan").disabled = true;
-    document.getElementById("btn-scan").textContent = "⏳ รอ server ตื่น...";
-    document.getElementById("wake-banner").style.display = "";
+    document.getElementById("btn-scan").textContent = "⏳ รอ server...";
+    document.getElementById("wake-banner").style.display = "flex";
     scheduleRetry();
   }
 }
 
 function scheduleRetry() {
-  if (_wakeAttempt < 15) {
-    setTimeout(checkAPI, 4000);
-  } else {
-    setAPIStatus(false, "❌ ไม่สามารถเชื่อมต่อได้");
+  if (_wakeAttempt < 15) setTimeout(checkAPI, 5000);
+  else {
+    setAPIStatus(false, "❌ ไม่สามารถเชื่อมต่อ");
     document.getElementById("btn-scan").disabled = false;
     document.getElementById("btn-scan").textContent = "🔄 ลองใหม่";
-    document.getElementById("btn-scan").onclick = () => { _wakeAttempt = 0; checkAPI(); };
+    document.getElementById("btn-scan").onclick = ()=>{_wakeAttempt=0;checkAPI()};
   }
 }
 
-function setAPIStatus(ok, text) {
+function setAPIStatus(ok, txt) {
   const dot = document.getElementById("api-dot");
   const lbl = document.getElementById("api-label");
-  dot.className = "dot " + (ok ? "online" : "error");
-  lbl.textContent = text;
-  lbl.style.color = ok ? "#27c97a" : "#e05555";
+  dot.className = "chip-dot " + (ok?"online":"error");
+  lbl.textContent = txt;
+  lbl.style.color = ok ? "var(--green)" : "var(--red)";
 }
 
-// ── DATA LOAD ─────────────────────────────────────────
+// ─────────────────────────────────────────────
+// DATA LOAD
+// ─────────────────────────────────────────────
+async function loadAll() {
+  await Promise.all([loadDeals(), loadStats()]);
+}
+
 async function fetchAllDeals() {
-  // Paginate through all pages (backend cap = 200/page)
-  const PER = 200;
-  let page = 1, all = [];
+  const PER = 200, all = [];
+  let page = 1;
   while (true) {
     const r = await fetch(`${API}/deals?per_page=${PER}&page=${page}`).then(r=>r.json());
     const batch = r.data || [];
-    all = all.concat(batch);
+    all.push(...batch);
     if (batch.length < PER || all.length >= (r.total || Infinity)) break;
     page++;
   }
@@ -352,511 +562,705 @@ async function loadDeals() {
   try {
     const [allDeals, hotR] = await Promise.all([
       fetchAllDeals(),
-      fetch(API + "/deals/hot?limit=200").then(r=>r.json()),
+      fetch(`${API}/deals/hot?limit=500`).then(r=>r.json()),
     ]);
     deals = allDeals;
     hotDeals = hotR.data || [];
+    populateFilters();
+    curPage = 1;
     renderDeals();
     updateDealTab();
-  } catch(e) {
-    console.error("loadDeals:", e);
-  }
+    // Source stats from deals
+    computeSrcStats();
+    renderSources(); // re-render with counts
+  } catch(e) { console.error("loadDeals:", e); }
+}
+
+function computeSrcStats() {
+  srcStats = {};
+  deals.forEach(d => {
+    const src = d.source_domain || "unknown";
+    if (!srcStats[src]) srcStats[src] = {count:0, hot:0};
+    srcStats[src].count++;
+    if ((d.roi_percent||0) >= 30) srcStats[src].hot++;
+  });
 }
 
 async function loadStats() {
   try {
-    const r = await fetch(API + "/deals/stats");
+    const r = await fetch(`${API}/deals/stats`);
     const d = await r.json();
-    document.getElementById("s-total").textContent = d.total_deals ?? "—";
-    document.getElementById("s-hot").textContent = d.hot_deals ?? "—";
-    document.getElementById("s-medium").textContent = d.medium_deals ?? "—";
-    // calc avg ROI from deals, cap outliers at 300% to avoid land-area inflation skew
-    const validRois = deals.map(x => Math.min(x.roi_percent||0, 300)).filter(r => r > 0);
+    document.getElementById("s-total").textContent  = fmtNum(d.total_deals ?? 0);
+    document.getElementById("s-hot").textContent    = fmtNum(d.hot_deals ?? 0);
+    document.getElementById("s-medium").textContent = fmtNum(d.medium_deals ?? 0);
+    const total = d.total_deals || 0;
+    const hot   = d.hot_deals   || 0;
+    if (total > 0) document.getElementById("s-hot-pct").textContent = ((hot/total)*100).toFixed(1)+"%";
+    const validRois = deals.map(x=>Math.min(x.roi_percent||0,300)).filter(r=>r>0);
     const avgRoi = validRois.length > 0
-      ? (validRois.reduce((s,x) => s+x, 0) / validRois.length).toFixed(1) + "%"
+      ? (validRois.reduce((s,x)=>s+x,0)/validRois.length).toFixed(1)+"%"
       : "—";
     document.getElementById("s-avg").textContent = avgRoi;
+    if (d.last_scan) {
+      const dt = new Date(d.last_scan);
+      document.getElementById("s-lastscan").textContent = dt.toLocaleString("th-TH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+    }
+    document.getElementById("s-status").textContent = d.scan_status || "—";
   } catch(e) { console.error("loadStats:", e); }
 }
 
-// ── AUTO-CHECK SCAN ON LOAD ───────────────────────────
-async function checkScanStatusOnLoad() {
-  try {
-    const r = await fetch(API + "/scan/status");
-    const d = await r.json();
-    if (d.status === "running") {
-      addLog("info", "📡 พบ scan กำลังทำงาน — กำลัง monitor อัตโนมัติ...");
-      isRunning = true;
-      scanPhase = 1;
-      renderPipeline();
-      switchTab("live");
-      document.getElementById("btn-scan").disabled = true;
-      document.getElementById("btn-stop").style.display = "";
-      document.getElementById("live-badge").style.display = "";
-      startPolling();
-    }
-  } catch(e) {}
+// ─────────────────────────────────────────────
+// FILTER HELPERS
+// ─────────────────────────────────────────────
+function getProvince(loc) {
+  if (!loc) return "";
+  return loc.split(/\s+(?:อำเภอ|เขต)/)[0].trim();
 }
 
-// ── SCAN ──────────────────────────────────────────────
+function populateFilters() {
+  // Provinces
+  const provinces = [...new Set(deals.map(d=>getProvince(d.location||"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"th"));
+  const pSel = document.getElementById("province-select");
+  const pVal = pSel.value;
+  pSel.innerHTML = '<option value="">🗺 ทุกจังหวัด</option>' +
+    provinces.map(p=>`<option value="${p}"${pVal===p?" selected":""}>${p}</option>`).join("");
+
+  // Sources
+  const sources = [...new Set(deals.map(d=>d.source_domain).filter(Boolean))].sort();
+  const sSel = document.getElementById("source-select");
+  const sVal = sSel.value;
+  sSel.innerHTML = '<option value="">🏦 ทุกแหล่ง</option>' +
+    sources.map(s=>`<option value="${s}"${sVal===s?" selected":""}>${s}</option>`).join("");
+}
+
+function applyFilters(list) {
+  return list.filter(d => {
+    if (dealFilter === "hot" && (d.roi_percent||0) < 30) return false;
+    if (filterType && d.property_type !== filterType) return false;
+    if (filterProvince && getProvince(d.location||"") !== filterProvince) return false;
+    if (filterSource && d.source_domain !== filterSource) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const hay = [d.project_name,d.location,d.property_type,d.source_domain,d.address,d.features]
+        .filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function applySort(list) {
+  return [...list].sort((a,b) => {
+    if (sortBy === "roi")        return (b.roi_percent||0)-(a.roi_percent||0);
+    if (sortBy === "price-asc")  return (a.price||0)-(b.price||0);
+    if (sortBy === "price-desc") return (b.price||0)-(a.price||0);
+    if (sortBy === "area")       return (b.area_sqm||0)-(a.area_sqm||0);
+    if (sortBy === "new")        return new Date(b.scraped_at||0)-new Date(a.scraped_at||0);
+    return 0;
+  });
+}
+
+// ─────────────────────────────────────────────
+// FILTER / SORT UI
+// ─────────────────────────────────────────────
+let searchTimer;
+function onSearch(v) { clearTimeout(searchTimer); searchTimer=setTimeout(()=>{searchQuery=v;curPage=1;renderDeals()},220); }
+
+function setTypeChip(type) {
+  filterType = type; curPage = 1;
+  ["all","house","townhouse","condo","land","commercial"].forEach(t=>{
+    const id = t==="all" ? "chip-all" : "chip-"+t;
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle("active", (t==="all"&&type==="")||(t===type));
+  });
+  updateResetChip();
+  renderDeals();
+}
+
+function toggleHot() {
+  dealFilter = dealFilter==="hot"?"all":"hot";
+  document.getElementById("chip-hot").classList.toggle("active", dealFilter==="hot");
+  curPage=1; updateResetChip(); renderDeals();
+}
+
+function resetFilters() {
+  searchQuery=""; filterType=""; filterProvince=""; filterSource=""; dealFilter="all"; curPage=1;
+  document.getElementById("search-box").value="";
+  document.getElementById("province-select").value="";
+  document.getElementById("source-select").value="";
+  setTypeChip(""); dealFilter="all";
+  document.getElementById("chip-hot").classList.remove("active");
+  updateResetChip(); renderDeals();
+}
+
+function updateResetChip() {
+  const hasFilter = searchQuery||filterType||filterProvince||filterSource||dealFilter==="hot";
+  document.getElementById("chip-reset").style.display = hasFilter?"":"none";
+}
+
+function setSort(s) {
+  sortBy = s; curPage=1;
+  document.querySelectorAll(".sort-chip").forEach(el=>el.classList.remove("active"));
+  const el = document.getElementById("sort-"+s);
+  if(el) el.classList.add("active");
+  // table headers
+  ["roi","price","area"].forEach(k=>{
+    const th = document.getElementById("th-"+k);
+    if(th) th.classList.toggle("sorted", s.startsWith(k));
+  });
+  renderDeals();
+}
+
+function setView(mode) {
+  viewMode = mode;
+  document.getElementById("vbtn-card").classList.toggle("active",mode==="card");
+  document.getElementById("vbtn-table").classList.toggle("active",mode==="table");
+  document.getElementById("deals-card-view").style.display = mode==="card"?"":"none";
+  document.getElementById("deals-table-wrap").style.display = mode==="table"?"":"none";
+  renderDeals();
+}
+
+// ─────────────────────────────────────────────
+// RENDER DEALS
+// ─────────────────────────────────────────────
+function renderDeals() {
+  const filtered = applyFilters(deals);
+  const sorted   = applySort(filtered);
+  document.getElementById("result-count").textContent = `${filtered.length} / ${deals.length} ทรัพย์`;
+
+  const totalPages = Math.ceil(sorted.length / PAGE_SIZE) || 1;
+  curPage = Math.min(curPage, totalPages);
+  const paginated = sorted.slice((curPage-1)*PAGE_SIZE, curPage*PAGE_SIZE);
+
+  if (viewMode === "card") renderCardView(paginated, sorted.length);
+  else                     renderTableView(paginated, sorted.length);
+
+  renderPagination(totalPages);
+}
+
+function renderCardView(items, total) {
+  const grid = document.getElementById("deals-grid");
+  if (!items.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <span class="empty-icon">${deals.length===0?"🔍":"🗂"}</span>
+      <div class="empty-msg">${deals.length===0?"ยังไม่มีดีล — กด ▶ เริ่มสแกน":"ไม่พบทรัพย์ที่ตรงกับตัวกรอง"}</div>
+      ${deals.length>0?'<div class="empty-sub"><a href="#" onclick="resetFilters();return false" style="color:var(--gold)">ล้างตัวกรอง</a></div>':""}
+    </div>`;
+    return;
+  }
+  grid.innerHTML = items.map(d=>dealCard(d)).join("");
+}
+
+function renderTableView(items, total) {
+  const tbody = document.getElementById("deals-tbody");
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray)">ไม่พบทรัพย์</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = items.map(d=>{
+    const roi = d.roi_percent||0;
+    const roiSuspect = roi > 999 || !d.roi_valid;
+    const roiClass = roiSuspect?"suspect":roi>=30?"hot":roi>=15?"medium":"low";
+    const roiTxt   = roiSuspect?"N/A":roi.toFixed(1)+"%";
+    const srcCol   = getSrcColor(d.source_domain||"");
+    const price    = d.price ? `฿${(d.price/1e6).toFixed(2)}M` : "—";
+    const area     = d.area_sqm ? `${d.area_sqm} ตร.ม.` : "—";
+    const url      = d.listing_url || "#";
+    const title    = d.project_name && d.project_name.length>2 ? d.project_name : (TYPE_TH[d.property_type]||"ทรัพย์");
+    const cond     = d.condition || "—";
+    return `<tr>
+      <td><span class="roi-pill ${roiClass}">${roiTxt}</span></td>
+      <td>
+        <div class="tbl-title" title="${title}">${title}</div>
+        <div class="tbl-loc">📍 ${d.location||"—"} · ${TYPE_TH[d.property_type]||d.property_type||"—"}</div>
+      </td>
+      <td style="font-weight:700;color:var(--white)">${price}</td>
+      <td style="color:var(--grayLight)">${area}</td>
+      <td style="color:${COND_COL[cond]||'var(--gray)'};">${cond}</td>
+      <td>
+        <span class="tbl-src-dot" style="background:${srcCol}"></span>
+        <span style="font-size:10px;color:var(--grayMid)">${(d.source_domain||"—").split(".")[0]}</span>
+      </td>
+      <td>${url!=="—"&&url?"<a href='"+url+"' target='_blank' style='color:var(--blue);font-size:10px'>ดูทรัพย์ →</a>":"—"}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderPagination(totalPages) {
+  const pg = document.getElementById("pagination");
+  if (totalPages <= 1) { pg.innerHTML=""; return; }
+  let html = `<button class="pg-btn" onclick="goPage(${curPage-1})" ${curPage<=1?"disabled":""}>‹ ก่อนหน้า</button>`;
+  const range = [];
+  for (let i=1;i<=totalPages;i++) {
+    if (i===1||i===totalPages||Math.abs(i-curPage)<=2) range.push(i);
+    else if (range[range.length-1]!=="…") range.push("…");
+  }
+  range.forEach(p => {
+    if (p==="…") html += `<span class="pg-info">…</span>`;
+    else html += `<button class="pg-btn${p===curPage?" active":""}" onclick="goPage(${p})">${p}</button>`;
+  });
+  html += `<button class="pg-btn" onclick="goPage(${curPage+1})" ${curPage>=totalPages?"disabled":""}>ถัดไป ›</button>`;
+  html += `<span class="pg-info">หน้า ${curPage}/${totalPages}</span>`;
+  pg.innerHTML = html;
+}
+
+function goPage(p) {
+  const filtered = applyFilters(deals);
+  const totalPages = Math.ceil(filtered.length/PAGE_SIZE)||1;
+  curPage = Math.max(1, Math.min(p, totalPages));
+  renderDeals();
+  document.getElementById("pane-deals").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+// ─────────────────────────────────────────────
+// DEAL CARD
+// ─────────────────────────────────────────────
+const slideIdx = {};
+
+function dealCard(d) {
+  const rawRoi    = d.roi_percent || 0;
+  const roiSuspect= rawRoi > 999 || d.roi_valid === false;
+  const hot       = rawRoi >= 30 && !roiSuspect;
+  const roiColor  = roiSuspect?"var(--gray)":rawRoi>=30?"var(--green)":rawRoi>=15?"var(--yellow)":"var(--red)";
+  const roiPct    = roiSuspect ? 0 : Math.min(rawRoi, 100);
+  const roiLabel  = roiSuspect?"⚠️ N/A":rawRoi>=30?"🟢 ควรซื้อ":rawRoi>=15?"🟡 พิจารณา":"🔴 ข้าม";
+  const roiDisp   = roiSuspect ? "N/A" : rawRoi.toFixed(1)+"%";
+  const priceM    = d.price ? (d.price/1e6).toFixed(2) : "—";
+  const areaSqm   = d.area_sqm || 0;
+  const areaDisp  = areaSqm >= 1600 ? `${(areaSqm/1600).toFixed(2)} ไร่` : areaSqm>0 ? `${areaSqm} ตร.ม.` : "—";
+  const cond      = d.condition || "—";
+  const condCol   = COND_COL[cond] || "var(--grayMid)";
+  const srcCol    = getSrcColor(d.source_domain||"");
+  const url       = d.listing_url || "#";
+  const pType     = d.property_type || "other";
+  const loc       = d.location || "";
+  const locShort  = loc.split(/[,\/]/)[0].trim() || "—";
+  const projectName = d.project_name && d.project_name !== "null" && d.project_name.length > 2 ? d.project_name : null;
+  const title     = projectName || `${TYPE_TH[pType]||"ทรัพย์"} — ${locShort}`;
+  const src       = d.source_domain || "—";
+
+  // Slideshow
+  const cardId = "c" + (d.id || Math.random().toString(36).slice(2,8));
+  const rawData = typeof d.raw_data==="object" && d.raw_data ? d.raw_data : {};
+  const images  = Array.isArray(rawData.images) && rawData.images.length>0 ? rawData.images : [];
+  const hasImgs = images.length > 0;
+  const imgsPipe = images.join("|");
+
+  const imgHTML = hasImgs ? `
+    <div class="img-wrap">
+      <img id="img-${cardId}" src="${images[0]}" data-imgs="${imgsPipe}" alt="" loading="lazy"
+        onerror="this.parentElement.innerHTML='<div class=img-ph>🏠</div>'">
+      <span class="img-src-badge" style="background:${srcCol}22;color:${srcCol};border:1px solid ${srcCol}44">${(src.split(".")[0]||"").toUpperCase()}</span>
+      ${images.length>1?`
+      <button class="slide-btn prev" onclick="event.stopPropagation();slideMove('${cardId}',-1,${images.length})">‹</button>
+      <button class="slide-btn next" onclick="event.stopPropagation();slideMove('${cardId}',1,${images.length})">›</button>
+      <div class="slide-dots">${images.map((_,i)=>`<button class="sdot${i===0?" active":""}" id="dot-${cardId}-${i}" onclick="event.stopPropagation();slideTo('${cardId}',${i},${images.length})"></button>`).join("")}</div>
+      <span class="img-count" id="sc-${cardId}">1/${images.length}</span>`:""}
+    </div>` : `
+    <div class="img-wrap">
+      <div class="img-ph">🏠</div>
+      <span class="img-src-badge" style="background:${srcCol}22;color:${srcCol};border:1px solid ${srcCol}44">${(src.split(".")[0]||"").toUpperCase()}</span>
+    </div>`;
+
+  // ROI breakdown
+  const hasBreakdown = d.roi_valid && d.total_cost;
+  const breakdownId = "bd-" + cardId;
+  const breakdownHTML = hasBreakdown ? `
+    <div class="roi-breakdown" id="${breakdownId}">
+      <div class="rb-row"><span class="rb-lbl">ราคาซื้อ</span><span class="rb-val">฿${fmtNum(d.buy_price||d.price)}</span></div>
+      <div class="rb-row"><span class="rb-lbl">ค่ารีโนเวท</span><span class="rb-val">฿${fmtNum(d.reno_cost_total)} (${fmtNum(d.reno_cost_sqm)}/ตร.ม.)</span></div>
+      <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง</span><span class="rb-val">฿${fmtNum(d.transfer_fee)}</span></div>
+      <div class="rb-row rb-total"><span class="rb-lbl">ต้นทุนรวม</span><span class="rb-val" style="color:var(--yellow)">฿${fmtNum(d.total_cost)}</span></div>
+      <div class="rb-row"><span class="rb-lbl">ราคาตลาด</span><span class="rb-val" style="color:var(--green)">฿${fmtNum(d.market_value)}</span></div>
+      <div class="rb-row rb-total"><span class="rb-lbl">กำไรโดยประมาณ</span><span class="rb-val" style="color:var(--green)">฿${fmtNum(d.estimated_profit)}</span></div>
+    </div>` : "";
+
+  return `
+  <div class="deal-card${hot?" hot":""}">
+    <a href="${url}" target="_blank" rel="noopener" style="display:block">${imgHTML}</a>
+    <div class="card-body">
+      <div class="card-title" title="${title}">${title}</div>
+      <div class="card-loc">📍 ${loc||"—"} · ${areaDisp}</div>
+      <div class="card-fields">
+        <div class="cf">
+          <div class="cf-lbl">ราคาซื้อ</div>
+          <div class="cf-val" style="color:var(--white)">฿${priceM}M</div>
+        </div>
+        <div class="cf">
+          <div class="cf-lbl">ประเภท</div>
+          <div class="cf-val" style="color:${srcCol}">${TYPE_TH[pType]||pType}</div>
+        </div>
+        <div class="cf">
+          <div class="cf-lbl">สภาพ</div>
+          <div class="cf-val" style="color:${condCol}">${cond}</div>
+        </div>
+      </div>
+      <div class="roi-bar-wrap">
+        <div class="roi-bar-head">
+          <span class="roi-bar-lbl">ROI (ประมาณ)</span>
+          <span class="roi-flag" style="color:${roiColor}">${roiLabel} ${roiDisp}</span>
+        </div>
+        <div class="roi-bar-track">
+          <div class="roi-bar-fill" style="width:${roiPct}%;background:${roiColor}"></div>
+        </div>
+      </div>
+      ${breakdownHTML}
+      <a href="${url}" target="_blank" rel="noopener" class="card-source">
+        <div>
+          <div class="card-src-lbl">แหล่งที่มา — คลิกเพื่อดูทรัพย์ ↗</div>
+          <span class="card-src-url">🔗 ${url!=="—"&&url?url.replace(/https?:\/\/(www\.)?/,"").split("?")[0].slice(0,48):src}</span>
+        </div>
+        <span style="color:var(--blue);font-size:18px">↗</span>
+      </a>
+      ${hasBreakdown?`<div class="card-actions">
+        <button class="card-action-btn" onclick="toggleBreakdown('${breakdownId}',this)">📊 ดู ROI Breakdown</button>
+        <a href="${url}" target="_blank" rel="noopener" class="card-action-btn primary-action">ดูทรัพย์ →</a>
+      </div>`:
+      `<a href="${url}" target="_blank" rel="noopener" class="card-action-btn primary-action" style="margin-top:auto">ดูทรัพย์จากต้นทาง →</a>`
+      }
+      ${hot?`<div class="hot-banner">
+        <span style="color:var(--green);font-size:10px;font-weight:700">🔥 HOT DEAL — ROI ${rawRoi.toFixed(1)}%</span>
+        <a href="${url}" target="_blank" rel="noopener" style="font-size:10px">ดูทรัพย์ →</a>
+      </div>`:""}
+      ${d.ai_analysis?`<div style="margin-top:8px;background:#0d2f2c22;border:1px solid var(--teal)22;border-radius:6px;padding:6px 8px;font-size:9px;color:var(--teal)">
+        🧠 AI: ${typeof d.ai_analysis==="object"?d.ai_analysis.summary||JSON.stringify(d.ai_analysis).slice(0,80):String(d.ai_analysis).slice(0,80)}...
+      </div>`:""}
+    </div>
+  </div>`;
+}
+
+function toggleBreakdown(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const open = el.classList.toggle("open");
+  btn.textContent = open ? "📊 ซ่อน ROI Breakdown" : "📊 ดู ROI Breakdown";
+}
+
+function updateDealTab() {
+  const hot = deals.filter(d => (d.roi_percent||0)>=30 && d.roi_valid!==false);
+  const badge = hot.length ? `<span class="tab-badge">${hot.length}</span>` : "";
+  document.getElementById("tab-deals").innerHTML = `📋 Deals${badge}`;
+}
+
+// ─────────────────────────────────────────────
+// IMAGE SLIDESHOW
+// ─────────────────────────────────────────────
+function slideMove(id, d, n) {
+  slideIdx[id] = ((slideIdx[id]||0)+d+n)%n;
+  _applySlide(id,n);
+}
+function slideTo(id, i, n) { slideIdx[id]=i; _applySlide(id,n); }
+function _applySlide(id, n) {
+  const i = slideIdx[id]||0;
+  const img = document.getElementById("img-"+id);
+  const cnt = document.getElementById("sc-"+id);
+  if (img) img.src = img.dataset.imgs.split("|")[i];
+  if (cnt) cnt.textContent = `${i+1}/${n}`;
+  for (let j=0;j<n;j++) {
+    const dot = document.getElementById(`dot-${id}-${j}`);
+    if (dot) dot.className = "sdot"+(j===i?" active":"");
+  }
+}
+
+// ─────────────────────────────────────────────
+// SOURCES
+// ─────────────────────────────────────────────
+function renderSources() {
+  const groups = [
+    {type:"bank_npa",    title:"🏦 NPA ธนาคาร — Non-Performing Assets"},
+    {type:"enforcement", title:"🏛️ กรมบังคับคดี — Distressed Assets"},
+    {type:"marketplace", title:"🏠 ตลาดอสังหาฯ — Market Price Reference"},
+  ];
+  const TYPE_COL = {bank_npa:"var(--blue)",enforcement:"var(--red)",marketplace:"var(--purple)"};
+  document.getElementById("pane-sources").innerHTML = `
+    <div style="color:var(--gray);font-size:11px;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+      <span>แหล่งข้อมูลที่ระบบ crawl อัตโนมัติ — คลิก 🔗 เพื่อเปิดเว็บต้นทาง</span>
+      <span style="margin-left:auto;color:var(--grayMid)">${deals.length} deals ใน DB</span>
+    </div>` +
+    groups.map(g => {
+      const sites = TARGET_SITES.filter(s=>s.type===g.type);
+      const col   = TYPE_COL[g.type];
+      return `<div class="source-section">
+        <div class="section-head">
+          <span class="section-title" style="color:${col}">${g.title}</span>
+          <div class="section-line" style="background:${col}"></div>
+        </div>
+        <div class="src-grid">${sites.map(site=>srcCard(site,col)).join("")}</div>
+      </div>`;
+    }).join("");
+}
+
+function srcCard(site, col) {
+  const st = srcStats[site.domain] || {};
+  const count = st.count || 0;
+  const hot   = st.hot   || 0;
+  const domShort = site.url.replace(/https?:\/\/(www\.)?/,"").split("/")[0];
+  const isBlocked = site.desc.includes("WAF");
+  return `<div class="src-card">
+    <div class="src-card-head">
+      <div>
+        <div class="src-name">${site.label}</div>
+        <span class="tag" style="background:${col}18;color:${col};border:1px solid ${col}33;border-radius:4px;padding:2px 7px;font-size:9px;font-weight:700">${site.type==="bank_npa"?"NPA":site.type==="enforcement"?"บังคับคดี":"ตลาด"}</span>
+        ${isBlocked?'<span class="tag" style="background:#e0555515;color:var(--red);border:1px solid #e0555533;border-radius:4px;padding:2px 7px;font-size:9px;font-weight:700;margin-left:4px">⚠️ WAF</span>':""}
+      </div>
+      ${count>0?`<div style="text-align:right"><div style="font-weight:800;font-size:18px;color:var(--white)">${count}</div><div style="font-size:9px;color:var(--gray)">deals</div></div>`:""}
+    </div>
+    <div class="src-desc">${site.desc}</div>
+    <div class="src-url-row">
+      <a href="${site.url}" target="_blank" class="src-url">🔗 ${domShort}</a>
+      ${count>0&&hot>0?`<span style="font-size:9px;color:var(--green);font-weight:700">🔥 ${hot} HOT</span>`:""}
+    </div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────
+// PIPELINE
+// ─────────────────────────────────────────────
+function renderPipeline() {
+  const el = document.getElementById("pipeline-inner");
+  const nodes = PIPE_STEPS.map((s,i) => {
+    const state = scanPhase>i+1?"done":scanPhase===i+1?"active":"";
+    return `<div class="pipe-node">
+      <div class="pipe-icon${state?" "+state}">${state==="done"?"✓":s.icon}</div>
+      <div class="pipe-lbl${state?" "+state}">${s.label.replace("\n","<br>")}</div>
+    </div>`;
+  });
+  // Interleave lines
+  let html = '<div class="pipe-wrap">';
+  nodes.forEach((n,i) => {
+    html += n;
+    if (i < nodes.length-1) {
+      const lineState = scanPhase>i+1?"done":scanPhase===i+1?"active":"";
+      html += `<div class="pipe-line${lineState?" "+lineState}"></div>`;
+    }
+  });
+  html += "</div>";
+  el.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────
+// SCAN
+// ─────────────────────────────────────────────
+async function checkScanStatusOnLoad() {
+  try {
+    const r = await fetch(API+"/scan/status");
+    const d = await r.json();
+    if (d.status==="running") {
+      addLog("info","📡 พบ scan กำลังทำงาน — monitor อัตโนมัติ...");
+      isRunning=true; scanPhase=1; renderPipeline();
+      switchTab("live");
+      document.getElementById("btn-scan").disabled=true;
+      document.getElementById("btn-stop").style.display="";
+      document.getElementById("live-badge").style.display="";
+      startPolling();
+    }
+  } catch(e){}
+}
+
 async function triggerScan(dryRun=false) {
   if (isRunning) return;
-  isRunning = true;
-  scanPhase = 0;
-  logs = [];
-  document.getElementById("btn-scan").disabled = true;
-  document.getElementById("btn-stop").style.display = "";
-  document.getElementById("live-badge").style.display = "";
-  document.getElementById("btn-dryrun").style.display = "none";
+  isRunning=true; scanPhase=0; logs=[];
+  document.getElementById("btn-scan").disabled=true;
+  document.getElementById("btn-stop").style.display="";
+  document.getElementById("live-badge").style.display="";
+  document.getElementById("btn-dryrun").style.display="none";
   switchTab("live");
-  addLog("success", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  addLog("success", "🚀 RE:DD AUTONOMOUS CRAWLER — เริ่มทำงาน");
-  if (dryRun) addLog("warn", "🧪 DRY RUN MODE — ไม่ save ข้อมูลจริง");
-  addLog("info", `📡 Target: https://npa.krungthai.com | Pages: 56 | Max: 2,000`);
-
+  addLog("success","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  addLog("success","🚀 RE:DD AUTONOMOUS CRAWLER — เริ่มทำงาน");
+  if (dryRun) addLog("warn","🧪 DRY RUN — ไม่ save ข้อมูลจริง");
+  addLog("info",`📡 Scanning ${TARGET_SITES.filter(s=>s.type==="bank_npa").length} NPA sources | max 2,000 listings`);
   try {
-    const resp = await fetch(API + "/scan", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({dry_run: dryRun, max_pages: 56, max_listings: 2000})
+    const resp = await fetch(API+"/scan",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({dry_run:dryRun,max_pages:56,max_listings:2000})
     });
     const d = await resp.json();
-    const isStarted = d.status === "started" || d.status === "running"
-      || (d.message && d.message.toLowerCase().includes("started"));
-    const isAlreadyRunning = (d.detail && d.detail.toLowerCase().includes("already running"))
-      || (d.message && d.message.toLowerCase().includes("already running"));
-
-    if (isStarted || isAlreadyRunning) {
-      addLog("success", isAlreadyRunning
-        ? "⚠️ Scan กำลังทำงานอยู่ — monitor อัตโนมัติ..."
-        : `✅ Scan started — ${d.url || "npa.krungthai.com"}`);
-      scanPhase = 1;
-      renderPipeline();
-      startPolling();
+    const started = d.status==="started"||d.status==="running"||(d.message||"").toLowerCase().includes("started");
+    const alreadyRun = (d.detail||"").toLowerCase().includes("already")||(d.message||"").toLowerCase().includes("already");
+    if (started||alreadyRun) {
+      addLog("success", alreadyRun?"⚠️ Scan กำลังทำงาน — monitor อัตโนมัติ...":"✅ Scan started");
+      scanPhase=1; renderPipeline(); startPolling();
     } else {
-      addLog("error", `❌ ${d.detail || d.message || JSON.stringify(d)}`);
+      addLog("error",`❌ ${d.detail||d.message||JSON.stringify(d)}`);
       scanDone();
     }
   } catch(e) {
-    addLog("error", `❌ Cannot connect: ${e.message}`);
+    addLog("error",`❌ ${e.message}`);
     scanDone();
   }
 }
 
 function startPolling() {
-  let lastStatus = "";
-  let pollCount = 0;
-  document.getElementById("s-pages").textContent = "…";
-  document.getElementById("s-scraped").textContent = "…";
-
-  pollInterval = setInterval(async () => {
+  let lastStatus="", pollCount=0;
+  document.getElementById("s-pages").textContent="…";
+  document.getElementById("s-scraped").textContent="…";
+  pollInterval = setInterval(async()=>{
     pollCount++;
     try {
-      const r = await fetch(API + "/scan/status");
+      const r = await fetch(API+"/scan/status");
       const d = await r.json();
-      const status = d.status;
-      const stats = d.stats || {};
-
-      // Update stats bar
-      if (stats.pages !== undefined) document.getElementById("s-pages").textContent = stats.pages;
-      if (stats.scraped !== undefined) document.getElementById("s-scraped").textContent = stats.scraped;
-
-      // Update pipeline phase
-      if (status === "running") {
-        const prog = stats.progress || "";
-        const newPhase = prog.includes("extract") ? 3 : prog.includes("scrape") ? 2 : 1;
-        if (newPhase !== scanPhase) { scanPhase = newPhase; renderPipeline(); }
-        if (pollCount % 3 === 0) {
-          addLog("info", `⏳ กำลัง scan... pages=${stats.pages||0} scraped=${stats.scraped||0} saved=${stats.saved||0}`);
+      const status=d.status, stats=d.stats||{};
+      if (stats.pages!==undefined) document.getElementById("s-pages").textContent=stats.pages;
+      if (stats.scraped!==undefined) document.getElementById("s-scraped").textContent=stats.scraped;
+      if (stats.current_site) document.getElementById("s-status").textContent=`🔄 ${stats.current_site.replace(/https?:\/\/(www\.)?/,"").split("/")[0]}`;
+      if (status==="running") {
+        const prog=stats.progress||"";
+        const np=prog.includes("extract")?3:prog.includes("scrape")?2:1;
+        if(np!==scanPhase){scanPhase=np;renderPipeline();}
+        if(pollCount%4===0) addLog("info",`⏳ scan... pages=${stats.pages||0} scraped=${stats.scraped||0} saved=${stats.saved||0} hot=${stats.hot||0}`);
+      }
+      if (status==="done") {
+        scanPhase=5; renderPipeline();
+        const s=stats;
+        addLog("success",`\n✅ COMPLETE — Pages:${s.pages||0} Scraped:${s.scraped||0} Saved:${s.saved||0} HOT:${s.hot||0}`);
+        // Per-site breakdown
+        if (s.sites?.length) {
+          s.sites.forEach(site=>{
+            const short=(site.url||"").replace(/https?:\/\/(www\.)?/,"").split("/")[0];
+            if(site.status==="ok") addLog("info",`  ✓ ${short}: scraped=${site.scraped||0} saved=${site.saved||0}`);
+            else addLog("warn",`  ✗ ${short}: ${site.error||"error"}`);
+          });
         }
-      }
-
-      if (status === "done") {
-        scanPhase = 5;
-        renderPipeline();
-        const s = stats;
-        addLog("success", `\n✅ DONE — Pages: ${s.pages||0} | Scraped: ${s.scraped||0} | Saved: ${s.saved||0} | HOT: ${s.hot||0}`);
         clearInterval(pollInterval);
-        await loadDeals();
-        await loadStats();
+        await loadAll();
         scanDone();
         switchTab("deals");
-      } else if (status === "failed") {
-        addLog("error", `❌ Scan failed: ${d.error || "unknown error"}`);
+        showToast("✅ Scan เสร็จแล้ว! "+s.saved+" ทรัพย์ถูกบันทึก");
+      } else if (status==="failed") {
+        addLog("error",`❌ ${d.error||"unknown"}`);
         clearInterval(pollInterval);
         scanDone();
-      } else if (status === "idle" && pollCount > 5) {
-        // scan may have finished very fast
+      } else if (status==="idle"&&pollCount>5) {
         clearInterval(pollInterval);
-        await loadDeals();
-        await loadStats();
-        scanDone();
-        switchTab("deals");
+        await loadAll(); scanDone(); switchTab("deals");
       }
-
-      if (status !== lastStatus) {
-        lastStatus = status;
-        addLog("info", `📊 Status: ${status}`);
-      }
-    } catch(e) {
-      addLog("warn", `⚠️ Poll error: ${e.message}`);
-    }
+      if(status!==lastStatus){lastStatus=status;addLog("info",`📊 Status: ${status}`);}
+    } catch(e){addLog("warn",`⚠️ Poll: ${e.message}`);}
   }, 3000);
 }
 
 function stopScan() {
   clearInterval(pollInterval);
-  addLog("warn", "⏹ หยุด (scan อาจทำงานต่อบน server)");
+  addLog("warn","⏹ หยุด monitor (scan อาจทำงานต่อบน server)");
   scanDone();
 }
 
 function scanDone() {
-  isRunning = false;
-  document.getElementById("btn-scan").disabled = false;
-  document.getElementById("btn-stop").style.display = "none";
-  document.getElementById("live-badge").style.display = "none";
-  document.getElementById("btn-dryrun").style.display = "";
+  isRunning=false;
+  document.getElementById("btn-scan").disabled=false;
+  document.getElementById("btn-stop").style.display="none";
+  document.getElementById("live-badge").style.display="none";
+  document.getElementById("btn-dryrun").style.display="";
 }
 
-// ── LOG ───────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// LOG
+// ─────────────────────────────────────────────
 function addLog(type, msg) {
-  const colors = {
-    info:"#8a9ba8", success:"#27c97a", warn:"#f0b429",
-    ai:"#e0c06e", hot:"#27c97a", error:"#e05555"
-  };
-  const now = new Date().toLocaleTimeString("th-TH");
-  logs.push({type, msg, color: colors[type]||"#8a9ba8", ts: now});
-  if (logs.length > 200) logs.shift();
-  renderLogLine(logs[logs.length-1]);
-  const body = document.getElementById("log-body");
-  if (body) body.scrollTop = body.scrollHeight;
-  document.getElementById("log-count").textContent = logs.length + " events";
-}
-
-function renderLog() {
-  document.getElementById("pane-live").innerHTML = `
-    <div id="log-container">
-      <div id="log-header">
-        <div id="log-dot"></div>
-        <span id="log-title">AGENT LOG</span>
-        <span id="log-count" style="color:var(--gray);font-size:11px;margin-left:auto">0 events</span>
-      </div>
-      <div id="log-body"><div class="log-empty">กด "เริ่มสแกน" เพื่อดู live log</div></div>
-    </div>`;
-}
-
-function renderLogLine(l) {
-  const body = document.getElementById("log-body");
-  if (!body) return;
-  const empty = body.querySelector(".log-empty");
-  if (empty) empty.remove();
-  const div = document.createElement("div");
-  div.className = "log-line";
-  div.style.color = l.color;
-  const urlRegex = /(https?:\/\/\S+)/g;
-  const parts = l.msg.split(urlRegex);
-  let html = `<span class="log-ts">${l.ts}</span>`;
-  parts.forEach(p => {
-    if (p.match(/^https?:\/\//)) {
-      const short = p.length > 55 ? p.slice(0,55)+"…" : p;
-      html += `<a href="${p}" target="_blank" style="color:var(--blue);border-bottom:1px solid #3b9eff44">${short}</a>`;
-    } else {
-      html += p.replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    }
+  const c={info:"#8a9ba8",success:"var(--green)",warn:"var(--yellow)",error:"var(--red)",ai:"var(--goldLight)"};
+  const ts=new Date().toLocaleTimeString("th-TH");
+  logs.push({type,msg,color:c[type]||c.info,ts});
+  if(logs.length>300) logs.shift();
+  const body=document.getElementById("log-body");
+  if(!body) return;
+  const empty=body.querySelector(".log-empty");
+  if(empty) empty.remove();
+  const div=document.createElement("div");
+  div.className="ll";
+  div.style.color=c[type]||c.info;
+  const urlRx=/(https?:\/\/\S+)/g;
+  let html=`<span class="ll-ts">${ts}</span>`;
+  msg.split(urlRx).forEach(p=>{
+    if(p.match(/^https?:\/\//)) html+=`<a href="${p}" target="_blank" style="color:var(--blue)">${p.slice(0,55)+(p.length>55?"…":"")}</a>`;
+    else html+=p.replace(/</g,"&lt;").replace(/>/g,"&gt;");
   });
-  div.innerHTML = html;
+  div.innerHTML=html;
   body.appendChild(div);
+  body.scrollTop=body.scrollHeight;
+  document.getElementById("log-count").textContent=logs.length+" events";
 }
 
-// ── PIPELINE ──────────────────────────────────────────
-function renderPipeline() {
-  const el = document.getElementById("pipeline-steps");
-  el.innerHTML = PIPE_STEPS.map((s,i) => {
-    const state = scanPhase > i+1 ? "done" : scanPhase === i+1 ? "active" : "";
-    const lineActive = scanPhase > i+1;
-    return `
-      <div class="pipe-step">
-        ${i < 4 ? `<div class="pipe-step-line${lineActive?" active":""}"></div>` : ""}
-        <div class="pipe-step-icon${state?" "+state:""}">${state==="done"?"✓":s.icon}</div>
-        <div class="pipe-step-lbl${state?" "+state:""}">${s.label.replace("\n","<br>")}</div>
-      </div>`;
-  }).join("");
+// ─────────────────────────────────────────────
+// ANALYZE
+// ─────────────────────────────────────────────
+function openAnalyze() {
+  switchTab("deals");
+  const panel = document.getElementById("analyze-panel");
+  panel.classList.toggle("show");
+  panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
-// ── SOURCES ───────────────────────────────────────────
-function renderSources() {
-  const groups = [
-    { type:"bank_npa", title:"🏦  NPA ธนาคาร — Non-Performing Assets" },
-    { type:"enforcement", title:"🏛️  กรมบังคับคดี — Distressed Assets" },
-    { type:"marketplace", title:"🏠  ตลาดอสังหาฯ — Market Price Reference" },
-  ];
-  document.getElementById("pane-sources").innerHTML = `
-    <div style="color:var(--gray);font-size:11px;margin-bottom:16px">
-      แหล่งข้อมูลที่ระบบ crawl อัตโนมัติ — คลิก 🔗 เพื่อเปิดเว็บต้นทาง
-    </div>` +
-    groups.map(g => {
-      const sites = TARGET_SITES.filter(s => s.type === g.type);
-      const col = TYPE_COLOR[g.type];
-      return `
-        <div class="type-section">
-          <div class="type-header" style="color:${col}">
-            ${g.title}
-            <div class="type-divider" style="background:${col}"></div>
-          </div>
-          <div class="sites-grid">
-            ${sites.map(site => `
-              <div class="site-card">
-                <div class="site-header">
-                  <div>
-                    <div class="site-name">${site.label}</div>
-                    <span class="tag" style="background:${col}22;color:${col};border:1px solid ${col}44">${TYPE_LABEL[site.type]}</span>
-                  </div>
-                </div>
-                <div class="site-desc">${site.desc}</div>
-                <div class="url-box">
-                  <div class="url-label">TARGET URL</div>
-                  <div class="url-row">
-                    <span class="url-key">ที่มา:</span>
-                    <a href="${site.url}" target="_blank" style="color:var(--blue);font-size:10px;border-bottom:1px solid #3b9eff44">🔗 ${site.url.replace(/https?:\/\/(www\.)?/,"").split("/")[0]}</a>
-                  </div>
-                </div>
-                <div class="site-prog">สถานะ: <span>รอสแกน</span></div>
-              </div>
-            `).join("")}
-          </div>
-        </div>`;
-    }).join("");
-}
-
-// ── DEALS ─────────────────────────────────────────────
-function renderDeals() {
-  const pane = document.getElementById("pane-deals");
-  if (!pane) return;
-
-  // Dynamic province list from current data
-  const provinces = [...new Set(
-    deals.map(d => getProvince(d.location || "")).filter(Boolean)
-  )].sort((a,b) => a.localeCompare(b, "th"));
-
-  const TYPES = [
-    { val:"",            label:"ทั้งหมด" },
-    { val:"house",       label:"🏠 บ้านเดี่ยว" },
-    { val:"townhouse",   label:"🏘 ทาวน์เฮ้าส์" },
-    { val:"condo",       label:"🏢 คอนโด" },
-    { val:"land",        label:"🌾 ที่ดิน" },
-    { val:"commercial",  label:"🏬 อาคารพาณิชย์" },
-    { val:"other",       label:"📦 อื่นๆ" },
-  ];
-
-  // Count per type
-  const typeCounts = {};
-  deals.forEach(d => { typeCounts[d.property_type || "other"] = (typeCounts[d.property_type||"other"]||0)+1; });
-
-  // Apply all filters
-  const filtered = applyFilters(deals);
-  const sorted = [...filtered].sort((a,b) => (b.roi_percent||0) - (a.roi_percent||0));
-  const hasActiveFilter = searchQuery || filterProvince || filterType || dealFilter === "hot";
-
-  pane.innerHTML = `
-    <div id="filter-bar">
-      <div class="filter-row">
-        <input type="text" id="search-box"
-          placeholder="🔍 ค้นหาโครงการ, ทำเล, ประเภท..."
-          value="${searchQuery.replace(/"/g,'&quot;')}"
-          oninput="searchQuery=this.value;renderDeals()" />
-        <select id="province-select" onchange="filterProvince=this.value;renderDeals()">
-          <option value="">🗺 ทุกจังหวัด</option>
-          ${provinces.map(p =>
-            `<option value="${p}" ${filterProvince===p?"selected":""}>${p}</option>`
-          ).join("")}
-        </select>
-        ${hasActiveFilter ? `<button class="filter-btn" onclick="resetFilters()" style="color:var(--red);border-color:#e0555533">✕ ล้างตัวกรอง</button>` : ""}
-        <span class="filter-count">${filtered.length} / ${deals.length} ทรัพย์</span>
-      </div>
-      <div class="filter-row">
-        ${TYPES.map(t => {
-          const cnt = t.val === "" ? deals.length : (typeCounts[t.val]||0);
-          if (t.val !== "" && cnt === 0) return "";
-          return `<button class="filter-btn${filterType===t.val?" active":""}"
-            onclick="filterType='${t.val}';renderDeals()"
-            title="${cnt} รายการ">
-            ${t.label}${t.val !== "" ? ` <span style="opacity:0.6;font-size:10px">(${cnt})</span>` : ""}
-          </button>`;
-        }).join("")}
-        <button class="filter-btn${dealFilter==="hot"?" active":""}"
-          onclick="dealFilter=dealFilter==='hot'?'all':'hot';renderDeals()">
-          🔥 HOT (${hotDeals.length})
-        </button>
-      </div>
-    </div>
-    <div id="deals-grid">
-      ${sorted.length === 0 ?
-        `<div id="deals-empty" style="grid-column:1/-1">
-          ${deals.length === 0
-            ? "ยังไม่มีดีล — กด ▶ เริ่มสแกน เพื่อดึงข้อมูล"
-            : `ไม่พบทรัพย์ที่ตรงกับตัวกรอง — <a href="#" onclick="resetFilters();return false" style="color:var(--gold)">ล้างตัวกรอง</a>`}
-        </div>`
-        : sorted.map(d => dealCard(d)).join("")
-      }
-    </div>`;
-}
-
-const TYPE_TH = { land:"ที่ดิน", condo:"คอนโด", house:"บ้านเดี่ยว", townhouse:"ทาวน์เฮาส์", commercial:"อาคารพาณิชย์", other:"ทรัพย์" };
-
-// ── IMAGE SLIDESHOW STATE ──────────────────────────────
-const slideIdx = {}; // cardId → currentIndex
-
-function slideMove(cardId, delta, total) {
-  if (!slideIdx[cardId]) slideIdx[cardId] = 0;
-  slideIdx[cardId] = ((slideIdx[cardId] + delta) + total) % total;
-  _applySlide(cardId, total);
-}
-
-function slideTo(cardId, idx, total) {
-  slideIdx[cardId] = idx;
-  _applySlide(cardId, total);
-}
-
-function _applySlide(cardId, total) {
-  const idx = slideIdx[cardId] || 0;
-  const el = document.getElementById("img-" + cardId);
-  const cnt = document.getElementById("sc-" + cardId);
-  if (el) el.src = el.dataset["imgs"].split("|")[idx];
-  if (cnt) cnt.textContent = `${idx+1}/${total}`;
-  // dots
-  for (let i = 0; i < total; i++) {
-    const dot = document.getElementById(`dot-${cardId}-${i}`);
-    if (dot) dot.className = "slide-dot" + (i===idx?" active":"");
+async function runAnalyze(hotOnly=false) {
+  const limit = parseInt(document.getElementById("analyze-limit").value)||50;
+  const btn   = document.getElementById("btn-run-analyze");
+  btn.disabled=true; btn.textContent="⏳ กำลังวิเคราะห์...";
+  document.getElementById("analyze-status").textContent="กำลังส่ง request...";
+  try {
+    const r = await fetch(`${API}/analyze?limit=${limit}&hot_only=${hotOnly}`,{method:"POST"});
+    const d = await r.json();
+    document.getElementById("analyze-status").textContent=d.message||"Started";
+    showToast("🧠 AI Analysis เริ่มทำงาน — รอสักครู่แล้ว reload");
+  } catch(e) {
+    document.getElementById("analyze-status").textContent="Error: "+e.message;
+    showToast("❌ Analyze error: "+e.message);
   }
+  setTimeout(()=>{btn.disabled=false;btn.textContent="▶ วิเคราะห์ทั้งหมด";},3000);
 }
 
-function dealCard(d) {
-  const rawRoi = d.roi_percent || 0;
-  const roiCapped = Math.min(rawRoi, 999);
-  const roiSuspect = rawRoi > 999; // likely land area bug
-  const hot = rawRoi >= 30 && !roiSuspect;
-  const srcCol = d.source_domain?.includes("krungthai") ? "#3b9eff" :
-                 d.source_domain?.includes("led.go")    ? "#e05555" :
-                 d.source_domain?.includes("bam")       ? "#C9A84C" :
-                 d.source_domain?.includes("krungsri")  ? "#9b6dff" :
-                 d.source_domain?.includes("gsb")       ? "#f59e0b" :
-                 d.source_domain?.includes("scb")       ? "#6b21a8" :
-                 d.source_domain?.includes("ghb")       ? "#16a34a" : "#64748b";
-  const cond = d.condition || "—";
-  const condCol = COND_COLOR[cond] || "#8a9ba8";
-  const priceM = d.price ? (d.price/1e6).toFixed(2) : "—";
-
-  // area display
-  const areaSqm = d.area_sqm || 0;
-  const areaDisplay = areaSqm >= 400
-    ? `${(areaSqm/1600).toFixed(2)} ไร่ (${areaSqm} ตร.ม.)`
-    : areaSqm > 0 ? `${areaSqm} ตร.ม.` : "—";
-
-  const src = d.source_domain || "—";
-  const url = d.listing_url || d.url || "#";
-  const pType = d.property_type || "other";
-  const loc = d.location || "";
-  const locShort = loc.split(/[,\/]/)[0].trim() || "—";
-
-  // smart title
-  const typeTH = TYPE_TH[pType] || "ทรัพย์";
-  const projectName = d.project_name || d.title || null;
-  const title = (projectName && projectName !== "null" && projectName.length > 3)
-    ? projectName
-    : `${typeTH}${locShort !== "—" ? " — " + locShort : ""}`;
-
-  const roiColor = roiSuspect ? "#5a7a8a" : rawRoi >= 30 ? "#27c97a" : rawRoi >= 15 ? "#f0b429" : "#e05555";
-  const roiLabel = roiSuspect ? "⚠️ ข้อมูลไม่แม่นยำ" : rawRoi >= 30 ? "🟢 ควรซื้อ" : rawRoi >= 15 ? "🟡 พิจารณา" : "🔴 ข้าม";
-  const roiDisplay = roiSuspect ? `${roiCapped}%+` : `${rawRoi.toFixed(1)}%`;
-
-  // ── Image slideshow ───────────────────────────────────
-  const cardId = "c" + (d.id || Math.random().toString(36).slice(2));
-  const rawData = (typeof d.raw_data === "object" && d.raw_data) ? d.raw_data : {};
-  const images = (rawData.images && Array.isArray(rawData.images) && rawData.images.length > 0)
-    ? rawData.images : [];
-  const hasImgs = images.length > 0;
-  const imgsPipe = images.map(u => u.replace(/\|/g,"")).join("|");
-
-  const imgHTML = hasImgs ? `
-    <div class="img-slide">
-      <img id="img-${cardId}"
-           src="${images[0]}"
-           data-imgs="${imgsPipe}"
-           alt="property"
-           loading="lazy"
-           onerror="this.parentElement.innerHTML='<div class=\\'img-placeholder\\'>🏠</div>'" />
-      ${images.length > 1 ? `
-        <button class="slide-btn prev" onclick="event.stopPropagation();slideMove('${cardId}',-1,${images.length})">‹</button>
-        <button class="slide-btn next" onclick="event.stopPropagation();slideMove('${cardId}',1,${images.length})">›</button>
-        <div class="slide-dots">
-          ${images.map((_,i)=>`<button class="slide-dot${i===0?' active':''}" id="dot-${cardId}-${i}"
-            onclick="event.stopPropagation();slideTo('${cardId}',${i},${images.length})"></button>`).join("")}
-        </div>
-        <span class="slide-count" id="sc-${cardId}">1/${images.length}</span>
-      ` : ""}
-    </div>` : `
-    <div class="img-slide">
-      <div class="img-placeholder">🏠</div>
-    </div>`;
-
-  return `
-    <div class="deal-card${hot?" hot":""}">
-      <a href="${url}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block">
-        ${imgHTML}
-      </a>
-      <div class="deal-card-body">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <div style="min-width:0;flex:1">
-            <div class="deal-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div>
-            <div class="deal-location">📍 ${loc || "—"} · ${areaDisplay}</div>
-          </div>
-          <span class="tag" style="background:${srcCol}22;color:${srcCol};border:1px solid ${srcCol}44;flex-shrink:0;margin-left:8px">${typeTH}</span>
-        </div>
-        <div class="deal-meta">
-          <div class="deal-field">
-            <div class="deal-field-lbl">ราคาซื้อ</div>
-            <div class="deal-field-val">฿${priceM}M</div>
-          </div>
-          <div class="deal-field">
-            <div class="deal-field-lbl">สภาพทรัพย์</div>
-            <div class="deal-field-val" style="color:${condCol}">${cond}</div>
-          </div>
-        </div>
-        <a href="${url}" target="_blank" rel="noopener noreferrer" class="deal-source" style="text-decoration:none;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onmouseover="this.style.background='#1e3d4f'" onmouseout="this.style.background='#060f15'">
-          <div>
-            <div class="deal-source-lbl">แหล่งที่มา — คลิกเพื่อดูทรัพย์ ↗</div>
-            <span style="color:var(--blue);font-size:11px">🔗 ${url !== "#" ? url.replace("https://","").split("?")[0].slice(0,50) : src}</span>
-          </div>
-          <span style="color:var(--blue);font-size:20px;font-weight:300">↗</span>
-        </a>
-        <div class="deal-roi">
-          <span style="color:var(--gray);font-size:10px">ROI</span>
-          <span style="color:${roiColor};font-weight:700">${roiLabel} ${roiDisplay}</span>
-        </div>
-        ${hot ? `
-        <div class="hot-badge">
-          <span style="color:var(--green);font-size:10px;font-weight:700">🔥 HOT DEAL — ROI ${rawRoi.toFixed(1)}%</span>
-          <a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--blue);font-size:10px;border-bottom:1px solid #3b9eff44">ดูทรัพย์ →</a>
-        </div>` : ""}
-        ${roiSuspect ? `
-        <div style="margin-top:8px;background:#1e3d4f33;border-radius:5px;padding:5px 8px;font-size:9px;color:var(--gray)">
-          ⚠️ ที่ดิน — ROI อาจสูงเกินจริง (ระบบคำนวณ Rai/ตร.ม. กำลังปรับปรุง)
-        </div>` : ""}
-      </div>
-    </div>`;
+// ─────────────────────────────────────────────
+// EXPORT CSV
+// ─────────────────────────────────────────────
+function exportCSV() {
+  const filtered = applySort(applyFilters(deals));
+  if (!filtered.length) { showToast("ไม่มีข้อมูลที่ export"); return; }
+  const headers = ["id","listing_url","source_domain","property_type","location","price","area_sqm","condition","roi_percent","roi_flag","total_cost","estimated_profit","scraped_at"];
+  const rows = filtered.map(d => headers.map(k => {
+    const v = d[k];
+    if (v===null||v===undefined) return "";
+    if (typeof v==="string"&&v.includes(",")) return `"${v.replace(/"/g,'""')}"`;
+    return v;
+  }).join(","));
+  const csv = [headers.join(","), ...rows].join("\n");
+  const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `redd-deals-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast(`⬇ Export ${filtered.length} deals เสร็จแล้ว`);
 }
 
-function updateDealTab() {
-  const hot = deals.filter(d => d.roi_percent >= 30);
-  document.getElementById("tab-deals").textContent = `📋 Deals${hot.length ? ` 🔥${hot.length}` : ""}`;
-}
-
-// ── TABS ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────────
 function switchTab(name) {
-  ["sources","live","deals"].forEach(t => {
-    document.getElementById("pane-"+t).style.display = t===name ? "" : "none";
-    document.getElementById("tab-"+t).classList.toggle("active", t===name);
+  ["sources","deals","live"].forEach(t=>{
+    document.getElementById("pane-"+t).style.display=t===name?"":"none";
+    document.getElementById("tab-"+t).classList.toggle("active",t===name);
   });
+}
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+function getSrcColor(src) {
+  for (const [k,v] of Object.entries(SRC_COLORS)) {
+    if (src.includes(k)) return v;
+  }
+  return "#64748b";
+}
+
+function fmtNum(n) {
+  if (n===null||n===undefined) return "—";
+  return Number(n).toLocaleString("th-TH");
+}
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove("show"),3500);
 }
 </script>
 </body>
