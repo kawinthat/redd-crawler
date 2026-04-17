@@ -902,12 +902,26 @@ function dealCard(d) {
   const breakdownId = "bd-" + cardId;
   const breakdownHTML = hasBreakdown ? `
     <div class="roi-breakdown" id="${breakdownId}">
-      <div class="rb-row"><span class="rb-lbl">ราคาซื้อ</span><span class="rb-val">฿${fmtNum(d.buy_price||d.price)}</span></div>
-      <div class="rb-row"><span class="rb-lbl">ค่ารีโนเวท</span><span class="rb-val">฿${fmtNum(d.reno_cost_total)} (${fmtNum(d.reno_cost_sqm)}/ตร.ม.)</span></div>
-      <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง</span><span class="rb-val">฿${fmtNum(d.transfer_fee)}</span></div>
-      <div class="rb-row rb-total"><span class="rb-lbl">ต้นทุนรวม</span><span class="rb-val" style="color:var(--yellow)">฿${fmtNum(d.total_cost)}</span></div>
-      <div class="rb-row"><span class="rb-lbl">ราคาตลาด</span><span class="rb-val" style="color:var(--green)">฿${fmtNum(d.market_value)}</span></div>
-      <div class="rb-row rb-total"><span class="rb-lbl">กำไรโดยประมาณ</span><span class="rb-val" style="color:var(--green)">฿${fmtNum(d.estimated_profit)}</span></div>
+      ${(()=>{
+        const buyPrice   = d.buy_price || d.price || 0;
+        const renoTotal  = d.reno_cost_total || 0;
+        const renoArea   = d.area_sqm || d.usable_area_sqm || 0;
+        const renoSqm    = d.reno_cost_sqm || (renoArea>0 && renoTotal>0 ? Math.round(renoTotal/renoArea) : null);
+        const transfer   = d.transfer_fee || Math.round(buyPrice * 0.04);
+        const totalCost  = d.total_cost || (buyPrice + renoTotal + transfer);
+        const mktVal     = d.market_value || 0;
+        const profit     = d.estimated_profit || (mktVal - totalCost);
+        const mktSqm     = d.market_price_sqm || null;
+        return `
+      <div class="rb-row"><span class="rb-lbl">ราคาซื้อ</span><span class="rb-val">฿${fmtNum(buyPrice)}</span></div>
+      <div class="rb-row"><span class="rb-lbl">ค่ารีโนเวท</span><span class="rb-val">฿${fmtNum(renoTotal)}${renoSqm?" (฿"+fmtNum(renoSqm)+"/ตร.ม.)":""}</span></div>
+      <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง <span style="font-size:9px;color:var(--gray)">(4%)</span></span><span class="rb-val">฿${fmtNum(transfer)}</span></div>
+      <div class="rb-row rb-total"><span class="rb-lbl">ต้นทุนรวม</span><span class="rb-val" style="color:var(--yellow)">฿${fmtNum(totalCost)}</span></div>
+      <div class="rb-row"><span class="rb-lbl">ราคาตลาดอ้างอิง${mktSqm?" (฿"+fmtNum(mktSqm)+"/ตร.ม.)":""}</span><span class="rb-val" style="color:var(--green)">฿${fmtNum(mktVal)}</span></div>
+      <div class="rb-row rb-total"><span class="rb-lbl">กำไรโดยประมาณ</span><span class="rb-val" style="color:${profit>0?"var(--green)":"var(--red)"}">฿${fmtNum(Math.round(profit))}</span></div>
+      <div style="font-size:9px;color:var(--gray);margin-top:6px;line-height:1.4">⚠️ ROI นี้เป็นค่าประมาณการเท่านั้น ราคาตลาดอ้างอิงจากฐานข้อมูลภายใน ควรตรวจสอบราคาตลาดจริงก่อนตัดสินใจ</div>
+        `;
+      })()}
     </div>` : "";
 
   return `

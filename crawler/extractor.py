@@ -234,16 +234,32 @@ RENO_COST_MATRIX = {
 }
 
 DEFAULT_MARKET_PRICE_SQM = {
-    # ราคาตลาดอ้างอิง บาท/ตร.ม (fallback ถ้าไม่มี comparable)
-    "กรุงเทพมหานคร":  95000,
-    "กรุงเทพ":        95000,
-    "นนทบุรี":        45000,
-    "ปทุมธานี":       30000,
-    "สมุทรปราการ":    40000,
-    "เชียงใหม่":      45000,
-    "ภูเก็ต":         80000,
-    "ชลบุรี":         55000,
-    "default":        40000,
+    # ราคาตลาดอ้างอิง บาท/ตร.ม — ใช้ average condo ทั้งจังหวัดรวมชานเมือง
+    # (ปรับลดจาก prime-only เพื่อ ROI ที่สมเหตุสมผลกว่า)
+    "กรุงเทพมหานคร":  65000,   # avg Bangkok รวม suburb condo
+    "กรุงเทพ":        65000,
+    "นนทบุรี":        40000,
+    "ปทุมธานี":       28000,
+    "สมุทรปราการ":    35000,
+    "เชียงใหม่":      40000,
+    "ภูเก็ต":         70000,
+    "ชลบุรี":         50000,
+    "ระยอง":          30000,
+    "ขอนแก่น":        25000,
+    "นครราชสีมา":     22000,
+    "สุราษฎร์ธานี":   28000,
+    "default":        22000,
+}
+
+# ตัวคูณปรับราคาตลาดตาม property_type
+# คอนโด = baseline (×1.0), บ้าน/ทาวน์เฮ้าส์ = ราคา/ตร.ม. ต่ำกว่าคอนโด
+TYPE_MARKET_MULTIPLIER = {
+    "condo":      1.0,
+    "house":      0.55,   # บ้านเดี่ยว: ราคาตลาด/ตร.ม. ต่ำกว่าคอนโดประมาณ 45%
+    "townhouse":  0.50,   # ทาวน์เฮ้าส์: ต่ำกว่าประมาณ 50%
+    "land":       0.40,   # ที่ดิน: เปรียบเทียบยาก ใช้ค่าต่ำไว้ก่อน
+    "commercial": 0.80,
+    "other":      0.70,
 }
 
 
@@ -303,12 +319,14 @@ class ROIEngine:
 
         # ─ ราคาตลาด ─
         if market_price_sqm is None:
+            base_price = DEFAULT_MARKET_PRICE_SQM["default"]
             for key, val in DEFAULT_MARKET_PRICE_SQM.items():
-                if key in location:
-                    market_price_sqm = val
+                if key != "default" and key in location:
+                    base_price = val
                     break
-            else:
-                market_price_sqm = DEFAULT_MARKET_PRICE_SQM["default"]
+            # ปรับตาม property_type (condo = baseline, house/townhouse ต่ำกว่า)
+            multiplier = TYPE_MARKET_MULTIPLIER.get(prop_type, 1.0)
+            market_price_sqm = base_price * multiplier
 
         # ─ คำนวณ ─
         reno_total    = area * reno_cost_sqm
