@@ -11,6 +11,7 @@ import json
 import os
 import random
 import time
+from typing import Optional
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -87,75 +88,82 @@ class AutonomousCrawler:
             # ── Phase 1: Harvest listing URLs + API data ──
             listing_urls, api_data = await self._harvest(base_url, config)
             self._stats["links_found"] = len(listing_urls)
-            logger.info(f"📋 พบ {len(listing_urls)} listing URLs (API price data: {len(api_data)} records)")
+            logger.info(f"📋 พบ {len(listing_urls)} listing URLs (API records: {len(api_data)})")
 
-            if not listing_urls:
+            if not listing_urls and not api_data:
                 logger.warning("ไม่พบ listing — จบการทำงาน")
                 self._stats["finished_at"] = datetime.now(timezone.utc).isoformat()
                 return self._stats
 
-            # ── Phase 2: Scrape detail pages ──
-            raw_listings = await self._scrape_details(listing_urls, config)
-            self._stats["scraped"] = len(raw_listings)
-
-            # ── Phase 3: AI Extract ──
-            if not raw_listings:
-                logger.warning("ไม่มี HTML ให้ extract")
-                self._stats["finished_at"] = datetime.now(timezone.utc).isoformat()
-                return self._stats
-
-            extracted = await self.extractor.extract_batch(
-                [{"url": r.url, "html": r.html, "source_domain": r.source_domain}
-                 for r in raw_listings],
-                batch_size=5,
-            )
-            self._stats["extracted"] = len(extracted)
-            logger.info(f"🤖 Extracted {len(extracted)} records")
-
-            # ── Phase 4: ROI + Save ──
             hot_deals = []
-            for data in extracted:
-                if data.get("error"):
-                    self._stats["errors"] += 1
-                    continue
 
-                # Merge API price data — krungthai hides prices in HTML
-                url = data.get("listing_url", "")
-                if url in api_data:
-                    api = api_data[url]
-                    # Use API price if AI couldn't find one from HTML
-                    if not data.get("price") and api.get("asking_price"):
-                        try:
-                            data["price"] = int(str(api["asking_price"]).replace(",", ""))
-                        except (ValueError, TypeError):
-                            pass
-                    if not data.get("location") and api.get("location"):
-                        data["location"] = api["location"]
-                    if not data.get("property_type") and api.get("property_type"):
-                        data["property_type"] = api["property_type"]
-                    # Convert area_rai → area_sqm if area missing (1 Rai = 1,600 sqm)
-                    if not data.get("area_sqm") and api.get("area_rai"):
-                        try:
-                            rai = float(str(api["area_rai"]).replace(",", ""))
-                            if rai > 0:
-                                data["area_sqm"] = round(rai * 1600, 2)
-                        except (ValueError, TypeError):
-                            pass
+            if api_data:
+                # ── API Fast-Path: ข้าม Playwright ──────────────────────────────
+                # มีข้อมูลจาก REST API แล้ว — ไม่ต้อง scrape detail pages
+                logger.info(f"⚡ API fast-path: บันทึก {len(api_data)} records โดยตรง (ไม่ใช้ Playwright)")
+                self._stats["scraped"] = len(api_data)
+                self._stats["extracted"] = len(api_data)
+                self._stats["pages_crawled"] = len(api_data)
 
-                roi = self.roi_engine.calculate(data)
-                self._log_deal(data, roi)
+                for url, record in api_data.items():
+                    deal = self._api_record_to_deal(record)
+                    if not deal.get("listing_url") or not deal.get("price"):
+                        self._stats["skipped"] += 1
+                        continue
 
-                if not self.dry_run:
-                    merged = {**data, **roi}
-                    ok = await self.db.upsert_deal(merged)
-                    if ok:
+                    roi = self.roi_engine.calculate(deal)
+                    self._log_deal(deal, roi)
+                    merged = {**deal, **roi}
+
+                    if not self.dry_run:
+                        ok = await self.db.upsert_deal(merged)
+                        if ok:
+                            self._stats["saved"] += 1
+                    else:
                         self._stats["saved"] += 1
-                else:
-                    self._stats["saved"] += 1   # count as "would save"
 
-                if roi.get("priority") == "HIGH":
-                    hot_deals.append({**data, **roi})
-                    self._stats["hot_deals"] += 1
+                    if roi.get("priority") == "HIGH":
+                        hot_deals.append(merged)
+                        self._stats["hot_deals"] += 1
+
+            else:
+                # ── Playwright Path: scrape detail pages ────────────────────────
+                # ใช้เฉพาะสำหรับ sites ที่ไม่มี API harvester
+                raw_listings = await self._scrape_details(listing_urls, config)
+                self._stats["scraped"] = len(raw_listings)
+
+                if not raw_listings:
+                    logger.warning("ไม่มี HTML ให้ extract")
+                    self._stats["finished_at"] = datetime.now(timezone.utc).isoformat()
+                    return self._stats
+
+                extracted = await self.extractor.extract_batch(
+                    [{"url": r.url, "html": r.html, "source_domain": r.source_domain}
+                     for r in raw_listings],
+                    batch_size=5,
+                )
+                self._stats["extracted"] = len(extracted)
+                logger.info(f"🤖 Extracted {len(extracted)} records")
+
+                for data in extracted:
+                    if data.get("error"):
+                        self._stats["errors"] += 1
+                        continue
+
+                    roi = self.roi_engine.calculate(data)
+                    self._log_deal(data, roi)
+                    merged = {**data, **roi}
+
+                    if not self.dry_run:
+                        ok = await self.db.upsert_deal(merged)
+                        if ok:
+                            self._stats["saved"] += 1
+                    else:
+                        self._stats["saved"] += 1
+
+                    if roi.get("priority") == "HIGH":
+                        hot_deals.append(merged)
+                        self._stats["hot_deals"] += 1
 
             # ── Phase 5: Alert ──
             if not self.dry_run:
@@ -241,6 +249,99 @@ class AutonomousCrawler:
                 break
 
         return list(all_urls)[:config.max_listings], {}
+
+    # ─────────────────────────────────────────
+    # API RECORD → DEAL FORMAT
+    # ─────────────────────────────────────────
+
+    def _api_record_to_deal(self, record: dict) -> dict:
+        """
+        แปลง normalized API record (จาก KrungthaiHarvester / SCBNPAHarvester / GHBankHarvester / etc.)
+        → deal dict ที่ ROIEngine และ SupabaseWriter รับได้
+
+        ทุก harvester ส่ง dict ที่มี keys เดียวกัน (normalized format):
+          source_url, price, area_sqm, property_type, condition, location,
+          title, source_domain, is_benchmark
+        บาง harvester (krungthai) ส่ง asking_price, area_rai, property_type (ภาษาไทย)
+        """
+        # ── property type mapping ────────────────────────────────────────
+        PTYPE_MAP = {
+            "บ้านเดี่ยว": "house", "บ้าน": "house",
+            "ทาวน์เฮ้าส์": "townhouse", "ทาวน์โฮม": "townhouse", "ทาวน์เฮาส์": "townhouse",
+            "คอนโด": "condo", "ห้องชุด": "condo", "อาคารชุด": "condo",
+            "ที่ดิน": "land", "ที่ดินเปล่า": "land",
+            "อาคาร": "other", "สิ่งปลูกสร้าง": "other", "ตึกแถว": "other",
+            "house": "house", "condo": "condo", "townhouse": "townhouse",
+            "land": "land", "other": "other",
+        }
+
+        ptype_raw = str(record.get("property_type") or "")
+        ptype = PTYPE_MAP.get(ptype_raw, "other")
+
+        # ── price ────────────────────────────────────────────────────────
+        price = 0.0
+        for price_key in ("price", "asking_price", "appraisalPrice", "start_price"):
+            raw_p = record.get(price_key)
+            if raw_p:
+                try:
+                    price = float(str(raw_p).replace(",", ""))
+                    if price > 0:
+                        break
+                except (ValueError, TypeError):
+                    pass
+
+        # ── area ─────────────────────────────────────────────────────────
+        area_sqm = 0.0
+        # Prefer direct sqm field
+        for area_key in ("area_sqm", "usable_area", "floor_size"):
+            raw_a = record.get(area_key)
+            if raw_a:
+                try:
+                    area_sqm = float(str(raw_a).replace(",", ""))
+                    if area_sqm > 0:
+                        break
+                except (ValueError, TypeError):
+                    pass
+
+        # Fallback: rai → sqm (1 rai = 1,600 sqm)
+        if area_sqm == 0:
+            raw_rai = record.get("area_rai")
+            if raw_rai:
+                try:
+                    rai = float(str(raw_rai).replace(",", ""))
+                    if rai > 0:
+                        area_sqm = round(rai * 1600, 2)
+                except (ValueError, TypeError):
+                    pass
+
+        # ── condition ────────────────────────────────────────────────────
+        condition = record.get("condition") or ("fair" if record.get("source_domain") == "npa.krungthai.com" else "good")
+
+        # ── location ─────────────────────────────────────────────────────
+        location = record.get("location") or ""
+        if not location:
+            parts = filter(None, [record.get("district"), record.get("province")])
+            location = " ".join(parts)
+
+        # ── title / project_name ─────────────────────────────────────────
+        title = record.get("title") or record.get("project_name") or ""
+
+        return {
+            "listing_url":   record.get("source_url") or record.get("listing_url", ""),
+            "source_domain": record.get("source_domain") or record.get("source_site", ""),
+            "source_type":   "NPA" if not record.get("is_benchmark") else "MARKET",
+            "property_type": ptype,
+            "project_name":  title,
+            "location":      location,
+            "price":         price,
+            "area_sqm":      area_sqm,
+            "condition":     condition,
+            "scraped_at":    datetime.now(timezone.utc).isoformat(),
+            "raw_data":      json.dumps({
+                k: v for k, v in record.items()
+                if k != "raw" and v is not None
+            }, ensure_ascii=False)[:2000],
+        }
 
     # ─────────────────────────────────────────
     # PHASE 2: SCRAPE DETAILS
