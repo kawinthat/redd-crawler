@@ -293,11 +293,15 @@ async function loadStats() {
   try {
     const r = await fetch(API + "/deals/stats");
     const d = await r.json();
-    document.getElementById("s-total").textContent = d.total ?? "—";
-    document.getElementById("s-hot").textContent = d.hot ?? "—";
-    document.getElementById("s-medium").textContent = d.medium ?? "—";
-    document.getElementById("s-avg").textContent = d.avg_roi != null ? d.avg_roi.toFixed(1) + "%" : "—";
-  } catch(e) {}
+    document.getElementById("s-total").textContent = d.total_deals ?? "—";
+    document.getElementById("s-hot").textContent = d.hot_deals ?? "—";
+    document.getElementById("s-medium").textContent = d.medium_deals ?? "—";
+    // calc avg ROI from deals array if API doesn't return it
+    const avgRoi = deals.length > 0
+      ? (deals.reduce((s,x) => s + (x.roi_percent||0), 0) / deals.length).toFixed(1) + "%"
+      : "—";
+    document.getElementById("s-avg").textContent = avgRoi;
+  } catch(e) { console.error("loadStats:", e); }
 }
 
 // ── SCAN ──────────────────────────────────────────────
@@ -325,6 +329,11 @@ async function triggerScan(dryRun=false) {
     const d = await resp.json();
     if (d.status === "started" || d.status === "running") {
       addLog("success", `✅ Scan started — job_id: ${d.job_id || "—"}`);
+      scanPhase = 1;
+      renderPipeline();
+      startPolling();
+    } else if (d.detail && d.detail.toLowerCase().includes("already running")) {
+      addLog("warn", "⚠️ Scan กำลังทำงานอยู่แล้ว — กำลัง monitor สถานะ...");
       scanPhase = 1;
       renderPipeline();
       startPolling();
