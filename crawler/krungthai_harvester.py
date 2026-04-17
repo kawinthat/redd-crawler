@@ -96,14 +96,16 @@ class KrungthaiHarvester:
     async def fetch_all(
         self,
         max_pages: int = 140,
+        max_listings: int = 2000,
         endpoint: str = "/homePage",
     ) -> list[dict]:
         """
         ดึง listing ทุกหน้าจาก API
 
         Args:
-            max_pages: จำนวนหน้าสูงสุด (default=140 = ทั้งหมด)
-            endpoint:  API endpoint ("/homePage" หรือ "/flashSale")
+            max_pages:    จำนวนหน้าสูงสุด (default=140 = ทั้งหมด)
+            max_listings: จำนวน listing สูงสุด (default=2000)
+            endpoint:     API endpoint ("/homePage" หรือ "/flashSale")
 
         Returns:
             list[dict]: normalized listing records พร้อม source_url
@@ -119,13 +121,16 @@ class KrungthaiHarvester:
             logger.info(
                 f"KrungthaiHarvester: totalRows={total_rows}, "
                 f"pageCount={paging.get('pageCount')}, "
-                f"fetching up to {total_pages} pages"
+                f"fetching up to {total_pages} pages (max_listings={max_listings})"
             )
 
             results.extend(self._normalize(r) for r in dr)
             logger.info(f"  Page 1/{total_pages}: +{len(dr)} items")
 
             for page in range(2, total_pages + 1):
+                if len(results) >= max_listings:
+                    logger.info(f"  ✅ ถึง max_listings ({max_listings}) แล้ว — หยุด")
+                    break
                 await asyncio.sleep(self.delay + random.uniform(0, 0.4))
                 try:
                     dr, _ = await self._post_page(client, endpoint, page=page)
@@ -135,7 +140,7 @@ class KrungthaiHarvester:
                     logger.warning(f"  Page {page} failed: {exc} — skipping")
 
         logger.success(f"KrungthaiHarvester done: {len(results)} listings")
-        return results
+        return results[:max_listings]
 
     async def fetch_urls_only(self, max_pages: int = 140) -> list[str]:
         """คืนแค่ list[str] ของ detail URLs"""
