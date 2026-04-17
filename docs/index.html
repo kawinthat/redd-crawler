@@ -196,7 +196,7 @@
 
 <!-- TABS -->
 <div id="tabs">
-  <button class="tab active" onclick="switchTab('sources')" id="tab-sources">🔗 แหล่งข้อมูล (8)</button>
+  <button class="tab active" onclick="switchTab('sources')" id="tab-sources">🔗 แหล่งข้อมูล (11)</button>
   <button class="tab" onclick="switchTab('live')" id="tab-live">📡 Live Log</button>
   <button class="tab" onclick="switchTab('deals')" id="tab-deals">📋 Deals</button>
 </div>
@@ -212,14 +212,17 @@
 const API = "https://redd-crawler.onrender.com";
 
 const TARGET_SITES = [
-  { url:"https://npa.krungthai.com", label:"Krungthai NPA", type:"bank_npa", desc:"ทรัพย์ NPA ธนาคารกรุงไทย — 56 pages, REST API" },
-  { url:"https://led.go.th/assets", label:"กรมบังคับคดี", type:"enforcement", desc:"ทรัพย์ขายทอดตลาดบังคับคดี — ราคาต่ำกว่าตลาดมากที่สุด" },
-  { url:"https://kbankasset.com", label:"KBank Asset", type:"bank_npa", desc:"ทรัพย์ NPA ธนาคารกสิกรไทย" },
-  { url:"https://www.scbnpa.com", label:"SCB NPA", type:"bank_npa", desc:"ทรัพย์ NPA ธนาคารไทยพาณิชย์" },
-  { url:"https://ghbhomecenter.com", label:"GH Bank", type:"bank_npa", desc:"ทรัพย์ NPA ธนาคารอาคารสงเคราะห์" },
-  { url:"https://www.ddproperty.com/buy", label:"DDProperty", type:"marketplace", desc:"ตลาดอสังหาฯ — market price benchmark" },
-  { url:"https://hipflat.co.th/sale", label:"Hipflat", type:"marketplace", desc:"ตลาดคอนโดมือสอง" },
-  { url:"https://baania.com/th/property/buy", label:"Baania", type:"marketplace", desc:"ตลาดอสังหาฯ + AI valuation" },
+  { url:"https://npa.krungthai.com",                                                       label:"Krungthai NPA",  type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารกรุงไทย — REST API ~5k ทรัพย์" },
+  { url:"https://www.ghbhomecenter.com",                                                   label:"GH Bank",        type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารอาคารสงเคราะห์ — HTML scraper ~3k ทรัพย์" },
+  { url:"https://www.bam.co.th/npa",                                                       label:"BAM",            type:"bank_npa",     desc:"ทรัพย์ NPA บริษัทบริหารสินทรัพย์กรุงเทพ — REST API ~16k ทรัพย์" },
+  { url:"https://www.krungsriproperty.com/home",                                           label:"Krungsri",       type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารกรุงศรีอยุธยา — HTML scraper ~1.7k ทรัพย์" },
+  { url:"https://npa-assets.gsb.or.th",                                                    label:"GSB (ออมสิน)",   type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารออมสิน — SSR scraper ~3k+ ทรัพย์" },
+  { url:"https://asset.home.scb/project",                                                  label:"SCB Asset",      type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารไทยพาณิชย์ — REST API ~4k ทรัพย์" },
+  { url:"https://www.kasikornbank.com/th/propertyforsale/search/pages/index.aspx",         label:"KBank",          type:"bank_npa",     desc:"ทรัพย์ NPA ธนาคารกสิกรไทย — WAF blocked (deferred)" },
+  { url:"https://www.led.go.th",                                                           label:"กรมบังคับคดี",  type:"enforcement",  desc:"ทรัพย์ขายทอดตลาดบังคับคดี — REST API ราคาต่ำกว่าตลาดมากที่สุด" },
+  { url:"https://www.ddproperty.com",                                                      label:"DDProperty",     type:"marketplace",  desc:"ตลาดอสังหาฯ — market price benchmark" },
+  { url:"https://www.hipflat.co.th",                                                       label:"Hipflat",        type:"marketplace",  desc:"ตลาดคอนโดมือสอง" },
+  { url:"https://www.baania.com",                                                          label:"Baania",         type:"marketplace",  desc:"ตลาดอสังหาฯ + AI valuation" },
 ];
 
 const TYPE_COLOR = { bank_npa:"#3b9eff", enforcement:"#e05555", marketplace:"#9b6dff" };
