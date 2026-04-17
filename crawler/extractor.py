@@ -286,7 +286,7 @@ class ROIEngine:
                 "buy_price":       price,
                 "area_sqm":        area,
             }
-        if prop_type in ("house", "townhouse", "condo", "commercial") and implied_price_sqm < 10_000:
+        if prop_type in ("house", "townhouse", "condo", "commercial", "other") and implied_price_sqm < 10_000:
             return {
                 "roi_valid":       False,
                 "roi_skip_reason": f"implied ฿/sqm={implied_price_sqm:.0f} ต่ำมาก — น่าจะเป็น area ที่ดินรวม ไม่ใช่พื้นที่ใช้สอย",
