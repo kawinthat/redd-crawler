@@ -185,7 +185,7 @@ async def test_db():
         test_deal = {
             "listing_url": "__test_deal_delete_me__",
             "source_domain": "test",
-            "source_type": "NPA",
+            "source_type": "bank_npa",
             "property_type": "condo",
             "location": "กรุงเทพ",
             "price": 1000000,
