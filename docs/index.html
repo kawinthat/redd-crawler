@@ -298,9 +298,10 @@ async function loadStats() {
     document.getElementById("s-total").textContent = d.total_deals ?? "—";
     document.getElementById("s-hot").textContent = d.hot_deals ?? "—";
     document.getElementById("s-medium").textContent = d.medium_deals ?? "—";
-    // calc avg ROI from deals array if API doesn't return it
-    const avgRoi = deals.length > 0
-      ? (deals.reduce((s,x) => s + (x.roi_percent||0), 0) / deals.length).toFixed(1) + "%"
+    // calc avg ROI from deals, cap outliers at 300% to avoid land-area inflation skew
+    const validRois = deals.map(x => Math.min(x.roi_percent||0, 300)).filter(r => r > 0);
+    const avgRoi = validRois.length > 0
+      ? (validRois.reduce((s,x) => s+x, 0) / validRois.length).toFixed(1) + "%"
       : "—";
     document.getElementById("s-avg").textContent = avgRoi;
   } catch(e) { console.error("loadStats:", e); }
@@ -348,18 +349,20 @@ async function triggerScan(dryRun=false) {
       body: JSON.stringify({dry_run: dryRun, max_pages: 56, max_listings: 2000})
     });
     const d = await resp.json();
-    if (d.status === "started" || d.status === "running") {
-      addLog("success", `✅ Scan started — job_id: ${d.job_id || "—"}`);
-      scanPhase = 1;
-      renderPipeline();
-      startPolling();
-    } else if (d.detail && d.detail.toLowerCase().includes("already running")) {
-      addLog("warn", "⚠️ Scan กำลังทำงานอยู่แล้ว — กำลัง monitor สถานะ...");
+    const isStarted = d.status === "started" || d.status === "running"
+      || (d.message && d.message.toLowerCase().includes("started"));
+    const isAlreadyRunning = (d.detail && d.detail.toLowerCase().includes("already running"))
+      || (d.message && d.message.toLowerCase().includes("already running"));
+
+    if (isStarted || isAlreadyRunning) {
+      addLog("success", isAlreadyRunning
+        ? "⚠️ Scan กำลังทำงานอยู่ — monitor อัตโนมัติ..."
+        : `✅ Scan started — ${d.url || "npa.krungthai.com"}`);
       scanPhase = 1;
       renderPipeline();
       startPolling();
     } else {
-      addLog("error", `❌ ${d.detail || JSON.stringify(d)}`);
+      addLog("error", `❌ ${d.detail || d.message || JSON.stringify(d)}`);
       scanDone();
     }
   } catch(e) {
