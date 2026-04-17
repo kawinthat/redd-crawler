@@ -84,16 +84,36 @@ def _parse_price(html: str) -> Optional[int]:
 
 
 def _parse_location(og_desc: str) -> str:
-    """'... เมืองปทุมธานี ปทุมธานี จากธนาคาร...' → 'ปทุมธานี เมืองปทุมธานี'"""
+    """
+    GHB OG desc: '...บางพูน เมืองปทุมธานี ปทุมธานี จากธนาคาร...'
+    → 'ปทุมธานี เมืองปทุมธานี'
+    """
+    # Pattern 1: "เขตXXX กรุงเทพ..." or "อำเภอXXX จังหวัดXXX"
     m = re.search(
-        r"(?:อำเภอ|เขต)\s*([ก-๙a-zA-Z ]+?)\s+(?:จังหวัด\s*)?([ก-๙a-zA-Z ]+?)(?:\s*จาก|\s*$)",
+        r"(?:อำเภอ|เขต)\s*([ก-๙]+(?:\s[ก-๙]+)?)\s+(?:จังหวัด\s*)?([ก-๙]+)",
         og_desc,
     )
     if m:
         return f"{m.group(2).strip()} {m.group(1).strip()}"
-    m2 = re.search(r"(?:จังหวัด)\s*([ก-๙a-zA-Z]+)", og_desc)
+
+    # Pattern 2: "DISTRICT PROVINCE จากธนาคาร"
+    m2 = re.search(
+        r"([ก-๙]+(?:[ก-๙\s]+)?)\s+([ก-๙]+)\s+จากธนาคาร",
+        og_desc,
+    )
     if m2:
-        return m2.group(1).strip()
+        # last two words before จากธนาคาร
+        parts = m2.group(0).replace("จากธนาคาร", "").strip().split()
+        if len(parts) >= 2:
+            province = parts[-1]
+            district = parts[-2]
+            return f"{province} {district}"
+
+    # Pattern 3: จังหวัด keyword
+    m3 = re.search(r"จังหวัด\s*([ก-๙]+)", og_desc)
+    if m3:
+        return m3.group(1).strip()
+
     return ""
 
 
@@ -135,7 +155,10 @@ class GHBankHarvester:
                         resp.text,
                     )
                     seen = set(listing_urls)
-                    new_urls = [url for url, _ in found if url not in seen]
+                    # deduplicate both within page and across pages
+                    new_urls = list(dict.fromkeys(
+                        url for url, _ in found if url not in seen
+                    ))
                     listing_urls.extend(new_urls)
                     logger.info(f"GHB page {page}: +{len(new_urls)} URLs (total {len(listing_urls)})")
 
@@ -202,11 +225,12 @@ class GHBankHarvester:
             return None  # ไม่มีราคา → skip (deals schema requires price > 0)
 
         result: dict = {
-            "source_url":    url,
+            "listing_url":   url,
             "source_domain": "ghbhomecenter.com",
+            "source_type":   "bank_npa",
             "property_type": ptype,
+            "project_name":  title[:200],
             "location":      location,
-            "title":         title[:200],
             "price":         price,
             "condition":     "fair",
             "is_benchmark":  False,

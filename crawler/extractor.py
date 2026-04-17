@@ -276,11 +276,20 @@ class ROIEngine:
 
         # ─ Sanity: implied price/sqm ─
         implied_price_sqm = price / area
-        # ถ้าราคาต่อ sqm ต่ำมาก (< 500 ฿/sqm) → น่าจะเป็นที่ดินชนบท ไม่เหมาะคำนวณ ROI แบบนี้
-        if implied_price_sqm < 500:
+        # สำหรับที่ดิน: < 500 ฿/sqm → ชนบทห่างไกล ไม่เหมาะ ROI
+        # สำหรับ house/townhouse/condo: ถ้า < 10,000 ฿/sqm มักหมายความว่า
+        # area ที่รายงานคือพื้นที่ที่ดินรวม ไม่ใช่พื้นที่ใช้สอย → ROI ระเบิดเกินจริง
+        if prop_type == "land" and implied_price_sqm < 500:
             return {
                 "roi_valid":       False,
-                "roi_skip_reason": f"implied ฿/sqm={implied_price_sqm:.0f} ต่ำมาก — ที่ดินชนบท/ข้อมูลผิดพลาด",
+                "roi_skip_reason": f"implied ฿/sqm={implied_price_sqm:.0f} ต่ำมาก — ที่ดินชนบท",
+                "buy_price":       price,
+                "area_sqm":        area,
+            }
+        if prop_type in ("house", "townhouse", "condo", "commercial") and implied_price_sqm < 10_000:
+            return {
+                "roi_valid":       False,
+                "roi_skip_reason": f"implied ฿/sqm={implied_price_sqm:.0f} ต่ำมาก — น่าจะเป็น area ที่ดินรวม ไม่ใช่พื้นที่ใช้สอย",
                 "buy_price":       price,
                 "area_sqm":        area,
             }
