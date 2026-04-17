@@ -577,31 +577,49 @@ function renderDeals() {
     </div>`;
 }
 
+const TYPE_TH = { land:"ที่ดิน", condo:"คอนโด", house:"บ้านเดี่ยว", townhouse:"ทาวน์เฮาส์", other:"ทรัพย์" };
+
 function dealCard(d) {
-  const roi = d.roi_percent || 0;
-  const hot = roi >= 30;
-  const priority = d.priority || "LOW";
+  const rawRoi = d.roi_percent || 0;
+  const roiCapped = Math.min(rawRoi, 999);
+  const roiSuspect = rawRoi > 999; // likely land area bug
+  const hot = rawRoi >= 30 && !roiSuspect;
   const srcCol = d.source_domain?.includes("krungthai") ? "#3b9eff" :
                  d.source_domain?.includes("led.go") ? "#e05555" : "#9b6dff";
   const cond = d.condition || "—";
   const condCol = COND_COLOR[cond] || "#8a9ba8";
   const priceM = d.price ? (d.price/1e6).toFixed(2) : "—";
-  const area = d.area_sqm ? d.area_sqm + " ตร.ม." : "—";
+
+  // area display
+  const areaSqm = d.area_sqm || 0;
+  const areaDisplay = areaSqm >= 400
+    ? `${(areaSqm/1600).toFixed(2)} ไร่ (${areaSqm} ตร.ม.)`
+    : areaSqm > 0 ? `${areaSqm} ตร.ม.` : "—";
+
   const src = d.source_domain || "—";
   const url = d.url || "#";
-  const title = d.title || "ทรัพย์ไม่ระบุชื่อ";
-  const loc = d.location || "—";
-  const roiColor = roi >= 30 ? "#27c97a" : roi >= 15 ? "#f0b429" : "#e05555";
-  const roiLabel = roi >= 30 ? "🟢 ควรซื้อ" : roi >= 15 ? "🟡 พิจารณา" : "🔴 ข้าม";
+  const pType = d.property_type || "other";
+  const loc = d.location || "";
+  const locShort = loc.split(/[,\/]/)[0].trim() || "—";
+
+  // smart title from type + location
+  const typeTH = TYPE_TH[pType] || "ทรัพย์";
+  const title = (d.title && d.title !== "null" && d.title.length > 3)
+    ? d.title
+    : `${typeTH}${locShort !== "—" ? " — " + locShort : ""}`;
+
+  const roiColor = roiSuspect ? "#5a7a8a" : rawRoi >= 30 ? "#27c97a" : rawRoi >= 15 ? "#f0b429" : "#e05555";
+  const roiLabel = roiSuspect ? "⚠️ ข้อมูลไม่แม่นยำ" : rawRoi >= 30 ? "🟢 ควรซื้อ" : rawRoi >= 15 ? "🟡 พิจารณา" : "🔴 ข้าม";
+  const roiDisplay = roiSuspect ? `${roiCapped}%+` : `${rawRoi.toFixed(1)}%`;
 
   return `
     <div class="deal-card${hot?" hot":""}">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-        <div>
-          <div class="deal-title">${title}</div>
-          <div class="deal-location">📍 ${loc} · ${area}</div>
+        <div style="min-width:0;flex:1">
+          <div class="deal-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div>
+          <div class="deal-location">📍 ${loc || "—"} · ${areaDisplay}</div>
         </div>
-        <span class="tag" style="background:${srcCol}22;color:${srcCol};border:1px solid ${srcCol}44;flex-shrink:0;margin-left:8px">${src.split(".")[0]}</span>
+        <span class="tag" style="background:${srcCol}22;color:${srcCol};border:1px solid ${srcCol}44;flex-shrink:0;margin-left:8px">${pType}</span>
       </div>
       <div class="deal-meta">
         <div class="deal-field">
@@ -613,21 +631,25 @@ function dealCard(d) {
           <div class="deal-field-val" style="color:${condCol}">${cond}</div>
         </div>
       </div>
-      <div class="deal-source">
+      <div class="deal-source" style="cursor:pointer" onclick="window.open('${url}','_blank')">
         <div>
-          <div class="deal-source-lbl">แหล่งที่มา</div>
-          <a href="${url}" target="_blank" style="font-size:11px;border-bottom:1px solid #3b9eff44">🔗 ${src}</a>
+          <div class="deal-source-lbl">แหล่งที่มา — คลิกเพื่อดูทรัพย์</div>
+          <span style="color:var(--blue);font-size:11px;border-bottom:1px solid #3b9eff44">🔗 ${src}</span>
         </div>
-        <span style="color:var(--gray);font-size:9px">${d.property_type || ""}</span>
+        <span style="color:var(--blue);font-size:18px;opacity:0.6">↗</span>
       </div>
       <div class="deal-roi">
-        <span style="color:var(--gray);font-size:10px">ROI Calculated</span>
-        <span style="color:${roiColor};font-weight:700">${roiLabel} ${roi.toFixed(1)}%</span>
+        <span style="color:var(--gray);font-size:10px">ROI</span>
+        <span style="color:${roiColor};font-weight:700">${roiLabel} ${roiDisplay}</span>
       </div>
       ${hot ? `
       <div class="hot-badge">
-        <span style="color:var(--green);font-size:10px;font-weight:700">🔥 HOT DEAL — ROI ${roi.toFixed(1)}%</span>
-        <a href="${url}" target="_blank" style="color:var(--blue);font-size:10px;border-bottom:1px solid #3b9eff44">ดูทรัพย์ →</a>
+        <span style="color:var(--green);font-size:10px;font-weight:700">🔥 HOT DEAL — ROI ${rawRoi.toFixed(1)}%</span>
+        <span onclick="window.open('${url}','_blank')" style="color:var(--blue);font-size:10px;cursor:pointer;border-bottom:1px solid #3b9eff44">ดูทรัพย์ →</span>
+      </div>` : ""}
+      ${roiSuspect ? `
+      <div style="margin-top:8px;background:#1e3d4f33;border-radius:5px;padding:5px 8px;font-size:9px;color:var(--gray)">
+        ⚠️ ที่ดิน — ROI อาจสูงเกินจริง (ระบบคำนวณ Rai/ตร.ม. กำลังปรับปรุง)
       </div>` : ""}
     </div>`;
 }
