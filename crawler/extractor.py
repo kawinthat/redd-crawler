@@ -256,15 +256,34 @@ class ROIEngine:
         reno_cost_sqm: Optional[float] = None,
     ) -> dict:
 
-        price = data.get("price")
-        area  = data.get("area_sqm") or data.get("usable_area_sqm")
+        price     = data.get("price")
+        prop_type = data.get("property_type", "condo")
+        condition = data.get("condition", "fair")
+        location  = data.get("location", "")
+
+        # ─ เลือก area ที่เหมาะสม ─
+        # สำหรับที่ดิน: ใช้ land_area_sqm ก่อน, ถ้าไม่มีค่อยใช้ area_sqm
+        area_built = data.get("area_sqm") or data.get("usable_area_sqm")
+        area_land  = data.get("land_area_sqm")
+
+        if prop_type == "land":
+            area = area_land or area_built
+        else:
+            area = area_built or area_land
 
         if not price or not area or price <= 0 or area <= 0:
             return {"roi_valid": False, "roi_skip_reason": "ข้อมูลราคา/พื้นที่ไม่ครบ"}
 
-        prop_type = data.get("property_type", "condo")
-        condition = data.get("condition", "fair")
-        location  = data.get("location", "")
+        # ─ Sanity: implied price/sqm ─
+        implied_price_sqm = price / area
+        # ถ้าราคาต่อ sqm ต่ำมาก (< 500 ฿/sqm) → น่าจะเป็นที่ดินชนบท ไม่เหมาะคำนวณ ROI แบบนี้
+        if implied_price_sqm < 500:
+            return {
+                "roi_valid":       False,
+                "roi_skip_reason": f"implied ฿/sqm={implied_price_sqm:.0f} ต่ำมาก — ที่ดินชนบท/ข้อมูลผิดพลาด",
+                "buy_price":       price,
+                "area_sqm":        area,
+            }
 
         # ─ ต้นทุนรีโนเวท ─
         if reno_cost_sqm is None:
@@ -289,6 +308,17 @@ class ROIEngine:
         market_value  = area * market_price_sqm
         profit        = market_value - total_cost
         roi           = (profit / total_cost) * 100
+
+        # ─ Sanity: ROI > 999% → likely data error ─
+        roi_suspect = roi > 999
+        if roi_suspect:
+            return {
+                "roi_valid":       False,
+                "roi_skip_reason": f"ROI={roi:.0f}% เกินสมเหตุสมผล — area หรือ market_price น่าจะผิดพลาด",
+                "buy_price":       price,
+                "area_sqm":        area,
+                "roi_percent":     round(roi, 2),
+            }
 
         # ─ Flag ─
         if roi >= 30:
