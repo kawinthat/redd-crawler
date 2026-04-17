@@ -53,16 +53,23 @@ class LinkHarvester:
 
     # pattern ที่บ่งบอกว่า URL เป็น detail page ของ listing
     DETAIL_PATTERNS = [
-        r'/property/\d+',
-        r'/asset/detail/',
-        r'/listing/\d+',
-        r'/detail/\d+',
-        r'/for-sale/\d+',
-        r'/buy/\d+',
-        r'/ประกาศ/\d+',
-        r'[?&]id=\d+',
-        r'/npa/\d+',
-        r'/asset/\w{6,}',
+        r'/propertyDetail/\d+',       # Krungthai NPA, SCB NPA
+        r'/property/\d+',             # DDProperty, generic
+        r'/property-for-sale/',       # DDProperty detail
+        r'/asset/detail/',            # generic
+        r'/asset/\w{6,}',             # generic
+        r'/listing/\d+',              # generic
+        r'/detail/\d+',               # generic
+        r'/for-sale/\d+',             # generic
+        r'/buy/\d+',                  # generic
+        r'/ประกาศ/\d+',               # Thai sites
+        r'[?&]id=\d+',                # query string style
+        r'/npa/\d+',                  # NPA generic
+        r'/properties/\d+',           # Hipflat, Baania
+        r'/p/\d+',                    # short form
+        r'/home-for-sale/',           # GH Bank
+        r'/condo-for-sale/',          # condo sites
+        r'/house-for-sale/',          # house sites
     ]
 
     # pattern หน้าถัดไป
@@ -186,9 +193,15 @@ class PageFetcher:
     """
 
     JS_SIGNALS = [
-        "__NEXT_DATA__", "react-root", "ng-app",
+        # React / Next.js
+        "__NEXT_DATA__", "data-reactroot", "react-root",
+        # Vue / Nuxt.js
+        "__NUXT__", "data-n-head", "data-server-rendered", "__vue__",
+        # Angular
+        "ng-app", "ng-version",
+        # Generic SPA
         "app-loading", "window.__INITIAL_STATE__",
-        "data-reactroot", "__vue__",
+        "window.__APP_STATE__", "window.App",
     ]
 
     HEADERS = {
@@ -209,8 +222,14 @@ class PageFetcher:
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage",
-                  "--disable-blink-features=AutomationControlled"]
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-infobars",
+                "--window-size=1920,1080",
+                "--disable-extensions",
+            ]
         )
 
     async def stop(self):
@@ -222,7 +241,16 @@ class PageFetcher:
     def _needs_js(self, html: str) -> bool:
         if not html or len(html) < 500:
             return True
-        return any(sig in html for sig in self.JS_SIGNALS)
+        # Known JS framework signals
+        if any(sig in html for sig in self.JS_SIGNALS):
+            return True
+        # Heuristic: very little real content despite having HTML
+        from bs4 import BeautifulSoup as _BS
+        soup = _BS(html, "html.parser")
+        links = soup.find_all("a", href=True)
+        if len(html) < 15000 and len(links) < 5:
+            return True
+        return False
 
     async def fetch(self, url: str) -> str:
         """Auto-select tier"""
@@ -250,6 +278,14 @@ class PageFetcher:
             context = await self._browser.new_context(
                 user_agent=self.HEADERS["User-Agent"],
                 locale="th-TH",
+                viewport={"width": 1920, "height": 1080},
+                extra_http_headers={"Accept-Language": "th-TH,th;q=0.9,en;q=0.8"},
+            )
+            # Hide automation signals
+            await context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+                "window.chrome = {runtime: {}};"
+                "Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});"
             )
             page = await context.new_page()
 
@@ -263,6 +299,7 @@ class PageFetcher:
             )
 
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(2500)  # JS render time
 
             # Scroll เพื่อ trigger lazy load
             await self._scroll_page(page)
@@ -284,3 +321,145 @@ class PageFetcher:
             if curr_height == prev_height:
                 break
             prev_height = curr_height
+
+
+# ─────────────────────────────────────────────
+# MAIN CRAWLER — ประสาน LinkHarvester + PageFetcher
+# ─────────────────────────────────────────────
+
+class RealEstateCrawler:
+    """
+    ใส่ URL เดียว → ได้ list ของ RawListing ทุกรายการ
+    ใช้ได้กับทุกเว็บใน target_sites
+
+    Auto-routing:
+        npa.krungthai.com → KrungthaiHarvester (REST API, ไม่ต้อง Playwright)
+        อื่นๆ             → LinkHarvester + PageFetcher (Playwright)
+    """
+
+    # เว็บที่มี API harvester พิเศษ (domain → harvester class name)
+    API_ROUTES: dict = {
+        "npa.krungthai.com": "KrungthaiHarvester",
+    }
+
+    def __init__(self, config: Optional[CrawlConfig] = None):
+        self.config = config
+        self.harvester = LinkHarvester()
+        self.fetcher = PageFetcher()
+
+    def _get_api_harvester(self, base_url: str):
+        """คืน API harvester instance ถ้าเว็บนี้รองรับ"""
+        from urllib.parse import urlparse
+        domain = urlparse(base_url).netloc
+        if domain in self.API_ROUTES:
+            from crawler.krungthai_harvester import KrungthaiHarvester
+            return KrungthaiHarvester(rows_per_page=50, delay=0.8)
+        return None
+
+    async def harvest(self, base_url: str,
+                      max_pages: int = 5,
+                      max_listings: int = 100) -> list:
+        """
+        Crawl listing pages และดึง URL ทุก listing
+
+        Returns:
+            list[str]: รายการ URL ของ detail pages
+        """
+        # ── API fast-path ──────────────────────────────────────
+        api_harvester = self._get_api_harvester(base_url)
+        if api_harvester is not None:
+            print(f"  ⚡ Using API harvester for {base_url}")
+            listings = await api_harvester.fetch_all(max_pages=max_pages)
+            return [x["source_url"] for x in listings[:max_listings]]
+        # ───────────────────────────────────────────────────────
+
+        cfg = self.config or CrawlConfig(base_url=base_url,
+                                          max_pages=max_pages,
+                                          max_listings=max_listings)
+        await self.fetcher.start()
+
+        all_urls: list = []
+        seen_pages: set = set()
+        current_url = base_url
+        page_num = 1
+
+        try:
+            while current_url and page_num <= cfg.max_pages:
+                if current_url in seen_pages:
+                    break
+                seen_pages.add(current_url)
+
+                print(f"  📄 Page {page_num}: {current_url}")
+                html = await self.fetcher.fetch(current_url)
+
+                if not html:
+                    print(f"  ⚠️  ไม่ได้ HTML จาก {current_url}")
+                    break
+
+                links = self.harvester.extract_listing_links(html, current_url)
+                new = [u for u in links if u not in all_urls]
+                all_urls.extend(new)
+                print(f"  🔗 พบ {len(new)} links ใหม่ (รวม {len(all_urls)})")
+
+                if len(all_urls) >= cfg.max_listings:
+                    print(f"  ✅ ถึง max_listings ({cfg.max_listings}) แล้ว")
+                    break
+
+                next_url = self.harvester.find_next_page(html, current_url, page_num)
+                if not next_url or next_url == current_url:
+                    print("  🏁 ไม่มีหน้าถัดไปแล้ว")
+                    break
+
+                # ตรวจว่า next_url ใช้ได้จริง
+                test_html = await self.fetcher._fetch_static(next_url)
+                if not test_html or len(test_html) < 200:
+                    print(f"  🏁 Next page ไม่ตอบสนอง: {next_url}")
+                    break
+
+                current_url = next_url
+                page_num += 1
+
+                # Delay礼貌
+                import random
+                await asyncio.sleep(random.uniform(cfg.delay_min, cfg.delay_max))
+
+        finally:
+            await self.fetcher.stop()
+
+        return all_urls[:cfg.max_listings]
+
+    async def fetch_listings(self, urls: list) -> list:
+        """
+        ดึง HTML ของทุก detail page และคืน list[RawListing]
+        """
+        await self.fetcher.start()
+        results = []
+
+        import random
+        semaphore = asyncio.Semaphore(
+            self.config.concurrency if self.config else 3
+        )
+
+        async def fetch_one(url: str) -> Optional[RawListing]:
+            async with semaphore:
+                html = await self.fetcher.fetch(url)
+                if not html:
+                    return None
+                content_hash = hashlib.md5(html.encode()).hexdigest()
+                domain = urlparse(url).netloc
+                listing = RawListing(
+                    url=url,
+                    source_domain=domain,
+                    html=html,
+                    text=BeautifulSoup(html, "html.parser").get_text(" ", strip=True)[:2000],
+                    content_hash=content_hash,
+                )
+                await asyncio.sleep(random.uniform(0.5, 1.5))
+                return listing
+
+        tasks = [fetch_one(u) for u in urls]
+        raw = await asyncio.gather(*tasks, return_exceptions=True)
+        results = [r for r in raw if isinstance(r, RawListing)]
+
+        await self.fetcher.stop()
+        return results

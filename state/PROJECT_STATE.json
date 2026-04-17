@@ -1,0 +1,165 @@
+{
+  "project": {
+    "name": "RE:DD Autonomous Real Estate Arbitrage Scanner",
+    "version": "0.4.0",
+    "owner": "กวินทัศน์ เมธีรัฐลีลากุล (Krit)",
+    "brand": "RE:DD × TITAN Financial Optimizer",
+    "repository": "local: redd-handoff/redd-crawler/ — push to GitHub ก่อน deploy",
+    "last_updated": "2026-04-17",
+    "last_session_summary": "Phase 1 DONE ✅ — สร้าง folder structure, copy code files, สร้าง db_writer.py, requirements.txt, .env.example, pyproject.toml, test files, git init + initial commit. Dependencies installed & verified. Playwright Chromium ต้องติดตั้งบน machine จริง (sandbox ไม่รองรับ)."
+  },
+
+  "stack": {
+    "backend_language": "Python 3.11",
+    "backend_framework": "FastAPI (optional — crawler เป็น standalone script ก็ได้)",
+    "scraping": ["Playwright", "httpx", "BeautifulSoup4"],
+    "ai_extraction": "Anthropic Claude Haiku (claude-haiku-4-5)",
+    "reno_pricing": "Perplexity API (sonar-pro)",
+    "database": "Supabase (PostgreSQL)",
+    "scheduler": "Make.com",
+    "hosting": "Render.com",
+    "alert": "LINE Notify",
+    "frontend": "React/TypeScript (Lovable platform)"
+  },
+
+  "environment_variables": {
+    "required": [
+      "ANTHROPIC_API_KEY",
+      "SUPABASE_URL",
+      "SUPABASE_KEY",
+      "PERPLEXITY_API_KEY",
+      "LINE_NOTIFY_TOKEN"
+    ],
+    "optional": [
+      "MAX_PAGES",
+      "MAX_LISTINGS",
+      "CONCURRENCY",
+      "TARGET_URL"
+    ],
+    "status": "NOT SET — Krit ต้องใส่ค่าจริงใน redd-crawler/.env"
+  },
+
+  "phases": {
+    "phase_1_setup": {
+      "name": "Environment Setup",
+      "status": "DONE",
+      "description": "สร้าง folder structure ครบ, code files copied, db_writer.py created, requirements.txt + .env.example + pyproject.toml, git init + initial commit. Dependencies pip installed OK. Playwright Chromium ต้องรัน 'playwright install chromium' บน machine จริงอีกครั้ง",
+      "blocking": true,
+      "estimated_hours": 1,
+      "completed_at": "2026-04-17",
+      "notes": "playwright install chromium ล้มเหลวใน sandbox — ต้องรันบน machine จริงเท่านั้น",
+      "command_file": "commands/antigravity/01_setup.md"
+    },
+    "phase_2_crawler": {
+      "name": "Spider + Link Harvester",
+      "status": "CODE_READY",
+      "description": "spider.py เขียนแล้วและ copy เข้า redd-crawler/crawler/ แล้ว — ต้อง test จริงกับ led.go.th",
+      "blocking": true,
+      "estimated_hours": 3,
+      "files_written": ["redd-crawler/crawler/spider.py"],
+      "test_command": "cd redd-crawler && RUN_INTEGRATION_TESTS=1 pytest tests/test_spider.py -v",
+      "command_file": "commands/antigravity/02_crawler.md"
+    },
+    "phase_3_extractor": {
+      "name": "AI Batch Extractor + ROI Engine",
+      "status": "CODE_READY",
+      "description": "extractor.py เขียนแล้วและ copy เข้า redd-crawler/crawler/ แล้ว — ต้อง test กับ real HTML",
+      "blocking": true,
+      "estimated_hours": 2,
+      "files_written": ["redd-crawler/crawler/extractor.py"],
+      "test_command": "cd redd-crawler && ANTHROPIC_API_KEY=xxx pytest tests/test_extractor.py -v",
+      "command_file": "commands/antigravity/03_extractor.md"
+    },
+    "phase_4_database": {
+      "name": "Supabase Schema + DB Writer",
+      "status": "SCHEMA_READY",
+      "description": "schema.sql + db_writer.py เขียนแล้ว — Krit ต้องสร้าง Supabase project แล้วรัน schema.sql",
+      "blocking": true,
+      "estimated_hours": 1,
+      "files_written": ["redd-crawler/schema.sql", "redd-crawler/crawler/db_writer.py"],
+      "action": "1. สร้าง Supabase project ที่ supabase.com  2. รัน redd-crawler/schema.sql บน SQL Editor  3. ใส่ SUPABASE_URL + SUPABASE_KEY ใน .env",
+      "command_file": "commands/antigravity/04_database.md"
+    },
+    "phase_5_orchestrator": {
+      "name": "Main Pipeline Orchestrator",
+      "status": "CODE_READY",
+      "description": "orchestrator.py เขียนแล้วและ copy เข้า redd-crawler/crawler/ แล้ว — ต้อง integration test",
+      "blocking": true,
+      "estimated_hours": 3,
+      "files_written": ["redd-crawler/crawler/orchestrator.py"],
+      "test_command": "cd redd-crawler && python -m crawler.orchestrator --dry-run --url https://led.go.th/assets",
+      "command_file": "commands/antigravity/05_orchestrator.md"
+    },
+    "phase_6_deploy": {
+      "name": "Deploy Render.com + Make.com Scheduler",
+      "status": "PENDING",
+      "description": "ยังไม่ได้เริ่ม — ต้อง phase 1-5 เสร็จก่อน",
+      "blocking": false,
+      "estimated_hours": 2,
+      "command_file": "commands/antigravity/06_deploy.md"
+    },
+    "phase_7_dashboard": {
+      "name": "React Dashboard Integration",
+      "status": "UI_READY",
+      "description": "crawler-dashboard-v3.jsx เขียนแล้ว — ต้อง connect กับ backend API",
+      "blocking": false,
+      "estimated_hours": 4,
+      "files_written": ["code/crawler-dashboard-v3.jsx"]
+    }
+  },
+
+  "target_sites": [
+    { "url": "https://led.go.th/assets", "label": "กรมบังคับคดี", "type": "enforcement", "priority": 1, "tested": false },
+    { "url": "https://npa.krungthai.com", "label": "Krungthai NPA", "type": "bank_npa", "priority": 1, "tested": false },
+    { "url": "https://kbankasset.com", "label": "KBank Asset", "type": "bank_npa", "priority": 2, "tested": false },
+    { "url": "https://www.scbnpa.com", "label": "SCB NPA", "type": "bank_npa", "priority": 2, "tested": false },
+    { "url": "https://ghbhomecenter.com", "label": "GH Bank", "type": "bank_npa", "priority": 2, "tested": false },
+    { "url": "https://www.ddproperty.com/buy", "label": "DDProperty", "type": "marketplace", "priority": 3, "tested": false },
+    { "url": "https://hipflat.co.th/sale", "label": "Hipflat", "type": "marketplace", "priority": 3, "tested": false },
+    { "url": "https://baania.com/th/property/buy", "label": "Baania", "type": "marketplace", "priority": 3, "tested": false }
+  ],
+
+  "roi_config": {
+    "hot_threshold_percent": 30,
+    "medium_threshold_percent": 15,
+    "transfer_fee_rate": 0.04,
+    "reno_cost_matrix": {
+      "condo_poor": 8000,
+      "condo_fair": 4500,
+      "condo_good": 1500,
+      "house_poor": 7000,
+      "house_fair": 4000,
+      "house_good": 1200,
+      "townhouse_poor": 6500,
+      "townhouse_fair": 3500,
+      "townhouse_good": 1000
+    }
+  },
+
+  "cost_estimates": {
+    "claude_haiku_per_1000_listings": 0.02,
+    "perplexity_per_month": 5,
+    "render_per_month": 7,
+    "supabase_per_month": 0,
+    "total_per_month_usd": 15
+  },
+
+  "issues": [
+    {
+      "id": "ISS-001",
+      "phase": "phase_1_setup",
+      "severity": "low",
+      "description": "playwright install chromium ล้มเหลวใน Cowork sandbox (ไม่มี root access)",
+      "resolution": "รัน 'playwright install chromium' บน machine จริงหรือ Render.com environment เท่านั้น — ไม่ใช่ blocker",
+      "status": "known"
+    }
+  ],
+
+  "decisions_needed_from_krit": [
+    "ใส่ API keys จริงใน redd-crawler/.env (copy จาก .env.example แล้วแก้ค่า)",
+    "สร้าง Supabase project ที่ supabase.com แล้วเอา URL + key มาใส่ .env",
+    "สร้าง LINE Notify token ที่ notify-bot.line.me/th/",
+    "ยืนยัน ROI threshold 30% (หรือเปลี่ยน?)",
+    "ยืนยัน max_pages ต่อเว็บ (ปัจจุบัน 30)"
+  ]
+}
