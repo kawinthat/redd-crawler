@@ -63,6 +63,14 @@ NPA_SITES = [
     "https://npa.krungthai.com",
     "https://www.scbnpa.com",
     "https://www.ghbhomecenter.com",
+    "https://www.led.go.th",
+]
+
+# ราคาตลาดอ้างอิง — ใช้ compare ROI กับ NPA
+MARKET_SITES = [
+    "https://www.ddproperty.com",
+    "https://www.hipflat.co.th",
+    "https://www.baania.com",
 ]
 
 class ScanRequest(BaseModel):
@@ -94,7 +102,8 @@ async def _run_scan(req: ScanRequest):
     elif req.url:
         target_urls = [req.url]
     else:
-        target_urls = NPA_SITES  # scan all NPA sites
+        # Full scan: NPA sites + market benchmark sites
+        target_urls = NPA_SITES + MARKET_SITES
 
     try:
         crawler = AutonomousCrawler(
@@ -165,7 +174,7 @@ async def trigger_scan(req: ScanRequest, background_tasks: BackgroundTasks):
     if _scan_state["status"] == "running":
         raise HTTPException(409, "Scan already running")
 
-    target_urls = req.urls or ([req.url] if req.url else NPA_SITES)
+    target_urls = req.urls or ([req.url] if req.url else NPA_SITES + MARKET_SITES)
     background_tasks.add_task(_run_scan, req)
     return {
         "message":      "Scan started",

@@ -339,11 +339,23 @@ class RealEstateCrawler:
 
     # เว็บที่มี API harvester พิเศษ (domain → harvester class name)
     API_ROUTES: dict = {
-        "npa.krungthai.com":   "KrungthaiHarvester",
-        "www.scbnpa.com":      "SCBNPAHarvester",
-        "scbnpa.com":          "SCBNPAHarvester",
+        # ── NPA Sites ────────────────────────────────────────────
+        "npa.krungthai.com":     "KrungthaiHarvester",
+        "www.scbnpa.com":        "SCBNPAHarvester",
+        "scbnpa.com":            "SCBNPAHarvester",
         "www.ghbhomecenter.com": "GHBankHarvester",
-        "ghbhomecenter.com":   "GHBankHarvester",
+        "ghbhomecenter.com":     "GHBankHarvester",
+        # ── กรมบังคับคดี ────────────────────────────────────────
+        "www.led.go.th":         "LEDHarvester",
+        "led.go.th":             "LEDHarvester",
+        "asset.led.go.th":       "LEDHarvester",
+        # ── Market Benchmark Sites ───────────────────────────────
+        "www.ddproperty.com":    "DDPropertyHarvester",
+        "ddproperty.com":        "DDPropertyHarvester",
+        "www.hipflat.co.th":     "HipflatHarvester",
+        "hipflat.co.th":         "HipflatHarvester",
+        "www.baania.com":        "BaaniaHarvester",
+        "baania.com":            "BaaniaHarvester",
     }
 
     def __init__(self, config: Optional[CrawlConfig] = None):
@@ -365,6 +377,18 @@ class RealEstateCrawler:
         elif harvester_name == "GHBankHarvester":
             from crawler.ghbank_harvester import GHBankHarvester
             return GHBankHarvester(rows_per_page=50, delay=1.0)
+        elif harvester_name == "LEDHarvester":
+            from crawler.led_harvester import LEDHarvester
+            return LEDHarvester(rows_per_page=20, delay=2.0)
+        elif harvester_name == "DDPropertyHarvester":
+            from crawler.ddproperty_harvester import DDPropertyHarvester
+            return DDPropertyHarvester(rows_per_page=30, delay=1.5)
+        elif harvester_name == "HipflatHarvester":
+            from crawler.hipflat_harvester import HipflatHarvester
+            return HipflatHarvester(rows_per_page=30, delay=1.5)
+        elif harvester_name == "BaaniaHarvester":
+            from crawler.baania_harvester import BaaniaHarvester
+            return BaaniaHarvester(rows_per_page=30, delay=1.5)
         return None
 
     async def harvest(self, base_url: str,
