@@ -954,13 +954,27 @@ function dealCard(d) {
         </div>
       </div>
       ${breakdownHTML}
-      <a href="${url}" target="_blank" rel="noopener" class="card-source">
-        <div>
-          <div class="card-src-lbl">แหล่งที่มา — คลิกเพื่อดูทรัพย์ ↗</div>
-          <span class="card-src-url">🔗 ${url!=="—"&&url?url.replace(/https?:\/\/(www\.)?/,"").split("?")[0].slice(0,48):src}</span>
+      ${(()=>{
+        // ─ Extract asset code from URL (for copy + search fallback) ─
+        const assetCodeMatch = url.match(/[?&](?:assetNo|code|id|asset)=([^&]+)/i);
+        const assetCode = assetCodeMatch ? assetCodeMatch[1] : (d.project_name||"").match(/^[A-Z0-9-]{6,}$/)?.[0] || null;
+        // ─ Detect sources where direct detail link may be unstable ─
+        const srcDom = d.source_domain || "";
+        const isBAM  = srcDom.includes("bam.co.th");
+        const isGSB  = srcDom.includes("gsb.or.th");
+        const searchUrl = isBAM ? "https://www.bam.co.th/npa"
+                        : isGSB ? "https://npa-assets.gsb.or.th"
+                        : null;
+        const srcLabel = url !== "#" && url ? url.replace(/https?:\/\/(www\.)?/,"").split("?")[0].slice(0,48) : srcDom;
+        return `<div class="card-source" style="cursor:default">
+          <div>
+            <div class="card-src-lbl">แหล่งที่มา${assetCode?` · รหัส: <span style="color:var(--gold);font-weight:700;cursor:pointer" onclick="navigator.clipboard.writeText('${assetCode}');showToast('คัดลอก ${assetCode} แล้ว')" title="คลิกเพื่อคัดลอก">${assetCode} 📋</span>`:""}</div>
+            <span class="card-src-url">🔗 ${srcLabel}</span>
+          </div>
+          ${url && url !== "#" ? `<a href="${url}" target="_blank" rel="noopener" style="color:var(--blue);font-size:18px" title="เปิดหน้าทรัพย์จากต้นทาง">↗</a>` : ""}
         </div>
-        <span style="color:var(--blue);font-size:18px">↗</span>
-      </a>
+        ${(isBAM||isGSB)&&searchUrl?`<div style="font-size:9px;color:var(--gray);margin-bottom:6px;line-height:1.5">⚠️ ถ้าลิงก์ขึ้น 404 — ทรัพย์อาจถูกขายแล้ว หรือ <a href="${searchUrl}" target="_blank" style="color:var(--blue)">ค้นหาด้วยรหัสบนเว็บธนาคาร ↗</a></div>`:""}`;
+      })()}
       ${hasBreakdown?`<div class="card-actions">
         <button class="card-action-btn" onclick="toggleBreakdown('${breakdownId}',this)">📊 ดู ROI Breakdown</button>
         <a href="${url}" target="_blank" rel="noopener" class="card-action-btn primary-action">ดูทรัพย์ →</a>
