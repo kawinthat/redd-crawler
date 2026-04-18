@@ -184,6 +184,7 @@ class BAMHarvester:
         self,
         max_pages: int = 999999,
         max_listings: int = 999999,
+        progress_cb=None,   # callable(fetched_count: int) — อัพเดท live_stats ระหว่างดึง
     ) -> list[dict]:
         results: list[dict] = []
 
@@ -235,6 +236,11 @@ class BAMHarvester:
                             page_deals.append(deal)
 
                     results.extend(page_deals)
+                    if progress_cb:
+                        try:
+                            progress_cb(len(results))
+                        except Exception:
+                            pass
                     logger.info(
                         f"BAM page {page}: +{len(page_deals)} deals "
                         f"(total so far: {len(results)}/{total})"

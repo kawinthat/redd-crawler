@@ -2677,14 +2677,20 @@ async function triggerScan(dryRun=false, selectedUrls=[]) {
 }
 
 function startPolling() {
-  let lastStatus="", pollCount=0;
+  let lastStatus="", pollCount=0, failCount=0;
+  let _inFlight = false;   // ป้องกัน concurrent poll
+  const MAX_FAIL = 8;      // หยุด poll หลังล้มเลิว 8 ครั้งติดกัน
   document.getElementById("s-pages").textContent="…";
   document.getElementById("s-scraped").textContent="…";
+
   pollInterval = setInterval(async()=>{
+    if (_inFlight) return;  // skip ถ้า request ก่อนหน้ายังค้างอยู่
+    _inFlight = true;
     pollCount++;
     try {
-      const r = await fetch(API+"/scan/status");
+      const r = await fetch(API+"/scan/status", {signal: AbortSignal.timeout(8000)});
       const d = await r.json();
+      failCount = 0;  // reset on success
       const status=d.status, stats=d.stats||{};
       if (stats.pages!==undefined) document.getElementById("s-pages").textContent=stats.pages;
       if (stats.scraped!==undefined) document.getElementById("s-scraped").textContent=stats.scraped;
@@ -2708,7 +2714,6 @@ function startPolling() {
         scanPhase=5; renderPipeline();
         const s=stats;
         addLog("success",`\n✅ COMPLETE — Pages:${s.pages||0} Scraped:${s.scraped||0} Saved:${s.saved||0} HOT:${s.hot||0}`);
-        // Per-site breakdown
         if (s.sites?.length) {
           s.sites.forEach(site=>{
             const short=(site.url||"").replace(/https?:\/\/(www\.)?/,"").split("/")[0];
@@ -2717,20 +2722,29 @@ function startPolling() {
           });
         }
         clearInterval(pollInterval);
-        await loadAll();
-        scanDone();
-        switchTab("deals");
+        await loadAll(); scanDone(); switchTab("deals");
         showToast("✅ Scan เสร็จแล้ว! "+s.saved+" ทรัพย์ถูกบันทึก");
       } else if (status==="failed") {
         addLog("error",`❌ ${d.error||"unknown"}`);
-        clearInterval(pollInterval);
-        scanDone();
+        clearInterval(pollInterval); scanDone();
       } else if (status==="idle"&&pollCount>5) {
         clearInterval(pollInterval);
         await loadAll(); scanDone(); switchTab("deals");
       }
       if(status!==lastStatus){lastStatus=status;addLog("info",`📊 Status: ${status}`);}
-    } catch(e){addLog("warn",`⚠️ Poll: ${e.message}`);}
+    } catch(e){
+      failCount++;
+      if (failCount <= 3 || failCount % 4 === 0) {
+        // log เฉพาะ 3 ครั้งแรก แล้วทุก 4 ครั้ง — ไม่ spam
+        addLog("warn",`⚠️ Poll: ${e.message} (${failCount}/${MAX_FAIL})`);
+      }
+      if (failCount >= MAX_FAIL) {
+        addLog("error","❌ Poll หยุด — server ไม่ตอบสนองหลังจาก "+MAX_FAIL+" ครั้ง");
+        clearInterval(pollInterval); scanDone();
+      }
+    } finally {
+      _inFlight = false;
+    }
   }, 3000);
 }
 

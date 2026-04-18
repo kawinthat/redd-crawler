@@ -95,12 +95,13 @@ class AutonomousCrawler:
             self._stats["links_found"] = len(listing_urls)
             logger.info(f"📋 พบ {len(listing_urls)} listing URLs (API records: {len(api_data)})")
 
-            # ── อัพเดท live_stats["pages"] หลัง harvest เสร็จ (ทั้ง API และ Playwright path) ──
-            # สำหรับ API harvester: pages_crawled = จำนวน listings ที่ดึงได้
-            # สำหรับ Playwright:    pages_crawled = จำนวนหน้าที่ paginate ผ่าน
+            # ── อัพเดท live_stats["pages"] หลัง harvest เสร็จ ──
+            # API harvesters ที่รองรับ progress_cb (เช่น BAM) จะอัพเดท live_stats["pages"]
+            # แบบ real-time ระหว่าง harvest แล้ว — ไม่ต้องอัพเดทซ้ำที่นี่
+            # สำหรับ harvesters ที่ไม่มี progress_cb และ Playwright: อัพเดทครั้งเดียวตอนจบ
             harvested_count = len(api_data) if api_data else self._stats.get("pages_crawled", 0)
-            if harvested_count > 0:
-                self.live_stats["pages"] = self.live_stats.get("pages", 0) + harvested_count
+            if harvested_count > 0 and self.live_stats.get("pages", 0) == 0:
+                self.live_stats["pages"] = harvested_count
 
             if not listing_urls and not api_data:
                 logger.warning("ไม่พบ listing — จบการทำงาน")
@@ -231,10 +232,17 @@ class AutonomousCrawler:
 
         if api_harvester is not None:
             logger.info(f"  ⚡ API harvester: {type(api_harvester).__name__} for {domain}")
-            listings = await api_harvester.fetch_all(
-                max_pages=config.max_pages,
-                max_listings=config.max_listings,
-            )
+            import inspect as _inspect
+            _fetch_sig = _inspect.signature(api_harvester.fetch_all)
+            _fetch_kwargs: dict = {
+                "max_pages":    config.max_pages,
+                "max_listings": config.max_listings,
+            }
+            if "progress_cb" in _fetch_sig.parameters:
+                def _page_progress(count: int) -> None:
+                    self.live_stats["pages"] = count
+                _fetch_kwargs["progress_cb"] = _page_progress
+            listings = await api_harvester.fetch_all(**_fetch_kwargs)
             # Support both 'source_url' (old harvesters) and 'listing_url' (new harvesters)
             def _get_url(x: dict) -> str:
                 return x.get("listing_url") or x.get("source_url") or ""
