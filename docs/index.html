@@ -624,6 +624,19 @@ async function checkAPI() {
     document.getElementById("btn-scan").disabled = true;
     document.getElementById("btn-scan").textContent = "⏳ รอ server...";
     document.getElementById("wake-banner").style.display = "flex";
+
+    // แสดง cached deals ทันทีแม้ server ยังไม่ตอบ — ข้อมูลไม่หาย
+    if (_wakeAttempt === 1 && deals.length === 0) {
+      const cached = loadCache();
+      if (cached && cached.deals.length > 0) {
+        renderFromCache(cached);
+        // แสดง pane-deals แม้ server ยังไม่ online
+        const paneDeals = document.getElementById("pane-deals");
+        if (paneDeals) paneDeals.style.display = "";
+        switchTab("deals");
+      }
+    }
+
     scheduleRetry();
   }
 }
@@ -931,17 +944,20 @@ function toggleHot() {
 }
 
 function resetFilters() {
-  searchQuery=""; filterType=""; filterProvince=""; filterSource=""; dealFilter="all"; curPage=1;
+  searchQuery=""; filterType=""; filterSource=""; dealFilter="all"; curPage=1;
+  filterProvinces = new Set(DEFAULT_PROVS);  // reset to 3 provinces default
   document.getElementById("search-box").value="";
-  document.getElementById("province-select").value="";
   document.getElementById("source-select").value="";
+  buildProvChecks(); updateProvBtn();
   setTypeChip(""); dealFilter="all";
   document.getElementById("chip-hot").classList.remove("active");
   updateResetChip(); renderDeals();
 }
 
 function updateResetChip() {
-  const hasFilter = searchQuery||filterType||filterProvince||filterSource||dealFilter==="hot";
+  const provChanged = filterProvinces.size !== DEFAULT_PROVS.size ||
+    [...DEFAULT_PROVS].some(p => !filterProvinces.has(p));
+  const hasFilter = searchQuery||filterType||filterSource||dealFilter==="hot"||provChanged;
   document.getElementById("chip-reset").style.display = hasFilter?"":"none";
 }
 
@@ -971,8 +987,19 @@ function setView(mode) {
 // RENDER DEALS
 // ─────────────────────────────────────────────
 function renderDeals() {
-  const filtered = applyFilters(deals);
-  const sorted   = applySort(filtered);
+  let filtered = applyFilters(deals);
+
+  // Safety: if province filter hides ALL deals but we have data → auto-reset to show all
+  if (filtered.length === 0 && deals.length > 0 && filterProvinces.size > 0) {
+    const hiddenBy = [...filterProvinces].join(", ");  // save before reset
+    filterProvinces = new Set();   // empty = show all provinces
+    buildProvChecks();
+    updateProvBtn();
+    showToast(`🗺 ไม่พบดีลใน "${hiddenBy}" — แสดงทุกจังหวัดแทน`);
+    filtered = applyFilters(deals);  // re-filter without province constraint
+  }
+
+  const sorted = applySort(filtered);
   document.getElementById("result-count").textContent = `${filtered.length} / ${deals.length} ทรัพย์`;
 
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE) || 1;
