@@ -213,24 +213,16 @@ Listings:
 # ROI ENGINE
 # ─────────────────────────────────────────────
 
-RENO_COST_MATRIX = {
-    # (property_type, condition): บาท/ตร.ม
-    ("condo",     "poor"):  8000,
-    ("condo",     "fair"):  4500,
-    ("condo",     "good"):  1500,
-    ("condo",     "new"):   0,
-    ("house",     "poor"):  7000,
-    ("house",     "fair"):  4000,
-    ("house",     "good"):  1200,
-    ("house",     "new"):   0,
-    ("townhouse", "poor"):  6500,
-    ("townhouse", "fair"):  3500,
-    ("townhouse", "good"):  1000,
-    ("townhouse", "new"):   0,
-    ("land",      "poor"):  0,
-    ("land",      "fair"):  0,
-    ("land",      "good"):  0,
-    ("land",      "new"):   0,
+# ค่ารีโนเวท flat rate 5,000 บาท/ตร.ม. (ที่ดิน = 0)
+RENO_COST_PER_SQM = 5_000   # บาท/ตร.ม.
+
+# ส่วนลดราคาตลาด ตามสภาพก่อนรีโนเวท
+# เพื่อคำนวณ market_value_before_reno = market_value_after_reno × discount
+CONDITION_MARKET_DISCOUNT = {
+    "new":  1.00,   # สภาพใหม่ = ราคาตลาดเต็ม
+    "good": 0.90,   # ดี = 90% ของราคาตลาดหลังรีโนเวท
+    "fair": 0.75,   # พอใช้ = 75%
+    "poor": 0.58,   # ต้องซ่อม = 58%
 }
 
 DEFAULT_MARKET_PRICE_SQM = {
@@ -310,41 +302,48 @@ class ROIEngine:
                 "area_sqm":        area,
             }
 
-        # ─ ต้นทุนรีโนเวท ─
+        # ─ ค่ารีโนเวท: flat 5,000 ฿/ตร.ม. (ที่ดินไม่รีโนเวท = 0) ─
         if reno_cost_sqm is None:
-            reno_cost_sqm = RENO_COST_MATRIX.get(
-                (prop_type, condition),
-                RENO_COST_MATRIX.get(("condo", condition), 4500)
-            )
+            reno_cost_sqm = 0 if prop_type == "land" else RENO_COST_PER_SQM
 
-        # ─ ราคาตลาด ─
+        # ─ ราคาตลาดอ้างอิง (fallback ก่อน Perplexity analyze) ─
+        # ค่าในตารางนี้เป็น "estimate" เท่านั้น — Perplexity Sonar Pro จะ override ด้วยราคาจริง
         if market_price_sqm is None:
             base_price = DEFAULT_MARKET_PRICE_SQM["default"]
             for key, val in DEFAULT_MARKET_PRICE_SQM.items():
                 if key != "default" and key in location:
                     base_price = val
                     break
-            # ปรับตาม property_type (condo = baseline, house/townhouse ต่ำกว่า)
-            multiplier = TYPE_MARKET_MULTIPLIER.get(prop_type, 1.0)
+            multiplier    = TYPE_MARKET_MULTIPLIER.get(prop_type, 1.0)
             market_price_sqm = base_price * multiplier
 
-        # ─ คำนวณ ─
-        reno_total    = area * reno_cost_sqm
-        transfer_fee  = price * 0.04           # ค่าโอน + จดจำนอง
-        total_cost    = price + reno_total + transfer_fee
-        market_value  = area * market_price_sqm
-        profit        = market_value - total_cost
-        roi           = (profit / total_cost) * 100
+        # ─ ราคาตลาดหลังรีโนเวท (สภาพดี) ─
+        market_value_after_reno = area * market_price_sqm
+
+        # ─ ราคาตลาดก่อนรีโนเวท (สภาพเดิม) ─
+        condition_discount      = CONDITION_MARKET_DISCOUNT.get(condition, 0.75)
+        market_value_before_reno = round(market_value_after_reno * condition_discount)
+
+        # ─ คำนวณต้นทุนรวม ─
+        reno_total   = area * reno_cost_sqm
+        transfer_fee = price * 0.055          # ค่าโอน + จดจำนอง 5.5%
+        total_cost   = price + reno_total + transfer_fee
+
+        # ─ กำไร + ROI (ใช้ราคาหลังรีโนเวทเป็นเป้าหมายขาย) ─
+        profit = market_value_after_reno - total_cost
+        roi    = (profit / total_cost) * 100
 
         # ─ Sanity: ROI > 999% → likely data error ─
-        roi_suspect = roi > 999
-        if roi_suspect:
+        if roi > 999:
             return {
-                "roi_valid":       False,
-                "roi_skip_reason": f"ROI={roi:.0f}% เกินสมเหตุสมผล — area หรือ market_price น่าจะผิดพลาด",
-                "buy_price":       price,
-                "area_sqm":        area,
-                "roi_percent":     round(roi, 2),
+                "roi_valid":              False,
+                "roi_skip_reason":        f"ROI={roi:.0f}% เกินสมเหตุสมผล — area/market_price น่าจะผิดพลาด",
+                "buy_price":              price,
+                "area_sqm":               area,
+                "roi_percent":            round(roi, 2),
+                "market_value_before_reno": market_value_before_reno,
+                "market_value":           round(market_value_after_reno),
+                "roi_data_source":        "estimate",
             }
 
         # ─ Flag ─
@@ -359,17 +358,21 @@ class ROIEngine:
             priority = "LOW"
 
         return {
-            "roi_valid":        True,
-            "buy_price":        price,
-            "area_sqm":         area,
-            "reno_cost_total":  round(reno_total),
-            "reno_cost_sqm":    reno_cost_sqm,
-            "transfer_fee":     round(transfer_fee),
-            "total_cost":       round(total_cost),
-            "market_price_sqm": market_price_sqm,
-            "market_value":     round(market_value),
-            "estimated_profit": round(profit),
-            "roi_percent":      round(roi, 2),
-            "roi_flag":         flag,
-            "priority":         priority,
+            "roi_valid":              True,
+            "buy_price":              price,
+            "area_sqm":               area,
+            "reno_cost_total":        round(reno_total),
+            "reno_cost_sqm":          reno_cost_sqm,
+            "transfer_fee":           round(transfer_fee),
+            "total_cost":             round(total_cost),
+            "market_price_sqm":       round(market_price_sqm),
+            # ─ ราคาตลาด 2 แบบ ─────────────────────────────────
+            "market_value_before_reno": market_value_before_reno,  # สภาพเดิม
+            "market_value":           round(market_value_after_reno),  # หลังรีโนเวท (= market_value ใน DB)
+            # ───────────────────────────────────────────────────
+            "estimated_profit":       round(profit),
+            "roi_percent":            round(roi, 2),
+            "roi_flag":               flag,
+            "priority":               priority,
+            "roi_data_source":        "estimate",  # จะเปลี่ยนเป็น "sonar_pro" หลัง analyze
         }

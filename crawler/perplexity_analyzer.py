@@ -29,61 +29,89 @@ from loguru import logger
 # ── OpenRouter endpoint (รองรับ Perplexity Sonar + Claude + Llama ฯลฯ) ──────
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# ── Models via OpenRouter ────────────────────────────────
-MODEL_STANDARD = "perplexity/sonar"      # มี web search, ราคาถูก
-MODEL_PRO       = "perplexity/sonar-pro" # แม่นกว่า, เฉพาะ HOT deals
+# ── Models via OpenRouter ─────────────────────────────────
+# ใช้ sonar-pro ทุก deal — real-time web search + แม่นกว่า sonar ทั่วไป
+MODEL_PRO = "perplexity/sonar-pro"
 
-# ── Prompt Template (token-efficient JSON-only) ──────────
+# ── Prompt Template ───────────────────────────────────────
+# sonar-pro มี real-time web search → ค้นหาราคาตลาดจริงจาก DDProperty, Hipflat, Baania
 PROMPT_TEMPLATE = """\
-วิเคราะห์ทรัพย์อสังหาริมทรัพย์ไทยต่อไปนี้ ตอบ JSON เท่านั้น ห้ามมีข้อความอื่น:
+ค้นหาราคาตลาดอสังหาริมทรัพย์จริงจากเว็บไซต์ DDProperty, Hipflat, Baania \
+หรือแหล่งข้อมูลอสังหาริมทรัพย์ที่น่าเชื่อถือในไทย ณ ปี 2025-2026
 
+ทรัพย์ที่ต้องการข้อมูล:
 ประเภท: {type_th}
 โครงการ/หมู่บ้าน: {project_name}
 พื้นที่: {area}
 จังหวัด: {province}
 เขต/อำเภอ: {district}
+สภาพ: {condition_th}
 
-JSON format (ตัวเลขหน่วยบาท):
+กฎเหล็ก:
+1. ห้ามประมาณเอง — ต้องใช้ข้อมูลราคาตลาดจริงที่ค้นเจอเท่านั้น
+2. ถ้าค้นไม่เจอราคาจริงสำหรับทำเล/ประเภทนี้ → ใส่ null
+3. ตอบ JSON เท่านั้น ห้ามมีข้อความอื่น ห้าม markdown
+
+JSON format (หน่วย: บาท และ บาท/ตร.ม.):
 {{
-  "price_before_reno": {{"min": 0, "max": 0}},
-  "price_after_reno": {{"min": 0, "max": 0}},
-  "reno_cost": {{"min": 0, "max": 0}},
-  "profit_potential": {{"min": 0, "max": 0}},
-  "roi_percent": 0,
-  "target_income_monthly": {{"min": 0, "max": 0}},
-  "target_occupations": [],
-  "work_areas": [],
-  "summary_th": ""
-}}"""
+  "market_price_sqm_before_reno": null,
+  "market_price_sqm_after_reno": null,
+  "market_value_before_reno": null,
+  "market_value_after_reno": null,
+  "data_sources": [],
+  "comparable_projects": [],
+  "target_buyers": [],
+  "summary_th": null
+}}
+
+คำอธิบาย fields:
+- market_price_sqm_before_reno: ราคาตลาด ฿/ตร.ม. สภาพเดิม ไม่รีโนเวท (ประเภทและทำเลเดียวกัน)
+- market_price_sqm_after_reno: ราคาตลาด ฿/ตร.ม. สภาพดี หลังรีโนเวทแล้ว
+- market_value_before_reno: มูลค่ารวมสภาพเดิม = market_price_sqm_before_reno × {area_sqm:.0f} ตร.ม.
+- market_value_after_reno: มูลค่ารวมหลังรีโนเวท = market_price_sqm_after_reno × {area_sqm:.0f} ตร.ม.
+- data_sources: URL หรือชื่อเว็บที่ใช้อ้างอิง
+- comparable_projects: โครงการที่ใกล้เคียงที่นำมาเปรียบเทียบ"""
 
 TYPE_TH_MAP = {
-    "house": "บ้านเดี่ยว", "townhouse": "ทาวน์เฮ้าส์",
-    "condo": "คอนโด",      "land": "ที่ดินเปล่า",
-    "commercial": "อาคารพาณิชย์", "other": "ทรัพย์",
+    "house":      "บ้านเดี่ยว",
+    "townhouse":  "ทาวน์เฮ้าส์",
+    "condo":      "คอนโด",
+    "land":       "ที่ดินเปล่า",
+    "commercial": "อาคารพาณิชย์",
+    "other":      "ทรัพย์",
+}
+
+CONDITION_TH_MAP = {
+    "new":  "ใหม่/สภาพดีมาก",
+    "good": "ดี",
+    "fair": "พอใช้ (ต้องรีโนเวทบ้าง)",
+    "poor": "ต้องซ่อมแซมมาก",
 }
 
 
 def _build_prompt(deal: dict) -> str:
-    """Build a token-efficient Perplexity prompt from a deal dict."""
-    loc = deal.get("location") or ""
-    # "สงขลา อำเภอสะเดา" → province="สงขลา", district="อำเภอสะเดา"
+    """Build a Perplexity Sonar Pro prompt from a deal dict."""
     import re
+    loc = deal.get("location") or ""
     m = re.search(r"^([ก-๙a-zA-Z]+)\s+((?:อำเภอ|เขต)[ก-๙a-zA-Z ]+)", loc)
     province = m.group(1) if m else loc
-    district = m.group(2) if m else "-"
+    district = m.group(2) if m else (loc or "-")
 
-    area_sqm = deal.get("area_sqm") or deal.get("land_area_sqm")
+    area_sqm = deal.get("area_sqm") or deal.get("land_area_sqm") or 0
     area_str = f"{area_sqm:.1f} ตร.ม." if area_sqm else "ไม่ระบุ"
 
-    type_th = TYPE_TH_MAP.get(deal.get("property_type", "other"), "ทรัพย์")
-    project  = deal.get("project_name") or "-"
+    type_th     = TYPE_TH_MAP.get(deal.get("property_type", "other"), "ทรัพย์")
+    condition_th = CONDITION_TH_MAP.get(deal.get("condition", "fair"), "พอใช้")
+    project     = deal.get("project_name") or "-"
 
     return PROMPT_TEMPLATE.format(
         type_th=type_th,
         project_name=project,
         area=area_str,
+        area_sqm=area_sqm or 0,
         province=province,
         district=district,
+        condition_th=condition_th,
     )
 
 
@@ -100,14 +128,11 @@ class PerplexityAnalyzer:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        rate_limit_per_min: int = 10,
-        use_pro_for_hot: bool = True,
+        rate_limit_per_min: int = 8,   # sonar-pro มี rate limit ต่ำกว่า sonar ทั่วไป
     ):
-        # ใช้ OPENROUTER_API_KEY (มีอยู่แล้ว) — ไม่ต้องสมัคร Perplexity แยก
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY", "")
         self._min_interval = 60.0 / rate_limit_per_min
         self._last_call_ts = 0.0
-        self.use_pro_for_hot = use_pro_for_hot
 
     @property
     def enabled(self) -> bool:
@@ -143,75 +168,117 @@ class PerplexityAnalyzer:
         await self._rate_limit()
 
         prompt = _build_prompt(deal)
-        is_hot = (deal.get("roi_percent") or 0) >= 30
-        model  = MODEL_PRO if (is_hot and self.use_pro_for_hot) else MODEL_STANDARD
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=45) as client:
                 resp = await client.post(
                     OPENROUTER_API_URL,
                     headers={
-                        "Authorization":  f"Bearer {self.api_key}",
-                        "Content-Type":   "application/json",
-                        "HTTP-Referer":   "https://redd-crawler.onrender.com",
-                        "X-Title":        "RE:DD Real Estate Analyzer",
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type":  "application/json",
+                        "HTTP-Referer":  "https://redd-crawler.onrender.com",
+                        "X-Title":       "RE:DD Real Estate Analyzer",
                     },
                     json={
-                        "model":    model,
+                        "model":    MODEL_PRO,   # ใช้ sonar-pro ทุก deal
                         "messages": [
-                            {"role": "system", "content":
-                             "You are a Thai real estate expert. Respond with valid JSON only, no other text."},
+                            {
+                                "role": "system",
+                                "content": (
+                                    "คุณคือผู้เชี่ยวชาญอสังหาริมทรัพย์ไทย "
+                                    "ค้นหาข้อมูลราคาตลาดจริงจากอินเทอร์เน็ต "
+                                    "ตอบด้วย JSON ที่ถูกต้องเท่านั้น ห้ามมีข้อความอื่น "
+                                    "ถ้าหาราคาจริงไม่เจอ ให้ใส่ null — ห้ามประมาณเอง"
+                                ),
+                            },
                             {"role": "user", "content": prompt},
                         ],
-                        "max_tokens": 450,
-                        "temperature": 0.2,
+                        "max_tokens":  600,
+                        "temperature": 0.1,   # ต่ำมาก = ตอบตรง ไม่สร้างสรรค์
                     },
                 )
                 resp.raise_for_status()
                 raw_content = resp.json()["choices"][0]["message"]["content"].strip()
 
         except Exception as e:
-            logger.error(f"Perplexity API error for deal {deal.get('id','?')}: {e}")
+            logger.error(f"Perplexity API error deal {deal.get('id','?')}: {e}")
             return None
 
-        # Parse JSON response
+        # ── Parse JSON ──────────────────────────────────────────────────
         try:
-            # Strip markdown code fences if present
             if raw_content.startswith("```"):
                 raw_content = raw_content.split("```")[1]
                 if raw_content.startswith("json"):
                     raw_content = raw_content[4:]
-            analysis: dict[str, Any] = json.loads(raw_content)
+            analysis: dict[str, Any] = json.loads(raw_content.strip())
         except json.JSONDecodeError as e:
-            logger.warning(f"Perplexity JSON parse error deal {deal.get('id','?')}: {e}")
-            logger.debug(f"Raw content: {raw_content[:200]}")
+            logger.warning(f"JSON parse error deal {deal.get('id','?')}: {e} | raw={raw_content[:200]}")
             return None
 
-        # Map analysis fields → Supabase deal columns
+        # ── Map fields → Supabase deal columns ─────────────────────────
         enrichment: dict[str, Any] = {
             "ai_analysis":    analysis,
             "ai_analyzed_at": datetime.now(timezone.utc).isoformat(),
+            "roi_data_source": "sonar_pro",
         }
 
-        # market_value → ใช้ price_after_reno (mid-point)
-        par = analysis.get("price_after_reno", {})
-        if par.get("min") and par.get("max"):
-            enrichment["market_value"] = int((par["min"] + par["max"]) / 2)
+        area_sqm = deal.get("area_sqm") or deal.get("land_area_sqm") or 0
+        buy_price = deal.get("price") or 0
 
-        # reno_cost_total → mid-point of reno_cost
-        rc = analysis.get("reno_cost", {})
-        if rc.get("min") and rc.get("max"):
-            enrichment["reno_cost_total"] = int((rc["min"] + rc["max"]) / 2)
+        # ── ราคาตลาดก่อนรีโนเวท (สภาพเดิม) ───────────────────────────
+        mvbr = analysis.get("market_value_before_reno")
+        psbr = analysis.get("market_price_sqm_before_reno")
+        if mvbr and mvbr > 0:
+            enrichment["market_value_before_reno"] = int(mvbr)
+        elif psbr and psbr > 0 and area_sqm > 0:
+            enrichment["market_value_before_reno"] = int(psbr * area_sqm)
 
-        # estimated_profit
-        pp = analysis.get("profit_potential", {})
-        if pp.get("min") and pp.get("max"):
-            enrichment["estimated_profit"] = int((pp["min"] + pp["max"]) / 2)
+        # ── ราคาตลาดหลังรีโนเวท (สภาพดี) ──────────────────────────────
+        mvar = analysis.get("market_value_after_reno")
+        psar = analysis.get("market_price_sqm_after_reno")
+        if mvar and mvar > 0:
+            market_value_after = int(mvar)
+            enrichment["market_value"] = market_value_after
+            if psar and psar > 0:
+                enrichment["market_price_sqm"] = int(psar)
+        elif psar and psar > 0 and area_sqm > 0:
+            market_value_after = int(psar * area_sqm)
+            enrichment["market_value"] = market_value_after
+            enrichment["market_price_sqm"] = int(psar)
+        else:
+            market_value_after = None
+
+        # ── คำนวณ ROI ใหม่ด้วยราคาจริงจาก Sonar Pro ──────────────────
+        if market_value_after and buy_price > 0 and area_sqm > 0:
+            reno_total   = area_sqm * 5_000      # flat 5,000 ฿/ตร.ม.
+            transfer_fee = buy_price * 0.055     # 5.5%
+            total_cost   = buy_price + reno_total + transfer_fee
+            profit       = market_value_after - total_cost
+            roi_pct      = (profit / total_cost) * 100
+
+            enrichment["reno_cost_total"]  = round(reno_total)
+            enrichment["reno_cost_sqm"]    = 5_000
+            enrichment["transfer_fee"]     = round(transfer_fee)
+            enrichment["total_cost"]       = round(total_cost)
+            enrichment["estimated_profit"] = round(profit)
+            enrichment["roi_percent"]      = round(roi_pct, 2)
+            enrichment["roi_valid"]        = True
+
+            if roi_pct >= 30:
+                enrichment["roi_flag"] = "🟢 ควรซื้อ"
+                enrichment["priority"] = "HIGH"
+            elif roi_pct >= 15:
+                enrichment["roi_flag"] = "🟡 พิจารณา"
+                enrichment["priority"] = "MEDIUM"
+            else:
+                enrichment["roi_flag"] = "🔴 ข้ามไป"
+                enrichment["priority"] = "LOW"
 
         logger.info(
-            f"✅ Analyzed deal {deal.get('id','?')} — "
-            f"ROI {analysis.get('roi_percent',0):.1f}% | "
-            f"profit ฿{enrichment.get('estimated_profit',0):,.0f}"
+            f"✅ Sonar Pro analyzed deal {deal.get('id','?')} — "
+            f"before_reno ฿{enrichment.get('market_value_before_reno',0):,.0f} | "
+            f"after_reno ฿{enrichment.get('market_value',0):,.0f} | "
+            f"ROI {enrichment.get('roi_percent',0):.1f}%"
         )
         return enrichment
 

@@ -67,9 +67,11 @@ DEALS_COLUMNS = frozenset({
     "title_deed", "bedrooms", "bathrooms", "floors",
     "condition", "features", "auction_date", "contact",
     "price", "area_sqm", "usable_area_sqm", "land_area_sqm",
-    "roi_valid", "roi_percent", "roi_flag", "priority",
-    "estimated_profit", "total_cost", "market_value", "reno_cost_total",
-    "reno_cost_sqm", "transfer_fee", "market_price_sqm", "buy_price",
+    "roi_valid", "roi_percent", "roi_flag", "priority", "roi_data_source",
+    "estimated_profit", "total_cost",
+    "market_value",             # ราคาตลาดหลังรีโนเวท (สภาพดี)
+    "market_value_before_reno", # ราคาตลาดก่อนรีโนเวท (สภาพเดิม) — จาก Sonar Pro
+    "reno_cost_total", "reno_cost_sqm", "transfer_fee", "market_price_sqm", "buy_price",
     "dedup_key", "is_duplicate",
     "scraped_at", "updated_at", "raw_data",
 })
