@@ -368,6 +368,15 @@ input,select{font-family:var(--font)}
 .chip.ai-chip.active{background:var(--teal);border-color:var(--teal);color:#fff}
 .chip.noai-chip.active{background:var(--textMid);border-color:var(--textMid);color:#fff}
 .deal-ai-badge{position:absolute;top:8px;right:7px;z-index:3;background:var(--teal);color:#fff;font-size:8px;font-weight:800;padding:2px 6px;border-radius:8px;letter-spacing:.3px}
+.deal-ai-badge.empty{background:var(--yellow);color:#fff}
+/* ── AI ANALYSIS SECTION IN CARD ── */
+.ai-card-box{margin-top:8px;border-radius:6px;padding:7px 9px;font-size:9.5px;line-height:1.5}
+.ai-card-box.done{background:var(--tealDim);border:1px solid #99F6E4;color:var(--teal)}
+.ai-card-box.empty{background:var(--yellowDim);border:1px solid var(--yellowBorder);color:var(--yellow)}
+.ai-card-title{font-weight:700;margin-bottom:3px;font-size:9px;letter-spacing:.3px}
+/* ── ROI NOT AVAILABLE ── */
+.roi-na-box{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:9.5px;color:var(--textMid);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.roi-na-icon{font-size:13px;flex-shrink:0}
 
 /* ── ANIMATIONS ── */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
@@ -1029,7 +1038,7 @@ function buildProvChecks() {
     const p = getProvince(d.location||"");
     if (!p) return;
     provCounts[p] = (provCounts[p]||0) + 1;
-    if (d.ai_analysis || d.ai_analyzed_at) provAI[p] = (provAI[p]||0) + 1;
+    if (getAIStatus(d) === "done") provAI[p] = (provAI[p]||0) + 1;
   });
   const provinces = Object.keys(provCounts).sort((a,b)=>a.localeCompare(b,"th"));
   const container = document.getElementById("prov-checks");
@@ -1087,7 +1096,29 @@ document.addEventListener("click", e => {
   }
 });
 
-function isAnalyzed(d) { return !!(d.ai_analysis || d.ai_analyzed_at); }
+// ── AI status helpers ─────────────────────────────────────────────────────
+// "none"  = ยังไม่เคย analyze
+// "empty" = analyze แล้ว แต่ได้ null / empty data กลับมา (ต้อง re-analyze)
+// "done"  = analyze สำเร็จ มี summary จริง
+function tryParseJSON(v) {
+  if (typeof v === "object") return v;
+  try { return JSON.parse(v); } catch { return null; }
+}
+function getAIStatus(d) {
+  if (!d.ai_analysis && !d.ai_analyzed_at) return "none";
+  if (!d.ai_analysis) return "empty";
+  const ai = tryParseJSON(d.ai_analysis);
+  if (!ai || typeof ai !== "object") {
+    // plain string analysis
+    return typeof d.ai_analysis === "string" && d.ai_analysis.length > 20 ? "done" : "empty";
+  }
+  const hasSummary  = !!(ai.summary_th || ai.summary);
+  const hasSources  = Array.isArray(ai.data_sources) && ai.data_sources.length > 0;
+  const hasProjects = ai.comparable_projects && Object.keys(ai.comparable_projects).length > 0;
+  return (hasSummary || hasSources || hasProjects) ? "done" : "empty";
+}
+function isAnalyzed(d) { return getAIStatus(d) !== "none"; }
+function isAISuccess(d) { return getAIStatus(d) === "done"; }
 
 function applyFilters(list) {
   return list.filter(d => {
@@ -1407,9 +1438,10 @@ function dealCard(d) {
   const cardId  = "c" + (d.id || Math.random().toString(36).slice(2,8));
   const dKey    = dealKey(d);
   const isSelMode = selectMode;
-  const isSel   = selectedDealKeys.has(dKey);
-  const rawData = rawD;  // alias — already declared above
-  const hasAI   = isAnalyzed(d);
+  const isSel     = selectedDealKeys.has(dKey);
+  const rawData   = rawD;  // alias
+  const aiStatus  = getAIStatus(d);   // "none" | "empty" | "done"
+  const hasAI     = aiStatus !== "none";
   const images  = Array.isArray(rawD.images) && rawD.images.length>0 ? rawD.images : [];
   const hasImgs = images.length > 0;
   const imgsPipe = images.join("|");
@@ -1464,7 +1496,7 @@ function dealCard(d) {
     ${isSelMode?`<div class="deal-sel-overlay" onclick="event.stopPropagation()">
       <input type="checkbox" class="deal-sel-cb" data-key="${escHtml(dKey)}" ${isSel?"checked":""} onchange="toggleDealSelect(${JSON.stringify(dKey)},this)">
     </div>`:""}
-    ${hasAI?`<div class="deal-ai-badge">🧠 AI</div>`:""}
+    ${aiStatus==="done"?`<div class="deal-ai-badge">🧠 AI</div>`:aiStatus==="empty"?`<div class="deal-ai-badge empty">⚠️ AI</div>`:""}
     <div onclick="${isSelMode?`toggleDealSelect(${JSON.stringify(dKey)},this.closest('.deal-card').querySelector('.deal-sel-cb'))`:`openLightbox('${cardId}',${JSON.stringify(images)})`}" style="cursor:${isSelMode?'pointer':hasImgs?'zoom-in':'default'}">${imgHTML}</div>
     <div class="card-body">
       ${isPromo?`<div style="margin-bottom:6px"><span class="promo-badge">🏷 Promotion</span>${savePct>0?`<span class="price-save">ลด ${savePct}%</span>`:""}</div>`:""}
@@ -1487,15 +1519,21 @@ function dealCard(d) {
           <div class="cf-val" style="color:${condCol}">${cond}</div>
         </div>
       </div>
-      <div class="roi-bar-wrap">
-        <div class="roi-bar-head">
-          <span class="roi-bar-lbl">ROI (ประมาณ)</span>
-          <span class="roi-flag" style="color:${roiColor}">${roiLabel} ${roiDisp}</span>
-        </div>
-        <div class="roi-bar-track">
-          <div class="roi-bar-fill" style="width:${roiPct}%;background:${roiColor}"></div>
-        </div>
-      </div>
+      ${roiSuspect || rawRoi === 0
+        ? `<div class="roi-na-box">
+            <span class="roi-na-icon">📊</span>
+            <span>ยังไม่ได้คำนวณ ROI — ต้องการ market price จาก Sonar Pro</span>
+           </div>`
+        : `<div class="roi-bar-wrap">
+            <div class="roi-bar-head">
+              <span class="roi-bar-lbl">ROI (ประมาณ)</span>
+              <span class="roi-flag" style="color:${roiColor}">${roiLabel} ${roiDisp}</span>
+            </div>
+            <div class="roi-bar-track">
+              <div class="roi-bar-fill" style="width:${roiPct}%;background:${roiColor}"></div>
+            </div>
+           </div>`
+      }
       ${breakdownHTML}
       ${(()=>{
         // ─ Extract asset code from URL (for copy + search fallback) ─
@@ -1571,9 +1609,30 @@ function dealCard(d) {
           <div style="display:flex;flex-wrap:wrap;gap:4px">${btns}</div>
         </div>`;
       })()}
-      ${d.ai_analysis?`<div style="margin-top:8px;background:var(--tealDim);border:1px solid #99F6E4;border-radius:6px;padding:6px 8px;font-size:9px;color:var(--teal)">
-        🧠 AI: ${typeof d.ai_analysis==="object"?d.ai_analysis.summary_th||d.ai_analysis.summary||JSON.stringify(d.ai_analysis).slice(0,80):String(d.ai_analysis).slice(0,80)}...
-      </div>`:""}
+      ${(()=>{
+        if (aiStatus === "none") return "";
+        if (aiStatus === "empty") {
+          return `<div class="ai-card-box empty">
+            <div class="ai-card-title">⚠️ AI ANALYZED — ข้อมูลไม่สมบูรณ์</div>
+            ยังไม่ได้รับ summary จาก Sonar Pro — ลอง Re-analyze เพื่อดึงข้อมูลราคาตลาดใหม่
+          </div>`;
+        }
+        // aiStatus === "done"
+        const ai = tryParseJSON(d.ai_analysis) || {};
+        const summary = ai.summary_th || ai.summary || (typeof d.ai_analysis === "string" ? d.ai_analysis : "");
+        const sources = Array.isArray(ai.data_sources) && ai.data_sources.length > 0
+          ? `<div style="margin-top:5px;color:var(--teal);opacity:.75;font-size:8.5px">🔗 แหล่งข้อมูล: ${ai.data_sources.slice(0,3).join(", ")}</div>`
+          : "";
+        const mktPrice = ai.market_price_sqm
+          ? `<div style="margin-top:4px;font-size:8.5px;color:var(--teal);opacity:.8">💰 ราคาตลาด: ~฿${Number(ai.market_price_sqm).toLocaleString()}/ตร.ม.</div>`
+          : "";
+        const trimmed = summary.length > 180 ? summary.slice(0,180)+"…" : summary;
+        return `<div class="ai-card-box done">
+          <div class="ai-card-title">🧠 Sonar Pro Analysis</div>
+          <div style="color:var(--text);font-size:9.5px;line-height:1.55">${trimmed || "—"}</div>
+          ${mktPrice}${sources}
+        </div>`;
+      })()}
     </div>
   </div>`;
 }
