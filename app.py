@@ -466,7 +466,7 @@ async def _run_analysis(
             # ── Filter-based mode ──────────────────────────────────────────
             q = db.table("deals").select(FIELDS)
             if not force and ai_status != "analyzed":
-                q = q.or_("ai_analyzed_at.is.null,and(ai_analyzed_at.not.is.null,price_reno_low.is.null,market_value_min.is.null,market_value.is.null)")
+                q = q.or_("ai_analyzed_at.is.null,and(price_reno_low.is.null,market_value_min.is.null,market_value.is.null)")
             elif ai_status == "analyzed":
                 q = q.not_.is_("ai_analyzed_at", "null")
 
