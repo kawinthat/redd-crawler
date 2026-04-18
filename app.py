@@ -477,7 +477,7 @@ async def _run_analysis(
             if price_max is not None:
                 q = q.lte("price", price_max)
 
-            fetch_limit = limit * 5 if (provinces or types) else limit
+            fetch_limit = limit * 10
             all_pending = q.order("scraped_at", desc=True).limit(fetch_limit).execute().data or []
 
             # Post-filter จังหวัด + ประเภท (free-text → ทำ server-side ไม่ได้ตรง)
@@ -485,6 +485,15 @@ async def _run_analysis(
                 loc = d.get("location") or ""
                 if provinces and not any(p in loc for p in provinces): return False
                 if types and d.get("property_type") not in types:      return False
+                
+                if not force and ai_status != "analyzed":
+                    if d.get("ai_analyzed_at"):
+                        ai = d.get("ai_analysis")
+                        if ai:
+                            ai_str = ai if isinstance(ai, str) else str(ai)
+                            # ถ้าเป็น new format แล้ว (มี pricing) แต่ราคาเป็น null → ห้ามวิเคราะห์ซ้ำให้เปลือง/วนลูป
+                            if "pricing" in ai_str or "project" in ai_str:
+                                return False
                 return True
 
             pending = [d for d in all_pending if _match(d)][:limit]
@@ -644,7 +653,7 @@ async def reset_analysis():
             .not_.is_("ai_analyzed_at", "null").execute()
         count_before = count_before_r.count or 0
 
-        db.table("deals").update(core_fields).not_.is_("id", "null").execute()
+        db.table("deals").update(core_fields).neq("id", 0).execute()
 
         # นับหลัง reset
         count_after_r = db.table("deals").select("id", count="exact") \
@@ -665,7 +674,7 @@ async def reset_analysis():
     # รัน new fields — ถ้า column ไม่มีให้ข้ามไป (ไม่ error)
     for col, val in new_fields.items():
         try:
-            db.table("deals").update({col: val}).not_.is_("id", "null").execute()
+            db.table("deals").update({col: val}).neq("id", 0).execute()
             reset_fields.append(col)
         except Exception as e:
             err_msg = str(e)

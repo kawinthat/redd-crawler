@@ -1311,7 +1311,10 @@ function getAIStatus(d) {
 
   const ai = tryParseJSON(d.ai_analysis);
   if (ai && typeof ai === "object") {
-    if (ai.pricing && ai.pricing.after_reno_low != null) return "done";
+    if (ai.pricing !== undefined || ai.project !== undefined) {
+      if (ai.pricing && ai.pricing.after_reno_low != null) return "done";
+      return "empty"; // New format but missing valid values
+    }
   } else if (typeof d.ai_analysis === "string" && d.ai_analysis.length > 20) {
     // plain string from very old crawler without structured data
     return "done";
