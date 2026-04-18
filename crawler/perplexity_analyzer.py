@@ -158,7 +158,8 @@ def _build_prompt(deal: dict) -> str:
     province = m.group(1) if m else loc
     district = m.group(2) if m else (loc or "-")
 
-    area_sqm = deal.get("area_sqm") or deal.get("land_area_sqm") or 0
+    area_sqm = (deal.get("usable_area_sqm") or deal.get("area_sqm")
+                or deal.get("land_area_sqm") or 0)
     area_str = f"{area_sqm:.1f} ตร.ม." if area_sqm else "ไม่ระบุ"
 
     type_th     = TYPE_TH_MAP.get(deal.get("property_type", "other"), "ทรัพย์")
@@ -311,7 +312,9 @@ class PerplexityAnalyzer:
         if listing_urls:
             enrichment["source_urls"] = listing_urls
 
-        area_sqm  = deal.get("area_sqm") or deal.get("land_area_sqm") or 0
+        # ใช้ usable_area_sqm ก่อน (condos) → area_sqm → land_area_sqm
+        area_sqm  = (deal.get("usable_area_sqm") or deal.get("area_sqm")
+                     or deal.get("land_area_sqm") or 0)
         buy_price = deal.get("buy_price") or deal.get("price") or 0
 
         # ── ราคา 3 ระดับ — ดึงจาก pricing block ────────────────────────

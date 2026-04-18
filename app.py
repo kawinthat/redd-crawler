@@ -438,7 +438,7 @@ async def _run_analysis(
     try:
         FIELDS = (
             "id,listing_url,source_domain,property_type,project_name,"
-            "location,price,area_sqm,land_area_sqm,roi_percent,priority,"
+            "location,price,area_sqm,usable_area_sqm,land_area_sqm,roi_percent,priority,"
             "condition,ai_analyzed_at,reno_cost_total,transfer_fee,"
             "market_value,buy_price"
         )
