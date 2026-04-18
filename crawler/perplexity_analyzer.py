@@ -1,19 +1,16 @@
 """
 perplexity_analyzer.py — RE:DD AI Market Intelligence Engine
 ใช้ Perplexity Sonar ผ่าน OpenRouter API วิเคราะห์แต่ละทรัพย์:
-  - ราคาตลาดก่อน/หลังรีโนเวท
-  - ค่าประมาณรีโนเวท
-  - กลุ่มลูกค้าเป้าหมาย (อาชีพ, รายได้, ทำเล)
+  - ราคาตลาดก่อน/หลังรีโนเวท (ข้อมูลจริงจากเว็บ)
+  - ค่าประมาณรีโนเวท (flat 5,000 ฿/ตร.ม.)
   - ROI คาดการณ์
 
-ใช้ OpenRouter (OPENROUTER_API_KEY) เพื่อเข้าถึง Perplexity Sonar
-ที่มี real-time web search — ไม่ต้องสมัคร Perplexity account แยก
-
 Token Efficiency Strategy:
-  1. ขอ JSON output เท่านั้น — ประหยัด ~60% tokens
-  2. perplexity/sonar สำหรับ batch (ถูก), sonar-pro เฉพาะ HOT deals
-  3. Skip deals ที่ analyze แล้ว
-  4. Rate limit: 10 req/min
+  1. ตรวจ MarketCache ก่อน — ถ้า cache hit ไม่เรียก AI เลย (ประหยัด 100% token)
+  2. ขอ JSON output เท่านั้น — ประหยัด ~60% tokens
+  3. Always sonar-pro — real-time web search + แม่นกว่า
+  4. บันทึก cache หลัง sonar-pro analysis — deals หมู่บ้านเดียวกันไม่ต้องวิเคราะห์ใหม่
+  5. Rate limit: 8 req/min (sonar-pro limit)
 """
 from __future__ import annotations
 
@@ -25,6 +22,20 @@ from typing import Any, Optional
 
 import httpx
 from loguru import logger
+
+# Import MarketCache (lazy to avoid circular imports)
+_market_cache: "Any" = None
+
+def _get_market_cache():
+    global _market_cache
+    if _market_cache is None:
+        try:
+            from crawler.market_cache import MarketCache
+            _market_cache = MarketCache()
+        except Exception as e:
+            logger.warning(f"MarketCache init failed: {e}")
+            _market_cache = False   # sentinel: don't retry
+    return _market_cache if _market_cache else None
 
 # ── OpenRouter endpoint (รองรับ Perplexity Sonar + Claude + Llama ฯลฯ) ──────
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -164,7 +175,18 @@ class PerplexityAnalyzer:
             logger.debug(f"Skip deal {deal.get('id','?')} — ไม่มี location/project_name")
             return None
 
-        # Rate limiting
+        # ── Check market pattern cache ──────────────────────────────────
+        cache = _get_market_cache()
+        if cache:
+            cached = await cache.get_pattern(deal)
+            if cached:
+                logger.info(
+                    f"♻️  Cache used for deal {deal.get('id','?')} — "
+                    f"ROI {cached.get('roi_percent','?')}% (no AI call)"
+                )
+                return cached
+
+        # Rate limiting (only hit when cache miss)
         await self._rate_limit()
 
         prompt = _build_prompt(deal)
@@ -216,11 +238,17 @@ class PerplexityAnalyzer:
             return None
 
         # ── Map fields → Supabase deal columns ─────────────────────────
+        # Extract source URLs from Sonar Pro response
+        data_sources = analysis.get("data_sources") or []
+        source_urls  = [s for s in data_sources if isinstance(s, str) and s.startswith("http")]
+
         enrichment: dict[str, Any] = {
             "ai_analysis":    analysis,
             "ai_analyzed_at": datetime.now(timezone.utc).isoformat(),
             "roi_data_source": "sonar_pro",
         }
+        if source_urls:
+            enrichment["source_urls"] = source_urls
 
         area_sqm = deal.get("area_sqm") or deal.get("land_area_sqm") or 0
         buy_price = deal.get("price") or 0
@@ -278,8 +306,17 @@ class PerplexityAnalyzer:
             f"✅ Sonar Pro analyzed deal {deal.get('id','?')} — "
             f"before_reno ฿{enrichment.get('market_value_before_reno',0):,.0f} | "
             f"after_reno ฿{enrichment.get('market_value',0):,.0f} | "
-            f"ROI {enrichment.get('roi_percent',0):.1f}%"
+            f"ROI {enrichment.get('roi_percent',0):.1f}% | "
+            f"sources={len(enrichment.get('source_urls',[]))}"
         )
+
+        # ── Save to market pattern cache for future use ─────────────────
+        if cache and enrichment.get("market_value"):
+            try:
+                await cache.save_pattern(deal, enrichment)
+            except Exception as ce:
+                logger.warning(f"Cache save failed (non-fatal): {ce}")
+
         return enrichment
 
     async def analyze_batch(

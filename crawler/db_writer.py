@@ -72,6 +72,7 @@ DEALS_COLUMNS = frozenset({
     "market_value",             # ราคาตลาดหลังรีโนเวท (สภาพดี)
     "market_value_before_reno", # ราคาตลาดก่อนรีโนเวท (สภาพเดิม) — จาก Sonar Pro
     "reno_cost_total", "reno_cost_sqm", "transfer_fee", "market_price_sqm", "buy_price",
+    "source_urls",               # URL อ้างอิงราคาตลาดจาก Sonar Pro (JSONB array)
     "dedup_key", "is_duplicate",
     "scraped_at", "updated_at", "raw_data",
 })

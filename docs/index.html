@@ -201,6 +201,8 @@ input,select{font-family:var(--font)}
 .card-action-btn.primary-action{background:var(--gold);color:#0d1c26;border-color:var(--gold);font-weight:700}
 .card-action-btn.primary-action:hover{filter:brightness(1.1)}
 .hot-banner{background:linear-gradient(90deg,#0a2017,#0d2a1a);border:1px solid #22d07a22;border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.src-ref-btn{display:inline-block;padding:2px 7px;font-size:9px;border-radius:10px;border:1px solid var(--teal);color:var(--teal);background:#0d2f2c22;text-decoration:none;white-space:nowrap;transition:all .15s;cursor:pointer}
+.src-ref-btn:hover{background:var(--teal);color:#0d1c26;border-color:var(--teal)}
 
 /* ── TABLE VIEW ── */
 #deals-table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
@@ -1015,11 +1017,13 @@ function dealCard(d) {
         return `
       <div class="rb-row"><span class="rb-lbl">ราคาซื้อ</span><span class="rb-val">฿${fmtNum(buyPrice)}</span></div>
       <div class="rb-row"><span class="rb-lbl">ค่ารีโนเวท</span><span class="rb-val">฿${fmtNum(renoTotal)}${renoSqm?" (฿"+fmtNum(renoSqm)+"/ตร.ม.)":""}</span></div>
-      <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง <span style="font-size:9px;color:var(--gray)">(4%)</span></span><span class="rb-val">฿${fmtNum(transfer)}</span></div>
+      <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง <span style="font-size:9px;color:var(--gray)">(5.5%)</span></span><span class="rb-val">฿${fmtNum(transfer)}</span></div>
       <div class="rb-row rb-total"><span class="rb-lbl">ต้นทุนรวม</span><span class="rb-val" style="color:var(--yellow)">฿${fmtNum(totalCost)}</span></div>
       <div class="rb-row"><span class="rb-lbl">ราคาตลาดอ้างอิง${mktSqm?" (฿"+fmtNum(mktSqm)+"/ตร.ม.)":""}</span><span class="rb-val" style="color:var(--green)">฿${fmtNum(mktVal)}</span></div>
       <div class="rb-row rb-total"><span class="rb-lbl">กำไรโดยประมาณ</span><span class="rb-val" style="color:${profit>0?"var(--green)":"var(--red)"}">฿${fmtNum(Math.round(profit))}</span></div>
-      <div style="font-size:9px;color:var(--gray);margin-top:6px;line-height:1.4">⚠️ ROI นี้เป็นค่าประมาณการเท่านั้น ราคาตลาดอ้างอิงจากฐานข้อมูลภายใน ควรตรวจสอบราคาตลาดจริงก่อนตัดสินใจ</div>
+      <div style="font-size:9px;color:var(--gray);margin-top:6px;line-height:1.4">
+        ${d.roi_data_source==="sonar_pro"?"✅ ราคาตลาดจากข้อมูลจริง (Sonar Pro)":d.roi_data_source==="cache"?"♻️ ราคาตลาดจาก pattern cache (script คำนวณ)":"⚠️ ROI ประมาณการ — ควรตรวจสอบราคาตลาดจริงก่อนตัดสินใจ"}
+      </div>
         `;
       })()}
     </div>` : "";
@@ -1118,8 +1122,22 @@ function dealCard(d) {
           <a href="${hotUrl}" target="_blank" rel="noopener" style="font-size:10px">${isBAMH?"ค้นหาบน BAM →":"ดูทรัพย์ →"}</a>
         </div>`;
       })()}
+      ${(()=>{
+        const srcUrls = Array.isArray(d.source_urls) ? d.source_urls.filter(u=>u&&u.startsWith("http")) : [];
+        if (!srcUrls.length) return "";
+        // Extract short domain label for each button (max 4)
+        const btns = srcUrls.slice(0,4).map(u=>{
+          let label = u.replace(/https?:\/\/(www\.)?/,"").split("/")[0].split(".").slice(-2).join(".");
+          label = label.length > 20 ? label.slice(0,18)+"…" : label;
+          return `<a href="${u}" target="_blank" rel="noopener" class="src-ref-btn" title="${u}">${label} ↗</a>`;
+        }).join("");
+        return `<div style="margin-top:7px">
+          <div style="font-size:9px;color:var(--gray);margin-bottom:4px">🔗 แหล่งอ้างอิงราคา:</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${btns}</div>
+        </div>`;
+      })()}
       ${d.ai_analysis?`<div style="margin-top:8px;background:#0d2f2c22;border:1px solid var(--teal)22;border-radius:6px;padding:6px 8px;font-size:9px;color:var(--teal)">
-        🧠 AI: ${typeof d.ai_analysis==="object"?d.ai_analysis.summary||JSON.stringify(d.ai_analysis).slice(0,80):String(d.ai_analysis).slice(0,80)}...
+        🧠 AI: ${typeof d.ai_analysis==="object"?d.ai_analysis.summary_th||d.ai_analysis.summary||JSON.stringify(d.ai_analysis).slice(0,80):String(d.ai_analysis).slice(0,80)}...
       </div>`:""}
     </div>
   </div>`;
