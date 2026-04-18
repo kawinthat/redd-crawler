@@ -970,7 +970,7 @@ function loadCache() {
 
 function renderFromCache(cached) {
   deals    = cached.deals;
-  hotDeals = deals.filter(d => (d.roi_percent||0) >= 30);
+  hotDeals = deals.filter(d => calcFreshRoi(d) >= 30 && d.roi_valid !== false);
   populateFilters();
   curPage = 1;
   renderDeals();
@@ -1036,7 +1036,8 @@ async function loadDeals() {
       fetch(`${API}/deals/hot?limit=500`).then(r=>r.json()),
     ]);
     deals = allDeals;
-    hotDeals = hotR.data || [];
+    // คำนวณ hotDeals จาก fresh ROI (conservative min) แทนการใช้ API ที่อาจ stale
+    hotDeals = deals.filter(d => calcFreshRoi(d) >= 30 && d.roi_valid !== false);
     // บันทึก cache ทุกครั้งที่ API โหลดสำเร็จ
     saveCache(deals);
     populateFilters();
@@ -1271,18 +1272,40 @@ function calcTotalCost(d) {
 }
 
 function calcFreshProfit(d) {
-  if (d.market_value && d.market_value > 0) {
-    return d.market_value - calcTotalCost(d);
-  }
-  return d.estimated_profit ?? null;  // null = unknown
+  // ใช้ market_value_min (conservative) ถ้ามีช่วงราคา
+  const mv = d.market_value_min || d.market_value;
+  if (mv && mv > 0) return mv - calcTotalCost(d);
+  return d.estimated_profit ?? null;
+}
+
+function calcFreshProfitMax(d) {
+  const mv = d.market_value_max || d.market_value;
+  if (mv && mv > 0) return mv - calcTotalCost(d);
+  return null;
 }
 
 function calcFreshRoi(d) {
-  if (d.market_value && d.market_value > 0) {
+  // conservative: ใช้ market_value_min เพื่อกัน false positive
+  const mv = d.market_value_min || d.market_value;
+  if (mv && mv > 0) {
     const cost = calcTotalCost(d);
-    if (cost > 0) return (d.market_value - cost) / cost * 100;
+    if (cost > 0) return (mv - cost) / cost * 100;
   }
-  return d.roi_percent || 0;
+  return d.roi_min ?? d.roi_percent ?? 0;
+}
+
+function calcFreshRoiMax(d) {
+  const mv = d.market_value_max || d.market_value;
+  if (mv && mv > 0) {
+    const cost = calcTotalCost(d);
+    if (cost > 0) return (mv - cost) / cost * 100;
+  }
+  return d.roi_max ?? calcFreshRoi(d);
+}
+
+function hasRoiRange(d) {
+  return d.market_value_min > 0 && d.market_value_max > 0 &&
+         d.market_value_min !== d.market_value_max;
 }
 
 function applySort(list) {
@@ -1603,22 +1626,21 @@ function goPage(p) {
 const slideIdx = {};
 
 function dealCard(d) {
-  // ── Fresh ROI calculation (ใช้ market_value จาก Sonar Pro ถ้ามี — แม่นยำกว่า d.roi_percent ใน DB) ──
-  let displayRoi = d.roi_percent || 0;
-  if (d.market_value && d.market_value > 0) {
-    const _bp   = d.buy_price || d.price || 0;
-    const _reno = d.reno_cost_total || 0;
-    const _fee  = (d.transfer_fee && d.transfer_fee > 0) ? d.transfer_fee : Math.round(_bp * 0.055);
-    const _cost = _bp + _reno + _fee;
-    if (_cost > 0) displayRoi = (d.market_value - _cost) / _cost * 100;
-  }
-  const rawRoi    = displayRoi;
-  const roiSuspect= rawRoi > 999 || (d.roi_valid === false && !(d.market_value > 0));
+  // ── Fresh ROI — ใช้ conservative (min) เพื่อกัน false positive ──
+  const rawRoi    = calcFreshRoi(d);
+  const rawRoiMax = calcFreshRoiMax(d);
+  const hasRange  = hasRoiRange(d) && Math.abs(rawRoiMax - rawRoi) >= 1;
+  const roiSuspect= rawRoi > 999 || (d.roi_valid === false && !((d.market_value_min||d.market_value) > 0));
   const hot       = rawRoi >= 30 && !roiSuspect;
   const roiColor  = roiSuspect?"var(--textLight)":rawRoi>=30?"var(--green)":rawRoi>=15?"var(--yellow)":"var(--red)";
   const roiPct    = roiSuspect ? 0 : Math.min(Math.max(rawRoi, 0), 100);
   const roiLabel  = roiSuspect?"⚠️ N/A":rawRoi>=30?"🟢 ควรซื้อ":rawRoi>=15?"🟡 พิจารณา":"🔴 ข้าม";
-  const roiDisp   = roiSuspect ? "N/A" : rawRoi.toFixed(1)+"%";
+  // แสดงเป็นช่วงถ้ามี range (min~max)
+  const roiDisp   = roiSuspect
+    ? "N/A"
+    : hasRange
+      ? `${rawRoi.toFixed(1)}%–${rawRoiMax.toFixed(1)}%`
+      : rawRoi.toFixed(1)+"%";
   const priceM    = d.price ? (d.price/1e6).toFixed(2) : "—";
   // ── Promotion / ราคาลด ────────────────────────────────────────
   const rawD      = typeof d.raw_data==="object" && d.raw_data ? d.raw_data : {};
@@ -1690,21 +1712,54 @@ function dealCard(d) {
         const transferPct = buyPrice > 0 ? (transfer/buyPrice*100).toFixed(1) : "5.5";
         // คำนวณต้นทุนรวมจาก line items จริงเสมอ — ห้ามใช้ d.total_cost (อาจ stale)
         const totalCost   = buyPrice + renoTotal + transfer;
-        // ── ราคาตลาด ─────────────────────────────────────────────────────────
-        const mktBefore   = d.market_value_before_reno || 0;   // ก่อนรีโนเวท (สภาพเดิม)
-        const mktAfter    = d.market_value || 0;               // หลังรีโนเวท (สภาพดี) ← ใช้คำนวณกำไร
-        const mktSqm      = d.market_price_sqm || null;        // ฿/ตร.ม. หลังรีโนเวท
-        const mktSqmBefore= (mktBefore > 0 && renoArea > 0) ? Math.round(mktBefore/renoArea) : null;
-        const mktSqmAfter = mktSqm || (mktAfter > 0 && renoArea > 0 ? Math.round(mktAfter/renoArea) : null);
-        // ── กำไร/ขาดทุน (คำนวณสด) ──────────────────────────────────────────
-        // กำไร = ราคาตลาดหลังรีโนเวท − ต้นทุนรวม (ห้ามใช้ d.estimated_profit ที่ stale)
-        const profit      = mktAfter - totalCost;
-        const isLoss      = profit < 0;
-        // ── ROI คำนวณใหม่ และตรวจสอบกับค่าใน DB ──────────────────────────
-        const recalcRoi   = totalCost > 0 ? (profit / totalCost) * 100 : 0;
-        const storedRoi   = d.roi_percent || 0;
-        const roiMismatch = storedRoi > 0 && Math.abs(recalcRoi - storedRoi) > 10;
-        const roiCol      = recalcRoi >= 30 ? "var(--green)" : recalcRoi >= 15 ? "var(--yellow)" : "var(--red)";
+        // ── ราคาตลาด (ช่วง low–high) ─────────────────────────────────────
+        const mktMin      = d.market_value_min || d.market_value || 0;
+        const mktMax      = d.market_value_max || d.market_value || 0;
+        const mktMidVal   = mktMin > 0 && mktMax > 0 ? Math.round((mktMin+mktMax)/2) : (mktMin||mktMax);
+        const sqmMin      = d.market_price_sqm_min || d.market_price_sqm || null;
+        const sqmMax      = d.market_price_sqm_max || d.market_price_sqm || null;
+        const hasValRange = mktMin > 0 && mktMax > 0 && mktMin !== mktMax;
+        const hasSqmRange = sqmMin && sqmMax && sqmMin !== sqmMax;
+        // ฿/ตร.ม. display
+        const sqmDisp = hasSqmRange
+          ? `฿${fmtNum(sqmMin)}–${fmtNum(sqmMax)}/ตร.ม.`
+          : sqmMin ? `฿${fmtNum(sqmMin)}/ตร.ม.` : "";
+        // ช่วงราคารวม display
+        const mktAfterDisp = hasValRange
+          ? `฿${fmtNum(mktMin)} – ฿${fmtNum(mktMax)}`
+          : mktMidVal > 0 ? `฿${fmtNum(mktMidVal)}` : "—";
+
+        // ── กำไร/ขาดทุน — ใช้ conservative (min) ──────────────────────
+        const profitMin   = mktMin > 0 ? mktMin - totalCost : null;
+        const profitMax   = mktMax > 0 ? mktMax - totalCost : null;
+        const hasProfitRange = profitMin !== null && profitMax !== null && profitMin !== profitMax;
+        const profitDisp  = profitMin === null
+          ? "—"
+          : hasProfitRange
+            ? `${profitMin>=0?"+":"-"}฿${fmtNum(Math.abs(Math.round(profitMin)))} – ${profitMax>=0?"+":"-"}฿${fmtNum(Math.abs(Math.round(profitMax)))}`
+            : `${profitMin>=0?"+":"-"}฿${fmtNum(Math.abs(Math.round(profitMin)))}`;
+        const profitIsLoss = profitMin !== null && profitMin < 0;
+
+        // ── ROI — ช่วง ─────────────────────────────────────────────────
+        const roiCalcMin  = mktMin > 0 && totalCost > 0 ? (profitMin / totalCost) * 100 : null;
+        const roiCalcMax  = mktMax > 0 && totalCost > 0 ? (profitMax / totalCost) * 100 : null;
+        const hasRoiCalcRange = roiCalcMin !== null && roiCalcMax !== null && Math.abs(roiCalcMax - roiCalcMin) >= 1;
+        const roiDisp2    = roiCalcMin === null
+          ? "—"
+          : hasRoiCalcRange
+            ? `${roiCalcMin>=0?"+":""}${roiCalcMin.toFixed(1)}% ~ ${roiCalcMax>=0?"+":""}${roiCalcMax.toFixed(1)}%`
+            : `${roiCalcMin>=0?"+":""}${roiCalcMin.toFixed(1)}%`;
+        const roiCol2     = roiCalcMin===null?"var(--textLight)":roiCalcMin>=30?"var(--green)":roiCalcMin>=15?"var(--yellow)":"var(--red)";
+
+        // ── แหล่งข้อมูล listing URLs ──────────────────────────────────
+        const srcUrls = (d.source_urls || []).filter(u => typeof u === "string" && u.startsWith("http"));
+        const urlsHTML = srcUrls.length > 0
+          ? `<div style="margin-top:6px;font-size:9px;color:var(--textMid)">🔗 แหล่งอ้างอิง:<br>${srcUrls.slice(0,3).map(u=>{
+              const host = u.replace(/^https?:\/\/(www\.)?/,"").split("/")[0];
+              return `<a href="${u}" target="_blank" style="color:var(--blue);text-decoration:none">${host}</a>`;
+            }).join(" · ")}</div>`
+          : "";
+
         return `
       <div style="font-size:9px;font-weight:700;color:var(--textLight);letter-spacing:.5px;margin-bottom:4px">── ต้นทุน ──────────────────────</div>
       <div class="rb-row"><span class="rb-lbl">ราคาซื้อ</span><span class="rb-val">฿${fmtNum(buyPrice)}</span></div>
@@ -1712,16 +1767,32 @@ function dealCard(d) {
       <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง <span style="font-size:9px;color:var(--textLight)">(${transferPct}%)</span></span><span class="rb-val">฿${fmtNum(transfer)}</span></div>
       <div class="rb-row rb-total" style="border-top:1px solid var(--border);margin-top:3px;padding-top:3px"><span class="rb-lbl" style="font-weight:800">ต้นทุนรวม</span><span class="rb-val" style="color:var(--yellow);font-size:13px">฿${fmtNum(totalCost)}</span></div>
 
-      <div style="font-size:9px;font-weight:700;color:var(--textLight);letter-spacing:.5px;margin:8px 0 4px">── ราคาตลาด (Sonar Pro) ─────────</div>
-      ${mktBefore>0?`<div class="rb-row"><span class="rb-lbl">ก่อนรีโนเวท (สภาพเดิม)${mktSqmBefore?" <span style='font-size:9px;color:var(--textLight)'>(฿"+fmtNum(mktSqmBefore)+"/ตร.ม.)</span>":""}</span><span class="rb-val" style="color:var(--blue)">฿${fmtNum(mktBefore)}</span></div>`:`<div class="rb-row"><span class="rb-lbl">ก่อนรีโนเวท (สภาพเดิม)</span><span class="rb-val" style="color:var(--textLight)">—</span></div>`}
-      <div class="rb-row"><span class="rb-lbl">หลังรีโนเวท (สภาพดี)${mktSqmAfter?" <span style='font-size:9px;color:var(--textLight)'>(฿"+fmtNum(mktSqmAfter)+"/ตร.ม.)</span>":""}</span><span class="rb-val" style="color:var(--green)">฿${fmtNum(mktAfter)}</span></div>
+      <div style="font-size:9px;font-weight:700;color:var(--textLight);letter-spacing:.5px;margin:8px 0 4px">── ราคาตลาดหลังรีโนเวท (จากเว็บประกาศขาย) ─</div>
+      ${mktMin>0
+        ? `<div class="rb-row">
+             <span class="rb-lbl">ช่วงราคาตลาด ${sqmDisp?`<span style='font-size:9px;color:var(--textLight)'>(${sqmDisp})</span>`:""}
+             </span>
+             <span class="rb-val" style="color:var(--green)">${mktAfterDisp}</span>
+           </div>`
+        : `<div class="rb-row"><span class="rb-lbl">ราคาตลาด</span><span class="rb-val" style="color:var(--textLight)">— ยังไม่มีข้อมูล</span></div>`
+      }
 
       <div style="height:1px;background:var(--border);margin:6px 0"></div>
-      <div class="rb-row rb-total"><span class="rb-lbl" style="font-weight:800">${isLoss?"❌ ขาดทุนโดยประมาณ":"💰 กำไรโดยประมาณ"}</span><span class="rb-val" style="color:${isLoss?"var(--red)":"var(--green)"};font-size:14px;font-weight:900">${isLoss?"−":"+"}฿${fmtNum(Math.abs(Math.round(profit)))}</span></div>
-      <div class="rb-row" style="margin-top:3px"><span class="rb-lbl">ROI จากการคำนวณ</span><span class="rb-val" style="color:${roiCol};font-weight:800;font-size:13px">${recalcRoi>=0?"+":""}${recalcRoi.toFixed(1)}%</span></div>
-      ${roiMismatch?`<div style="background:var(--yellowDim);border:1px solid var(--yellowBorder);border-radius:5px;padding:5px 8px;margin-top:6px;font-size:9px;color:var(--yellow)">⚠️ ROI เดิมใน DB (${storedRoi.toFixed(1)}%) ไม่ตรงกับการคำนวณใหม่ (${recalcRoi.toFixed(1)}%) — ราคาตลาดอาจเปลี่ยนแปลง ควร Re-analyze</div>`:""}
+      <div class="rb-row rb-total">
+        <span class="rb-lbl" style="font-weight:800">${profitIsLoss?"❌ ขาดทุน":"💰 กำไรโดยประมาณ"}</span>
+        <span class="rb-val" style="color:${profitIsLoss?"var(--red)":"var(--green)"};font-size:13px;font-weight:900">${profitDisp}</span>
+      </div>
+      <div class="rb-row" style="margin-top:3px">
+        <span class="rb-lbl">ROI (conservative ~ optimistic)</span>
+        <span class="rb-val" style="color:${roiCol2};font-weight:800;font-size:12px">${roiDisp2}</span>
+      </div>
+      ${urlsHTML}
       <div style="font-size:9px;color:var(--textMid);margin-top:6px;line-height:1.5">
-        ${d.roi_data_source==="sonar_pro"?"✅ ราคาตลาดจากข้อมูลจริง (Sonar Pro)":d.roi_data_source==="cache"?"♻️ ราคาตลาดจาก pattern cache":"⚠️ ประมาณการ — ควรตรวจสอบราคาตลาดจริงก่อนตัดสินใจ"}
+        ${d.roi_data_source==="sonar_pro"
+          ? "✅ ราคาจากเว็บประกาศขายจริง (Sonar Pro)"
+          : d.roi_data_source==="cache"
+            ? "♻️ ราคาตลาดจาก pattern cache"
+            : "⚠️ ยังไม่มีราคาตลาด — กด Re-analyze เพื่อดึงข้อมูล"}
       </div>`;
       })()}
     </div>` : "";

@@ -45,45 +45,55 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL_PRO = "perplexity/sonar-pro"
 
 # ── Prompt Template ───────────────────────────────────────
-# sonar-pro มี real-time web search → ค้นหาราคาตลาดจริงจาก DDProperty, Hipflat, Baania
+# เข้มงวด: ค้นเฉพาะเว็บฝากขายบ้านเท่านั้น + บังคับ URL จริง + ราคาเป็นช่วง low-high
 PROMPT_TEMPLATE = """\
-ค้นหาราคาตลาดอสังหาริมทรัพย์จริงจากเว็บไซต์ DDProperty, Hipflat, Baania \
-หรือแหล่งข้อมูลอสังหาริมทรัพย์ที่น่าเชื่อถือในไทย ณ ปี 2025-2026
+ค้นหาประกาศขายจริงของอสังหาริมทรัพย์ใกล้เคียง จากเว็บฝากขายบ้านต่อไปนี้เท่านั้น:
+• ddproperty.com
+• fazwaz.co.th
+• propertyonlineplus.com
+• baania.com
+• livinginsider.com
+• dotproperty.co.th
+• kaidee.com
 
-ทรัพย์ที่ต้องการข้อมูล:
+ทรัพย์เป้าหมาย (ต้องการเปรียบเทียบราคาขาย):
 ประเภท: {type_th}
 โครงการ/หมู่บ้าน: {project_name}
 พื้นที่: {area}
 จังหวัด: {province}
 เขต/อำเภอ: {district}
-สภาพ: {condition_th}
+สภาพเป้าหมาย: สภาพดี พร้อมอยู่ (เทียบเท่าหลังรีโนเวทแล้ว)
 
-กฎเหล็ก:
-1. ห้ามประมาณเอง — ต้องใช้ข้อมูลราคาตลาดจริงที่ค้นเจอเท่านั้น
-2. ถ้าค้นไม่เจอราคาจริงสำหรับทำเล/ประเภทนี้ → ใส่ null
-3. ตอบ JSON เท่านั้น ห้ามมีข้อความอื่น ห้าม markdown
+ขั้นตอน:
+1. ค้นหาประกาศขายที่ใกล้เคียงที่สุด (ประเภท + ทำเล + ขนาด) จากเว็บในรายการข้างต้นเท่านั้น
+2. คำนวณ ฿/ตร.ม. ของแต่ละประกาศที่เจอ
+3. รายงานช่วงราคา: ต่ำสุด (low) และ สูงสุด (high) ฿/ตร.ม. จากประกาศจริงที่ค้นเจอ
 
-JSON format (หน่วย: บาท และ บาท/ตร.ม.):
+กฎเหล็ก (ห้ามฝ่าฝืนเด็ดขาด):
+1. ห้ามใช้แหล่งอื่นนอกจากเว็บฝากขายบ้านในรายการข้างต้น — ห้ามใช้ข่าว บทความ ราคาประเมิน ธปท. DDinsight หรือแหล่งอื่นใด
+2. ห้ามประมาณหรือคาดเดาราคา — ถ้าค้นไม่เจอประกาศจริง ให้ใส่ null ทุก field
+3. listing_urls ต้องเป็น URL ประกาศขายจริง ห้ามใส่ URL หน้าหลักหรือหน้าค้นหา
+4. ตอบ JSON เท่านั้น ห้ามมีข้อความอื่น ห้าม markdown ห้าม backtick
+
+JSON (หน่วย: บาท/ตร.ม.):
 {{
-  "market_price_sqm_before_reno": null,
-  "market_price_sqm_after_reno": null,
-  "market_value_before_reno": null,
-  "market_value_after_reno": null,
-  "data_sources": [],
+  "listing_urls": [],
+  "market_price_sqm_low": null,
+  "market_price_sqm_high": null,
+  "comparable_count": null,
   "comparable_projects": [],
   "target_buyers": [],
   "summary_th": null
 }}
 
-คำอธิบาย fields (สำคัญมาก — ต้องกรอกทุก field):
-- market_price_sqm_before_reno: ราคาตลาด ฿/ตร.ม. สภาพเดิม ไม่รีโนเวท (ประเภทและทำเลเดียวกัน)
-- market_price_sqm_after_reno: ราคาตลาด ฿/ตร.ม. สภาพดี หลังรีโนเวทแล้ว
-- market_value_before_reno: มูลค่ารวมสภาพเดิม = market_price_sqm_before_reno × {area_sqm:.0f} ตร.ม.
-- market_value_after_reno: มูลค่ารวมหลังรีโนเวท = market_price_sqm_after_reno × {area_sqm:.0f} ตร.ม.
-- data_sources: รายการ URL หรือชื่อเว็บที่ใช้อ้างอิงราคาตลาดจริง (เช่น ["https://www.ddproperty.com/...", "hipflat.co.th"])
-- comparable_projects: รายชื่อโครงการใกล้เคียงที่นำมาเปรียบเทียบราคา (เช่น ["The Trust Ratchada", "ลลิล Lumpini"])
-- target_buyers: กลุ่มลูกค้าเป้าหมาย (เช่น ["นักลงทุนปล่อยเช่า", "ครอบครัว", "นักลงทุน flip"])
-- summary_th: สรุปภาษาไทย 2-3 ประโยค ครอบคลุม: (1) ราคาตลาดที่ค้นเจอ (2) ศักยภาพการลงทุน (3) ข้อควรระวัง — ห้ามเว้นว่าง ต้องกรอกเสมอ"""
+คำอธิบาย fields:
+- listing_urls: URL ประกาศขายจริงที่ค้นเจอ (จากเว็บฝากขายเท่านั้น)
+- market_price_sqm_low: ราคาต่ำสุด ฿/ตร.ม. จากประกาศที่ค้นเจอ (สภาพดี)
+- market_price_sqm_high: ราคาสูงสุด ฿/ตร.ม. จากประกาศที่ค้นเจอ (สภาพดี)
+- comparable_count: จำนวนประกาศที่ค้นเจอและใช้อ้างอิง
+- comparable_projects: โครงการ/หมู่บ้านจากประกาศที่ค้นเจอ
+- target_buyers: กลุ่มผู้ซื้อเป้าหมายที่เหมาะสม
+- summary_th: สรุป 2-3 ประโยค: (1) ช่วงราคาที่ค้นเจอจากเว็บใด (2) ศักยภาพการลงทุน (3) ข้อควรระวัง"""
 
 TYPE_TH_MAP = {
     "house":      "บ้านเดี่ยว",
@@ -121,10 +131,8 @@ def _build_prompt(deal: dict) -> str:
         type_th=type_th,
         project_name=project,
         area=area_str,
-        area_sqm=area_sqm or 0,
         province=province,
         district=district,
-        condition_th=condition_th,
     )
 
 
@@ -209,16 +217,18 @@ class PerplexityAnalyzer:
                             {
                                 "role": "system",
                                 "content": (
-                                    "คุณคือผู้เชี่ยวชาญอสังหาริมทรัพย์ไทย "
-                                    "ค้นหาข้อมูลราคาตลาดจริงจากอินเทอร์เน็ต "
-                                    "ตอบด้วย JSON ที่ถูกต้องเท่านั้น ห้ามมีข้อความอื่น "
-                                    "ถ้าหาราคาจริงไม่เจอ ให้ใส่ null — ห้ามประมาณเอง"
+                                    "คุณคือผู้ค้นหาราคาอสังหาริมทรัพย์จากเว็บประกาศขายบ้านในไทย "
+                                    "ค้นหาจาก ddproperty.com fazwaz.co.th baania.com livinginsider.com "
+                                    "dotproperty.co.th propertyonlineplus.com kaidee.com เท่านั้น "
+                                    "ห้ามใช้แหล่งข้อมูลอื่น ห้ามประมาณราคาเอง "
+                                    "ตอบด้วย JSON ที่ถูกต้องเท่านั้น ห้ามมีข้อความอื่น ห้าม backtick "
+                                    "ถ้าค้นไม่เจอประกาศจริง ให้ใส่ null ทุก field"
                                 ),
                             },
                             {"role": "user", "content": prompt},
                         ],
-                        "max_tokens":  600,
-                        "temperature": 0.1,   # ต่ำมาก = ตอบตรง ไม่สร้างสรรค์
+                        "max_tokens":  800,    # เพิ่มจาก 600 เพราะ listing_urls ใช้ token
+                        "temperature": 0.0,   # 0 = deterministic, ห้ามคาดเดา
                     },
                 )
                 resp.raise_for_status()
@@ -240,95 +250,144 @@ class PerplexityAnalyzer:
             return None
 
         # ── Map fields → Supabase deal columns ─────────────────────────
-        # Extract source URLs from Sonar Pro response
-        data_sources = analysis.get("data_sources") or []
-        source_urls  = [s for s in data_sources if isinstance(s, str) and s.startswith("http")]
+        # Extract real listing URLs from response
+        listing_urls = [
+            u for u in (analysis.get("listing_urls") or [])
+            if isinstance(u, str) and u.startswith("http")
+        ]
 
         enrichment: dict[str, Any] = {
-            "ai_analysis":    analysis,
-            "ai_analyzed_at": datetime.now(timezone.utc).isoformat(),
+            "ai_analysis":     analysis,
+            "ai_analyzed_at":  datetime.now(timezone.utc).isoformat(),
             "roi_data_source": "sonar_pro",
         }
-        if source_urls:
-            enrichment["source_urls"] = source_urls
+        if listing_urls:
+            enrichment["source_urls"] = listing_urls
 
-        area_sqm = deal.get("area_sqm") or deal.get("land_area_sqm") or 0
-        buy_price = deal.get("price") or 0
+        area_sqm  = deal.get("area_sqm") or deal.get("land_area_sqm") or 0
+        buy_price = deal.get("buy_price") or deal.get("price") or 0
 
-        # ── ราคาตลาดก่อนรีโนเวท (สภาพเดิม) ───────────────────────────
-        mvbr = analysis.get("market_value_before_reno")
-        psbr = analysis.get("market_price_sqm_before_reno")
-        if mvbr and mvbr > 0:
-            enrichment["market_value_before_reno"] = int(mvbr)
-        elif psbr and psbr > 0 and area_sqm > 0:
-            enrichment["market_value_before_reno"] = int(psbr * area_sqm)
+        # ── ราคาตลาดหลังรีโนเวท (สภาพดี) — เป็นช่วง low/high ──────────
+        sqm_low  = analysis.get("market_price_sqm_low")
+        sqm_high = analysis.get("market_price_sqm_high")
 
-        # ── ราคาตลาดหลังรีโนเวท (สภาพดี) ──────────────────────────────
-        mvar = analysis.get("market_value_after_reno")
-        psar = analysis.get("market_price_sqm_after_reno")
-        if mvar and mvar > 0:
-            market_value_after = int(mvar)
-            enrichment["market_value"] = market_value_after
-            if psar and psar > 0:
-                enrichment["market_price_sqm"] = int(psar)
-        elif psar and psar > 0 and area_sqm > 0:
-            market_value_after = int(psar * area_sqm)
-            enrichment["market_value"] = market_value_after
-            enrichment["market_price_sqm"] = int(psar)
+        # Validate: ต้องเป็นตัวเลข > 0 และสมเหตุสมผล (ไม่น้อยกว่า 5,000 หรือเกิน 500,000 ฿/ตร.ม.)
+        def _valid_sqm(v) -> bool:
+            try:
+                f = float(v)
+                return 5_000 <= f <= 500_000
+            except (TypeError, ValueError):
+                return False
+
+        has_low  = sqm_low  is not None and _valid_sqm(sqm_low)
+        has_high = sqm_high is not None and _valid_sqm(sqm_high)
+
+        if has_low and has_high and area_sqm > 0:
+            sqm_low_f  = float(sqm_low)
+            sqm_high_f = float(sqm_high)
+            # Normalize: low ต้องไม่สูงกว่า high
+            if sqm_low_f > sqm_high_f:
+                sqm_low_f, sqm_high_f = sqm_high_f, sqm_low_f
+
+            val_min = int(sqm_low_f  * area_sqm)
+            val_max = int(sqm_high_f * area_sqm)
+            val_mid = int((val_min + val_max) / 2)   # midpoint ใช้เป็น market_value หลัก
+
+            enrichment["market_price_sqm_min"] = int(sqm_low_f)
+            enrichment["market_price_sqm_max"] = int(sqm_high_f)
+            enrichment["market_price_sqm"]     = int((sqm_low_f + sqm_high_f) / 2)
+            enrichment["market_value_min"]     = val_min
+            enrichment["market_value_max"]     = val_max
+            enrichment["market_value"]         = val_mid   # backward compat
+            market_value_min = val_min
+            market_value_max = val_max
+        elif has_low and area_sqm > 0:
+            # มีแค่ low — ใช้ low เป็นทั้ง min และ max
+            sqm_low_f = float(sqm_low)
+            val_min   = int(sqm_low_f * area_sqm)
+            enrichment["market_price_sqm_min"] = int(sqm_low_f)
+            enrichment["market_price_sqm_max"] = int(sqm_low_f)
+            enrichment["market_price_sqm"]     = int(sqm_low_f)
+            enrichment["market_value_min"]     = val_min
+            enrichment["market_value_max"]     = val_min
+            enrichment["market_value"]         = val_min
+            market_value_min = market_value_max = val_min
+        elif has_high and area_sqm > 0:
+            # มีแค่ high — ใช้ high เป็นทั้ง min และ max
+            sqm_high_f = float(sqm_high)
+            val_max    = int(sqm_high_f * area_sqm)
+            enrichment["market_price_sqm_min"] = int(sqm_high_f)
+            enrichment["market_price_sqm_max"] = int(sqm_high_f)
+            enrichment["market_price_sqm"]     = int(sqm_high_f)
+            enrichment["market_value_min"]     = val_max
+            enrichment["market_value_max"]     = val_max
+            enrichment["market_value"]         = val_max
+            market_value_min = market_value_max = val_max
         else:
-            market_value_after = None
+            market_value_min = market_value_max = None
 
-        # ── คำนวณ ROI ใหม่ด้วยราคาจริงจาก Sonar Pro ──────────────────
-        if market_value_after and buy_price > 0 and area_sqm > 0:
-            reno_total   = area_sqm * 5_000      # flat 5,000 ฿/ตร.ม.
-            transfer_fee = buy_price * 0.055     # 5.5% (โอน 2% + จดจำนอง 1% + อากร 0.5% + อื่นๆ)
+        # ── คำนวณ ROI ด้วยช่วงราคาจริงจาก Sonar Pro ──────────────────
+        def _calc_roi(market_val: int) -> tuple[float, float, float]:
+            """Return (reno_total, total_cost, roi_pct) for a given market value."""
+            reno_total   = area_sqm * 5_000
+            transfer_fee = buy_price * 0.055
             total_cost   = buy_price + reno_total + transfer_fee
-            profit       = market_value_after - total_cost
-            roi_pct      = (profit / total_cost) * 100
+            profit       = market_val - total_cost
+            roi_pct      = (profit / total_cost) * 100 if total_cost > 0 else 0
+            return reno_total, total_cost, roi_pct
 
-            # ── Sanity checks — กัน ROI หลอก ──────────────────────────
-            # 1. ราคาตลาดต้องไม่ต่ำกว่าราคาซื้อ × 0.7 (ไม่มีใครซื้อสินทรัพย์ที่ขายได้แค่ 70% ของที่จ่ายไป)
-            if market_value_after < buy_price * 0.7:
+        if market_value_min is not None and buy_price > 0 and area_sqm > 0:
+            reno_total, total_cost, roi_min = _calc_roi(market_value_min)
+            _,          _,          roi_max = _calc_roi(market_value_max)
+            roi_mid = (roi_min + roi_max) / 2
+
+            enrichment["reno_cost_total"] = round(reno_total)
+            enrichment["reno_cost_sqm"]   = 5_000
+            enrichment["transfer_fee"]    = round(buy_price * 0.055)
+            enrichment["total_cost"]      = round(total_cost)
+
+            # ── Sanity checks ──────────────────────────────────────────
+            # 1. ราคาตลาดต่ำสุดต้องไม่น้อยกว่าราคาซื้อ × 0.7
+            if market_value_min < buy_price * 0.7:
                 logger.warning(
                     f"Sanity fail deal {deal.get('id','?')}: "
-                    f"market_value_after {market_value_after:,.0f} < buy_price×0.7 {buy_price*0.7:,.0f} "
-                    f"— roi_valid=False"
+                    f"market_value_min {market_value_min:,.0f} < buy_price×0.7 — roi_valid=False"
                 )
-                enrichment["roi_valid"] = False
-                enrichment["roi_percent"] = round(roi_pct, 2)
-                enrichment["roi_flag"] = "⚠️ ข้อมูลผิดปกติ"
-                enrichment["priority"] = "SKIP"
-                enrichment["total_cost"] = round(total_cost)
-                enrichment["transfer_fee"] = round(transfer_fee)
-                enrichment["reno_cost_total"] = round(reno_total)
-                enrichment["reno_cost_sqm"] = 5_000
-            # 2. ROI ที่เป็นไปไม่ได้ (>200%) — Sonar Pro อาจ confuse ราคา/ตร.ม. กับราคารวม
-            elif roi_pct > 200:
+                enrichment["roi_valid"]   = False
+                enrichment["roi_percent"] = round(roi_min, 2)
+                enrichment["roi_min"]     = round(roi_min, 2)
+                enrichment["roi_max"]     = round(roi_max, 2)
+                enrichment["roi_flag"]    = "⚠️ ข้อมูลผิดปกติ"
+                enrichment["priority"]    = "SKIP"
+
+            # 2. ROI สูงผิดปกติ (>200%) — Sonar อาจส่ง ฿/ตร.ม. มาเป็นราคารวม
+            elif roi_max > 200:
                 logger.warning(
                     f"Sanity fail deal {deal.get('id','?')}: "
-                    f"ROI {roi_pct:.1f}% > 200%% threshold — likely Sonar Pro confused unit "
-                    f"(market_value_after={market_value_after:,.0f}, area={area_sqm}) — roi_valid=False"
+                    f"roi_max {roi_max:.1f}% > 200% — likely unit confusion — roi_valid=False"
                 )
-                enrichment["roi_valid"] = False
-                enrichment["roi_flag"] = "⚠️ ROI เกินจริง (ตรวจสอบหน่วย)"
-                enrichment["priority"] = "SKIP"
-                enrichment["total_cost"] = round(total_cost)
-                enrichment["transfer_fee"] = round(transfer_fee)
-                enrichment["reno_cost_total"] = round(reno_total)
-                enrichment["reno_cost_sqm"] = 5_000
+                enrichment["roi_valid"]   = False
+                enrichment["roi_percent"] = round(roi_mid, 2)
+                enrichment["roi_min"]     = round(roi_min, 2)
+                enrichment["roi_max"]     = round(roi_max, 2)
+                enrichment["roi_flag"]    = "⚠️ ROI เกินจริง (ตรวจสอบหน่วย)"
+                enrichment["priority"]    = "SKIP"
+
             else:
-                enrichment["reno_cost_total"]  = round(reno_total)
-                enrichment["reno_cost_sqm"]    = 5_000
-                enrichment["transfer_fee"]     = round(transfer_fee)
-                enrichment["total_cost"]       = round(total_cost)
-                enrichment["estimated_profit"] = round(profit)
-                enrichment["roi_percent"]      = round(roi_pct, 2)
-                enrichment["roi_valid"]        = True
+                profit_min = market_value_min - total_cost
+                profit_max = market_value_max - total_cost
+                enrichment["estimated_profit"]     = round(profit_min)   # conservative
+                enrichment["estimated_profit_max"] = round(profit_max)
+                enrichment["roi_percent"]          = round(roi_min, 2)   # conservative
+                enrichment["roi_min"]              = round(roi_min, 2)
+                enrichment["roi_max"]              = round(roi_max, 2)
+                enrichment["roi_valid"]            = True
 
-                if roi_pct >= 30:
+                # ตัดสินบน roi_min (conservative) เพื่อกันสัญญาณ false positive
+                if roi_min >= 30:
                     enrichment["roi_flag"] = "🟢 ควรซื้อ"
                     enrichment["priority"] = "HIGH"
-                elif roi_pct >= 15:
+                elif roi_min >= 15:
                     enrichment["roi_flag"] = "🟡 พิจารณา"
                     enrichment["priority"] = "MEDIUM"
                 else:
@@ -337,10 +396,12 @@ class PerplexityAnalyzer:
 
         logger.info(
             f"✅ Sonar Pro analyzed deal {deal.get('id','?')} — "
-            f"before_reno ฿{enrichment.get('market_value_before_reno',0):,.0f} | "
-            f"after_reno ฿{enrichment.get('market_value',0):,.0f} | "
-            f"ROI {enrichment.get('roi_percent',0):.1f}% | "
-            f"sources={len(enrichment.get('source_urls',[]))}"
+            f"฿/ตร.ม. {enrichment.get('market_price_sqm_min',0):,.0f}"
+            f"~{enrichment.get('market_price_sqm_max',0):,.0f} | "
+            f"value ฿{enrichment.get('market_value_min',0):,.0f}"
+            f"~฿{enrichment.get('market_value_max',0):,.0f} | "
+            f"ROI {enrichment.get('roi_min',0):.1f}%~{enrichment.get('roi_max',0):.1f}% | "
+            f"urls={len(listing_urls)}"
         )
 
         # ── Save to market pattern cache for future use ─────────────────
