@@ -2860,8 +2860,26 @@ async function doRunAnalyze() {
   const btn = document.getElementById("btn-run-analyze");
 
   btn.disabled = true;
+  btn.textContent = "⏳ ตรวจสอบ credit...";
+  document.getElementById("analyze-status").textContent = "ตรวจสอบ API credit...";
+
+  // ── Pre-flight credit check ────────────────────────────────────
+  try {
+    const cr = await fetch(`${API}/analyze/credits`).then(r => r.json());
+    if (cr.status === "ok" && !cr.can_analyze) {
+      const msg = `🚫 API credit หมดแล้ว! (ใช้ไป $${(cr.usage_daily||0).toFixed(2)} / limit $${cr.limit}) — เติมเครดิตที่ openrouter.ai หรือรอพรุ่งนี้`;
+      showToast(msg);
+      document.getElementById("analyze-status").textContent = msg;
+      btn.disabled = false;
+      btn.textContent = "✅ ยืนยัน — Run เลย";
+      return;
+    }
+    if (cr.status === "ok" && cr.remaining != null) {
+      document.getElementById("analyze-status").textContent = `💰 Credit เหลือ $${cr.remaining.toFixed(2)} — กำลังส่ง request...`;
+    }
+  } catch(e) { /* non-fatal — proceed anyway */ }
+
   btn.textContent = "⏳ กำลังส่ง...";
-  document.getElementById("analyze-status").textContent = "กำลังส่ง request...";
 
   try {
     let url, body = {};

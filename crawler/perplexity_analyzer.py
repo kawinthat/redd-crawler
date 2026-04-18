@@ -39,10 +39,16 @@ def _get_market_cache():
 
 # ── OpenRouter endpoint (รองรับ Perplexity Sonar + Claude + Llama ฯลฯ) ──────
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_AUTH_URL = "https://openrouter.ai/api/v1/auth/key"
 
 # ── Models via OpenRouter ─────────────────────────────────
 # ใช้ sonar-pro ทุก deal — real-time web search + แม่นกว่า sonar ทั่วไป
 MODEL_PRO = "perplexity/sonar-pro"
+
+
+class CreditExhausted(Exception):
+    """API credit/daily limit exhausted — stop entire batch."""
+    pass
 
 # ── Prompt Template ───────────────────────────────────────
 # ขอข้อมูลครบ 4 ส่วน: โครงการ / ราคา 3 ระดับ / กลุ่มลูกค้า / ทำเล
@@ -202,6 +208,25 @@ class PerplexityAnalyzer:
     def enabled(self) -> bool:
         return bool(self.api_key) and self.api_key.startswith("sk-or-")
 
+    async def check_credits(self) -> dict:
+        """Check remaining API credits. Returns dict with limit info."""
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    OPENROUTER_AUTH_URL,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                )
+                if resp.status_code == 200:
+                    data = resp.json().get("data", {})
+                    return {
+                        "limit": data.get("limit"),
+                        "remaining": data.get("limit_remaining"),
+                        "usage_daily": data.get("usage_daily"),
+                    }
+        except Exception as e:
+            logger.warning(f"Credit check failed: {e}")
+        return {}
+
     async def analyze_deal(self, deal: dict) -> Optional[dict]:
         """
         วิเคราะห์ 1 deal → return enrichment dict (หรือ None ถ้า fail).
@@ -218,6 +243,9 @@ class PerplexityAnalyzer:
               "ai_analysis": {...full JSON...},
               "ai_analyzed_at": "2026-04-17T..."
             }
+
+        Raises:
+            CreditExhausted: when API returns 403 (daily limit reached)
         """
         if not self.enabled:
             logger.debug("PerplexityAnalyzer disabled — ไม่มี API key")
@@ -274,9 +302,28 @@ class PerplexityAnalyzer:
                         "temperature": 0.0,   # 0 = deterministic, ห้ามคาดเดา
                     },
                 )
+
+                # ── Detect credit exhaustion (403) ─────────────────────────
+                if resp.status_code == 403:
+                    logger.error(
+                        f"🚫 API 403 Forbidden — daily credit limit exhausted! "
+                        f"deal {deal.get('id','?')}"
+                    )
+                    raise CreditExhausted(
+                        "OpenRouter API credit หมด (403 Forbidden) — "
+                        "เติมเครดิตที่ openrouter.ai หรือรอ limit reset พรุ่งนี้"
+                    )
+
+                if resp.status_code == 429:
+                    logger.warning(f"Rate limited (429) — deal {deal.get('id','?')}")
+                    await asyncio.sleep(15)
+                    return None
+
                 resp.raise_for_status()
                 raw_content = resp.json()["choices"][0]["message"]["content"].strip()
 
+        except CreditExhausted:
+            raise  # re-raise to caller — don't swallow
         except Exception as e:
             logger.error(f"Perplexity API error deal {deal.get('id','?')}: {e}")
             return None

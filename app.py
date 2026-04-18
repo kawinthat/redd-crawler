@@ -352,6 +352,26 @@ def analyze_status_endpoint():
     return _analyze_state
 
 
+@app.get("/analyze/credits")
+async def analyze_credits():
+    """Check remaining OpenRouter API credits."""
+    from crawler.perplexity_analyzer import PerplexityAnalyzer
+    perplexity_key = os.getenv("OPENROUTER_API_KEY", "")
+    if not perplexity_key or not perplexity_key.startswith("sk-or-"):
+        return {"status": "error", "message": "API key ยังไม่ได้ตั้งค่า"}
+    analyzer = PerplexityAnalyzer(api_key=perplexity_key)
+    credits = await analyzer.check_credits()
+    if not credits:
+        return {"status": "error", "message": "ไม่สามารถตรวจสอบ credit ได้"}
+    return {
+        "status": "ok",
+        "limit": credits.get("limit"),
+        "remaining": credits.get("remaining"),
+        "usage_daily": credits.get("usage_daily"),
+        "can_analyze": (credits.get("remaining") or 0) > 0,
+    }
+
+
 @app.post("/analyze")
 async def trigger_analysis(
     background_tasks: BackgroundTasks,
@@ -413,10 +433,27 @@ async def _run_analysis(
     """Background task: fetch pending deals → market cache / Perplexity analyze → save back."""
     global _analyze_state
 
-    from crawler.perplexity_analyzer import PerplexityAnalyzer
+    from crawler.perplexity_analyzer import PerplexityAnalyzer, CreditExhausted
 
     db = _get_supabase()
     analyzer = PerplexityAnalyzer()
+
+    # ── Pre-flight credit check ────────────────────────────────────────
+    try:
+        credits = await analyzer.check_credits()
+        remaining = credits.get("remaining")
+        if remaining is not None and remaining <= 0:
+            _analyze_state.update({
+                "status": "failed",
+                "error": f"🚫 API credit หมด! (ใช้ไป ${credits.get('usage_daily',0):.2f} / limit ${credits.get('limit',0)}) — เติมเครดิตที่ openrouter.ai",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            })
+            logger.error(f"Credit exhausted: {credits}")
+            return
+        if remaining is not None:
+            logger.info(f"API credits remaining: ${remaining:.2f} / ${credits.get('limit',0)}")
+    except Exception as ce:
+        logger.warning(f"Credit check failed (non-fatal): {ce}")
     start_time = datetime.now(timezone.utc)
 
     # ── Reset progress state ───────────────────────────────────────────────
@@ -559,9 +596,30 @@ async def _run_analysis(
                         _analyze_state["enriched"] += 1
                 else:
                     _analyze_state["failed_count"] += 1
+
+            except CreditExhausted as ce:
+                logger.error(f"🚫 Credit exhausted — stopping batch: {ce}")
+                _analyze_state.update({
+                    "status": "failed",
+                    "done":   i + 1,
+                    "error":  str(ce),
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                })
+                return  # หยุดทันที ไม่วนลูปต่อ
+
             except Exception as deal_err:
                 logger.error(f"Deal analyze error ({deal.get('id')}): {deal_err}")
                 _analyze_state["failed_count"] += 1
+                # ถ้า fail ติดกัน 5 ตัว — หยุดเลย น่าจะมีปัญหา API
+                if _analyze_state["failed_count"] >= 5 and _analyze_state["enriched"] == 0:
+                    logger.error("5 consecutive failures with 0 success — stopping batch")
+                    _analyze_state.update({
+                        "status": "failed",
+                        "done":   i + 1,
+                        "error":  f"Fail {_analyze_state['failed_count']} ติดกัน ไม่มี success — API อาจมีปัญหา ({deal_err})",
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    return
 
         elapsed_total = (datetime.now(timezone.utc) - start_time).total_seconds()
         _analyze_state.update({
