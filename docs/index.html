@@ -551,7 +551,54 @@ function setAPIStatus(ok, txt) {
 // ─────────────────────────────────────────────
 // DATA LOAD
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// LOCAL CACHE — ข้อมูลไม่หายเมื่อ refresh / API offline
+// ─────────────────────────────────────────────
+const CACHE_KEY   = "redd_deals_v1";
+const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 วัน
+
+function saveCache(allDeals) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      ts: Date.now(),
+      deals: allDeals,
+    }));
+  } catch(e) { console.warn("Cache write failed:", e); }
+}
+
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !obj.deals) return null;
+    if (Date.now() - obj.ts > CACHE_MAX_AGE) return null; // หมดอายุ
+    return { deals: obj.deals, ts: obj.ts };
+  } catch(e) { return null; }
+}
+
+function renderFromCache(cached) {
+  deals    = cached.deals;
+  hotDeals = deals.filter(d => (d.roi_percent||0) >= 30);
+  populateFilters();
+  curPage = 1;
+  renderDeals();
+  updateDealTab();
+  computeSrcStats();
+  renderSources();
+  const age = Math.round((Date.now() - cached.ts) / 60000);
+  const ageStr = age < 60 ? `${age} นาทีที่แล้ว`
+               : age < 1440 ? `${Math.round(age/60)} ชั่วโมงที่แล้ว`
+               : `${Math.round(age/1440)} วันที่แล้ว`;
+  showToast(`📦 โหลดจาก cache (${ageStr}) — ${deals.length} ทรัพย์`);
+}
+
 async function loadAll() {
+  // โหลด cache ทันทีก่อน API ตอบ
+  const cached = loadCache();
+  if (cached && cached.deals.length > 0) {
+    renderFromCache(cached);
+  }
   await Promise.all([loadDeals(), loadStats()]);
 }
 
@@ -576,14 +623,24 @@ async function loadDeals() {
     ]);
     deals = allDeals;
     hotDeals = hotR.data || [];
+    // บันทึก cache ทุกครั้งที่ API โหลดสำเร็จ
+    saveCache(deals);
     populateFilters();
     curPage = 1;
     renderDeals();
     updateDealTab();
-    // Source stats from deals
     computeSrcStats();
-    renderSources(); // re-render with counts
-  } catch(e) { console.error("loadDeals:", e); }
+    renderSources();
+  } catch(e) {
+    console.error("loadDeals:", e);
+    // API ล้มเหลว — ใช้ cache ถ้ายังไม่ได้โหลด
+    if (deals.length === 0) {
+      const cached = loadCache();
+      if (cached) {
+        renderFromCache(cached);
+      }
+    }
+  }
 }
 
 function computeSrcStats() {
