@@ -199,25 +199,44 @@ class LEDHarvesterV2:
     ) -> list[dict]:
         results: list[dict] = []
 
-        # 1. โหลดหน้า search ใหม่
+        # 1. โหลดหน้า search ใหม่ — wait networkidle ให้ JS set CAPTCHA ครบก่อน
         try:
-            await page.goto(LED_URL, wait_until="domcontentloaded", timeout=30_000)
-            await page.wait_for_timeout(1500)
+            await page.goto(LED_URL, wait_until="networkidle", timeout=45_000)
+            await page.wait_for_timeout(2000)
         except Exception as e:
-            logger.error(f"LED: goto failed '{region}': {e}")
-            return []
+            logger.warning(f"LED: goto networkidle timeout '{region}', fallback domcontentloaded: {e}")
+            try:
+                await page.goto(LED_URL, wait_until="domcontentloaded", timeout=30_000)
+                await page.wait_for_timeout(3000)  # extra wait for JS to populate CAPTCHA
+            except Exception as e2:
+                logger.error(f"LED: goto failed '{region}': {e2}")
+                return []
 
         # 2. อ่าน CAPTCHA จาก #opass (id ที่ confirmed จาก live inspection)
-        captcha_val: str = await page.evaluate(
-            "document.getElementById('opass')?.value || ''"
-        )
-        if not captcha_val:
-            # fallback: ลองชื่อ field อื่น
+        # ถ้า field ยังไม่มีค่า ให้ wait poll สูงสุด 5 วิ
+        captcha_val: str = ""
+        for _attempt in range(10):
             captcha_val = await page.evaluate(
-                "document.querySelector('input[name=\"oseckey\"]')?.value || ''"
+                "document.getElementById('opass')?.value || ''"
             )
+            if not captcha_val:
+                captcha_val = await page.evaluate(
+                    "document.querySelector('input[name=\"oseckey\"]')?.value || ''"
+                )
+            if captcha_val:
+                break
+            await page.wait_for_timeout(500)
+
         if not captcha_val:
-            logger.warning(f"LED: '{region}' — ไม่พบ CAPTCHA value")
+            # Log page state เพื่อ debug ว่าหน้าโหลดมาถูกไหม
+            page_html = await page.content()
+            has_form = "webForm" in page_html
+            has_opass = "opass" in page_html
+            logger.warning(
+                f"LED: '{region}' — ไม่พบ CAPTCHA value "
+                f"(has_webForm={has_form}, has_opass={has_opass}, url={page.url}, "
+                f"html_snippet={page_html[200:500]})"
+            )
             return []
         logger.info(f"LED: '{region}' CAPTCHA = '{captcha_val}'")
 

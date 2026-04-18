@@ -79,10 +79,12 @@ PROMPT_TEMPLATE = """\
 [ส่วนที่ 4 — ทำเลและการเดินทาง]
 ระยะทาง/เวลาไปยัง: BTS/MRT ใกล้ที่สุด, ห้างสรรพสินค้า, ทางพิเศษ/วงแหวน, นิคมอุตสาหกรรม/โรงงาน
 
-กฎเหล็ก:
-1. ราคาต้องมาจากประกาศจริงจากเว็บที่ระบุเท่านั้น ห้ามประมาณหรือคาดเดา
+กฎ:
+1. พยายามหาประกาศขายจริงจากเว็บที่ระบุก่อนเป็นอันดับแรก
 2. listing_urls ต้องเป็น URL ประกาศขายจริง ห้ามใส่ URL หน้าค้นหาหรือหน้าหลัก
-3. ถ้าหาข้อมูลจริงไม่เจอ ให้ใส่ null ห้ามกรอกตัวเลขเอง
+3. ถ้าหาประกาศขายตรงๆ ไม่เจอ — ให้ประมาณราคาตลาดจากทรัพย์คล้ายกันในพื้นที่/จังหวัดเดียวกัน
+   โดยใช้ข้อมูลราคาทรัพย์ประเภทเดียวกัน ขนาดใกล้เคียง ในเขต/อำเภอเดียวกันหรือใกล้เคียง
+   ในกรณีนี้ listing_urls = [] แต่ต้องใส่ราคาประมาณการ (อย่าใส่ null ทุก field)
 4. ตอบ JSON เท่านั้น ห้ามมีข้อความอื่น ห้าม backtick ห้าม markdown
 
 JSON (ราคาหน่วย: บาท):
@@ -257,12 +259,12 @@ class PerplexityAnalyzer:
                             {
                                 "role": "system",
                                 "content": (
-                                    "คุณคือผู้ค้นหาราคาอสังหาริมทรัพย์จากเว็บประกาศขายบ้านในไทย "
-                                    "ค้นหาจาก ddproperty.com fazwaz.co.th baania.com livinginsider.com "
-                                    "dotproperty.co.th propertyonlineplus.com kaidee.com เท่านั้น "
-                                    "ห้ามใช้แหล่งข้อมูลอื่น ห้ามประมาณราคาเอง "
-                                    "ตอบด้วย JSON ที่ถูกต้องเท่านั้น ห้ามมีข้อความอื่น ห้าม backtick "
-                                    "ถ้าค้นไม่เจอประกาศจริง ให้ใส่ null ทุก field"
+                                    "คุณคือผู้วิเคราะห์ราคาอสังหาริมทรัพย์ไทย "
+                                    "ขั้นตอน: 1) ค้นหาประกาศขายจริงจาก ddproperty.com fazwaz.co.th baania.com "
+                                    "livinginsider.com dotproperty.co.th propertyonlineplus.com kaidee.com ก่อน "
+                                    "2) ถ้าหาประกาศขายตรงๆ ไม่เจอ ให้ประมาณราคาตลาดจากทรัพย์ใกล้เคียงในพื้นที่เดียวกัน "
+                                    "(ใส่ราคาประมาณการ listing_urls=[]) ห้ามใส่ null ทุก pricing field "
+                                    "ตอบด้วย JSON ที่ถูกต้องเท่านั้น ห้ามมีข้อความอื่น ห้าม backtick"
                                 ),
                             },
                             {"role": "user", "content": prompt},
@@ -352,20 +354,15 @@ class PerplexityAnalyzer:
         market_value_max = reno_high or good_high or market_value_min
 
         if market_value_min:
-            # ตรวจสอบความสมเหตุสมผล: ต้องไม่ต่ำกว่าราคาซื้อ × 0.5
-            if buy_price > 0 and market_value_min < buy_price * 0.5:
+            # ตรวจสอบความสมเหตุสมผล: ต้องไม่ต่ำกว่าราคาซื้อ × 0.4 (ปรับจาก 0.5 — กัน edge case NPA ลดราคามาก)
+            if buy_price > 0 and market_value_min < buy_price * 0.4:
                 logger.warning(
                     f"Price sanity fail deal {deal.get('id','?')}: "
-                    f"after_reno {market_value_min:,.0f} < buy_price*0.5 — clearing"
+                    f"after_reno {market_value_min:,.0f} < buy_price*0.4 — clearing"
                 )
                 market_value_min = market_value_max = None
-            # ตรวจสอบ: after_reno ต้องสูงกว่า original (ปกติต้องรีโนเวทแล้วแพงขึ้น)
-            elif orig_high and market_value_min < orig_high * 0.8:
-                logger.warning(
-                    f"Price logic fail deal {deal.get('id','?')}: "
-                    f"after_reno_low {market_value_min:,.0f} < original_high*0.8 — clearing"
-                )
-                market_value_min = market_value_max = None
+            # ลบ sanity check orig_high*0.8 ออก — aggressive เกินไป ทำให้ ROI = null บ่อยๆ
+            # Sonar บางครั้ง return after_reno ต่ำกว่า orig_high เพราะ listing แต่ละตัวต่างกัน
 
         if market_value_min and market_value_max:
             val_mid = int((market_value_min + market_value_max) / 2)
