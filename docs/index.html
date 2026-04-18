@@ -997,7 +997,10 @@ function loadCache() {
 
 function renderFromCache(cached) {
   deals    = cached.deals;
-  hotDeals = deals.filter(d => calcFreshRoi(d) >= 30 && d.roi_valid !== false);
+  // HOT DEAL เฉพาะ deals ที่ผ่าน AI analyze จริง (sonar_pro หรือ cache)
+  hotDeals = deals.filter(d =>
+    (d.roi_data_source === 'sonar_pro' || d.roi_data_source === 'cache') &&
+    calcFreshRoi(d) >= 30 && d.roi_valid !== false);
   populateFilters();
   curPage = 1;
   renderDeals();
@@ -1064,7 +1067,10 @@ async function loadDeals() {
     ]);
     deals = allDeals;
     // คำนวณ hotDeals จาก fresh ROI (conservative min) แทนการใช้ API ที่อาจ stale
-    hotDeals = deals.filter(d => calcFreshRoi(d) >= 30 && d.roi_valid !== false);
+    // HOT DEAL เฉพาะ deals ที่ผ่าน AI analyze จริง (sonar_pro หรือ cache)
+  hotDeals = deals.filter(d =>
+    (d.roi_data_source === 'sonar_pro' || d.roi_data_source === 'cache') &&
+    calcFreshRoi(d) >= 30 && d.roi_valid !== false);
     // บันทึก cache ทุกครั้งที่ API โหลดสำเร็จ
     saveCache(deals);
     populateFilters();
@@ -1657,14 +1663,16 @@ function dealCard(d) {
   const rawRoi    = calcFreshRoi(d);
   const rawRoiMax = calcFreshRoiMax(d);
   const hasRange  = hasRoiRange(d) && Math.abs(rawRoiMax - rawRoi) >= 1;
-  const roiSuspect= rawRoi > 999 || (d.roi_valid === false && !((d.market_value_min||d.market_value) > 0));
+  // roiSuspect = estimate (ยังไม่ได้ AI วิเคราะห์), เกิน 999% (ผิดปกติ) หรือ roi_valid false
+  const isEstimate= !d.roi_data_source || d.roi_data_source === 'estimate';
+  const roiSuspect= isEstimate || rawRoi > 999 || (d.roi_valid === false && !((d.market_value_min||d.market_value) > 0));
   const hot       = rawRoi >= 30 && !roiSuspect;
   const roiColor  = roiSuspect?"var(--textLight)":rawRoi>=30?"var(--green)":rawRoi>=15?"var(--yellow)":"var(--red)";
   const roiPct    = roiSuspect ? 0 : Math.min(Math.max(rawRoi, 0), 100);
-  const roiLabel  = roiSuspect?"⚠️ N/A":rawRoi>=30?"🟢 ควรซื้อ":rawRoi>=15?"🟡 พิจารณา":"🔴 ข้าม";
+  const roiLabel  = roiSuspect?"🔍 รอวิเคราะห์":rawRoi>=30?"🟢 ควรซื้อ":rawRoi>=15?"🟡 พิจารณา":"🔴 ข้าม";
   // แสดงเป็นช่วงถ้ามี range (min~max)
   const roiDisp   = roiSuspect
-    ? "N/A"
+    ? "รอ Analyze"
     : hasRange
       ? `${rawRoi.toFixed(1)}%–${rawRoiMax.toFixed(1)}%`
       : rawRoi.toFixed(1)+"%";
@@ -1721,7 +1729,9 @@ function dealCard(d) {
     </div>`;
 
   // ── Rich AI Report Breakdown ────────────────────────────────────────
-  const hasBreakdown = !!(d.market_value_min || d.market_value || d.ai_analysis);
+  // แสดง breakdown เฉพาะ deal ที่ผ่าน AI analyze แล้ว (sonar_pro / cache)
+  const hasBreakdown = !!(d.price_reno_low || d.price_reno_high || d.ai_analysis ||
+    ((d.roi_data_source === 'sonar_pro' || d.roi_data_source === 'cache') && (d.market_value_min || d.market_value)));
   const breakdownId  = "bd-" + cardId;
 
   function _priceRange(low, high) {
@@ -1746,8 +1756,10 @@ function dealCard(d) {
         const origHigh   = d.price_original_high || null;
         const goodLow    = d.price_good_low       || null;
         const goodHigh   = d.price_good_high      || null;
-        const renoLow    = d.price_reno_low       || d.market_value_min || d.market_value || null;
-        const renoHigh   = d.price_reno_high      || d.market_value_max || d.market_value || null;
+        // fallback ไป market_value เฉพาะ sonar_pro/cache เท่านั้น ไม่ใช้ estimate
+        const _mvFallok  = (d.roi_data_source === 'sonar_pro' || d.roi_data_source === 'cache');
+        const renoLow    = d.price_reno_low  || (_mvFallok ? (d.market_value_min || d.market_value) : null) || null;
+        const renoHigh   = d.price_reno_high || (_mvFallok ? (d.market_value_max || d.market_value) : null) || null;
         const rental     = d.rental_monthly_est   || null;
 
         // ── กำไร/ROI range ────────────────────────────────────────────
@@ -2045,7 +2057,9 @@ function toggleBreakdown(id, btn) {
 }
 
 function updateDealTab() {
-  const hot = deals.filter(d => (d.roi_percent||0)>=30 && d.roi_valid!==false);
+  const hot = deals.filter(d =>
+    (d.roi_data_source === 'sonar_pro' || d.roi_data_source === 'cache') &&
+    (d.roi_percent||0)>=30 && d.roi_valid!==false);
   const badge = hot.length ? `<span class="tab-badge">${hot.length}</span>` : "";
   document.getElementById("tab-deals").innerHTML = `📋 Deals${badge}`;
 }
