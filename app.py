@@ -54,6 +54,24 @@ _scan_state: dict = {
 
 _scan_lock = asyncio.Lock()
 
+# ── Analyze progress state ─────────────────────
+_analyze_state: dict = {
+    "status":      "idle",   # idle | running | done | failed
+    "started_at":  None,
+    "finished_at": None,
+    "total":       0,        # deals ทั้งหมดในชุดนี้
+    "done":        0,        # ประมวลผลแล้ว (รวม success + error)
+    "enriched":    0,        # Sonar Pro สำเร็จ
+    "cached":      0,        # ได้ข้อมูลจาก market cache
+    "failed_count":0,        # error รายตัว
+    "current":     None,     # {"title":..., "location":...}
+    "error":       None,
+    "elapsed":     0,        # วินาที
+    "eta":         None,     # วินาที
+}
+
+_analyze_lock = asyncio.Lock()
+
 
 # ─────────────────────────────────────────────
 # SCHEMAS
@@ -322,86 +340,210 @@ def hot_deals(limit: int = Query(200, ge=1, le=5000)):
     return {"data": result.data, "count": len(result.data)}
 
 
+class AnalyzeUrlsBody(BaseModel):
+    urls: list[str] = []
+    force_reanalyze: bool = False
+
+
+@app.get("/analyze/status")
+def analyze_status_endpoint():
+    """Return current analyze progress."""
+    return _analyze_state
+
+
 @app.post("/analyze")
 async def trigger_analysis(
     background_tasks: BackgroundTasks,
-    limit: int = Query(50, ge=1, le=500, description="จำนวน deals สูงสุดที่ analyze ต่อ batch"),
-    hot_only: bool = Query(False, description="วิเคราะห์เฉพาะ HOT deals (ROI ≥ 30%)"),
-    provinces: str = Query(None, description="จังหวัดที่ต้องการวิเคราะห์ คั่นด้วยคอมม่า เช่น กรุงเทพมหานคร,นนทบุรี"),
+    body: AnalyzeUrlsBody = None,
+    limit: int     = Query(50,    ge=1,  le=500),
+    hot_only: bool = Query(False),
+    provinces: str = Query(None),
+    types: str     = Query(None,  description="house,condo,townhouse,land,commercial"),
+    price_min: int = Query(None),
+    price_max: int = Query(None),
+    ai_status: str = Query("all", description="all | unanalyzed | analyzed"),
+    force: bool    = Query(False,  description="force re-analyze even if already done"),
 ):
     """
-    เรียก Perplexity Sonar Pro วิเคราะห์ deals ที่ยังไม่ analyze (ai_analyzed_at IS NULL)
-
-    Token Efficiency:
-    - ตรวจ market pattern cache ก่อน — cache hit ไม่เสีย token เลย
-    - ใช้ sonar-pro สำหรับทุก deal ที่ไม่มีใน cache
-    - Skip deals ที่ analyze แล้ว อัตโนมัติ
-    - ระบุ provinces เพื่อจำกัดขอบเขต ประหยัด token
+    เรียก Perplexity Sonar Pro วิเคราะห์ deals
+    - body.urls: ถ้าส่งมา → analyze เฉพาะ URL เหล่านั้น (Selection mode)
+    - force: True → analyze ซ้ำแม้มี ai_analyzed_at แล้ว
     """
     perplexity_key = os.getenv("OPENROUTER_API_KEY", "")
     if not perplexity_key or not perplexity_key.startswith("sk-or-"):
         raise HTTPException(503, "OPENROUTER_API_KEY ยังไม่ได้ตั้งค่า หรือไม่ถูกต้อง")
 
-    prov_list = [p.strip() for p in provinces.split(",")] if provinces else []
-    background_tasks.add_task(_run_analysis, limit, hot_only, prov_list)
+    if _analyze_state.get("status") == "running":
+        return {
+            "message": "Analysis already running",
+            "progress": _analyze_state,
+        }
+
+    prov_list  = [p.strip() for p in provinces.split(",")] if provinces else []
+    types_list = [t.strip() for t in types.split(",")]     if types     else []
+    url_list   = (body.urls if body and body.urls else [])
+    force_flag = force or (body.force_reanalyze if body else False)
+
+    background_tasks.add_task(
+        _run_analysis,
+        limit, hot_only, prov_list, types_list,
+        price_min, price_max, ai_status, force_flag, url_list,
+    )
     return {
-        "message": "Analysis started",
-        "limit": limit,
-        "hot_only": hot_only,
+        "message":   "Analysis started",
+        "limit":     limit,
+        "hot_only":  hot_only,
         "provinces": prov_list or "ทุกจังหวัด",
+        "urls_mode": len(url_list) > 0,
     }
 
 
-async def _run_analysis(limit: int, hot_only: bool, provinces: list[str] | None = None):
+async def _run_analysis(
+    limit: int,
+    hot_only: bool,
+    provinces: list[str] | None = None,
+    types: list[str] | None = None,
+    price_min: int | None = None,
+    price_max: int | None = None,
+    ai_status: str = "all",
+    force: bool = False,
+    url_list: list[str] | None = None,
+):
     """Background task: fetch pending deals → market cache / Perplexity analyze → save back."""
+    global _analyze_state
+
     from crawler.perplexity_analyzer import PerplexityAnalyzer
 
     db = _get_supabase()
     analyzer = PerplexityAnalyzer()
+    start_time = datetime.now(timezone.utc)
+
+    # ── Reset progress state ───────────────────────────────────────────────
+    _analyze_state.update({
+        "status":      "running",
+        "started_at":  start_time.isoformat(),
+        "finished_at": None,
+        "total":       0,
+        "done":        0,
+        "enriched":    0,
+        "cached":      0,
+        "failed_count":0,
+        "current":     None,
+        "error":       None,
+        "elapsed":     0,
+        "eta":         None,
+    })
 
     try:
-        # ดึง deals ที่ยังไม่ analyze
-        q = db.table("deals").select(
+        FIELDS = (
             "id,listing_url,source_domain,property_type,project_name,"
-            "location,price,area_sqm,land_area_sqm,roi_percent,priority,condition,ai_analyzed_at"
-        ).is_("ai_analyzed_at", "null")
+            "location,price,area_sqm,land_area_sqm,roi_percent,priority,"
+            "condition,ai_analyzed_at,reno_cost_total,transfer_fee,"
+            "market_value,buy_price"
+        )
 
-        if hot_only:
-            q = q.gte("roi_percent", 30)
-
-        # ดึงมามากกว่า limit เพื่อ post-filter จังหวัด
-        fetch_limit = limit * 5 if provinces else limit
-        all_pending = q.order("scraped_at", desc=True).limit(fetch_limit).execute().data or []
-
-        # กรองจังหวัด (post-filter เพราะ location เป็น free-text)
-        if provinces:
-            def _match_province(loc: str) -> bool:
-                loc = loc or ""
-                return any(p in loc for p in provinces)
-            pending = [d for d in all_pending if _match_province(d.get("location", ""))][:limit]
-            logger.info(f"Province filter {provinces}: {len(all_pending)} → {len(pending)} deals")
+        # ── URL selection mode ─────────────────────────────────────────────
+        if url_list:
+            all_deals = []
+            CHUNK = 50
+            for i in range(0, len(url_list), CHUNK):
+                chunk = url_list[i:i+CHUNK]
+                rows = db.table("deals").select(FIELDS).in_("listing_url", chunk).execute().data or []
+                all_deals.extend(rows)
+            if not force:
+                pending = [d for d in all_deals if not d.get("ai_analyzed_at")]
+            else:
+                pending = all_deals
         else:
-            pending = all_pending[:limit]
+            # ── Filter-based mode ──────────────────────────────────────────
+            q = db.table("deals").select(FIELDS)
+            if not force and ai_status != "analyzed":
+                q = q.is_("ai_analyzed_at", "null")
+            elif ai_status == "analyzed":
+                q = q.not_.is_("ai_analyzed_at", "null")
 
-        logger.info(f"Analyze batch: {len(pending)} pending deals | provinces={provinces or 'all'}")
+            if hot_only:
+                q = q.gte("roi_percent", 30)
+            if price_min is not None:
+                q = q.gte("price", price_min)
+            if price_max is not None:
+                q = q.lte("price", price_max)
 
-        enriched = 0
-        for deal in pending:
-            result = await analyzer.analyze_deal(deal)
-            if result:
-                deal_id = deal["id"]
-                update_data = {k: v for k, v in result.items()
-                               if k not in ("ai_analysis",)}
-                # Save ai_analysis as JSONB
-                update_data["ai_analysis"] = result.get("ai_analysis")
-                update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-                db.table("deals").update(update_data).eq("id", deal_id).execute()
-                enriched += 1
+            fetch_limit = limit * 5 if (provinces or types) else limit
+            all_pending = q.order("scraped_at", desc=True).limit(fetch_limit).execute().data or []
 
-        logger.success(f"Analysis done: {enriched}/{len(pending)} deals enriched")
+            # Post-filter จังหวัด + ประเภท (free-text → ทำ server-side ไม่ได้ตรง)
+            def _match(d: dict) -> bool:
+                loc = d.get("location") or ""
+                if provinces and not any(p in loc for p in provinces): return False
+                if types and d.get("property_type") not in types:      return False
+                return True
+
+            pending = [d for d in all_pending if _match(d)][:limit]
+            logger.info(f"Analyze batch: {len(pending)} deals | prov={provinces} types={types}")
+
+        _analyze_state["total"] = len(pending)
+        if not pending:
+            _analyze_state.update({"status": "done", "finished_at": datetime.now(timezone.utc).isoformat()})
+            return
+
+        # ── Process each deal ──────────────────────────────────────────────
+        for i, deal in enumerate(pending):
+            elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+            eta     = (elapsed / (i + 1)) * (len(pending) - i - 1) if i > 0 else None
+            _analyze_state.update({
+                "done":    i,
+                "elapsed": int(elapsed),
+                "eta":     int(eta) if eta is not None else None,
+                "current": {
+                    "title":    deal.get("project_name") or TYPE_TH_PY.get(deal.get("property_type"), "ทรัพย์"),
+                    "location": (deal.get("location") or "—")[:60],
+                },
+            })
+
+            try:
+                result = await analyzer.analyze_deal(deal)
+                if result:
+                    update_data = {k: v for k, v in result.items() if k != "ai_analysis"}
+                    update_data["ai_analysis"] = result.get("ai_analysis")
+                    update_data["updated_at"]  = datetime.now(timezone.utc).isoformat()
+                    db.table("deals").update(update_data).eq("id", deal["id"]).execute()
+                    # Distinguish cache vs Sonar Pro
+                    if result.get("roi_data_source") == "cache":
+                        _analyze_state["cached"] += 1
+                    else:
+                        _analyze_state["enriched"] += 1
+                else:
+                    _analyze_state["failed_count"] += 1
+            except Exception as deal_err:
+                logger.warning(f"Deal analyze error ({deal.get('id')}): {deal_err}")
+                _analyze_state["failed_count"] += 1
+
+        elapsed_total = (datetime.now(timezone.utc) - start_time).total_seconds()
+        _analyze_state.update({
+            "status":      "done",
+            "done":        len(pending),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "elapsed":     int(elapsed_total),
+            "eta":         0,
+            "current":     None,
+        })
+        logger.success(
+            f"Analysis done: {_analyze_state['enriched']} sonar | "
+            f"{_analyze_state['cached']} cache | "
+            f"{_analyze_state['failed_count']} failed"
+        )
 
     except Exception as e:
         logger.error(f"Analysis batch failed: {e}")
+        _analyze_state.update({"status": "failed", "error": str(e)})
+
+
+# ── ชื่อประเภทภาษาไทย (ใช้ใน _run_analysis) ────────────────────────────────
+TYPE_TH_PY = {
+    "land": "ที่ดิน", "condo": "คอนโด", "house": "บ้านเดี่ยว",
+    "townhouse": "ทาวน์เฮาส์", "commercial": "อาคารพาณิชย์",
+}
 
 
 @app.get("/deals/stats")

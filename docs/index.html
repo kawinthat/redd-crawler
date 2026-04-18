@@ -565,6 +565,32 @@ input,select{font-family:var(--font)}
         <button class="btn btn-teal" id="btn-preview-analyze" onclick="previewAnalyze()">🔍 Preview ก่อน Run</button>
       </div>
 
+      <!-- ── Progress Box (shown while/after running) ── -->
+      <div id="analyze-progress-box" style="display:none;margin-top:10px;background:var(--tealDim);border:1px solid #99F6E4;border-radius:8px;padding:12px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="color:var(--teal);font-size:12px;font-weight:700" id="apb-title">🧠 กำลังวิเคราะห์...</span>
+          <span style="font-size:10px;font-weight:700;color:var(--teal)" id="apb-count">0 / 0</span>
+        </div>
+        <!-- Progress bar -->
+        <div style="height:8px;background:rgba(20,184,166,.15);border-radius:4px;overflow:hidden;margin-bottom:8px">
+          <div id="apb-bar" style="height:100%;border-radius:4px;background:var(--teal);transition:width .5s ease;width:0%"></div>
+        </div>
+        <!-- Current deal being analyzed -->
+        <div id="apb-current" style="font-size:10px;color:var(--teal);opacity:.85;margin-bottom:7px;min-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        <!-- Stats row -->
+        <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:10px;color:var(--textMid)">
+          <span>✅ Sonar Pro: <b id="apb-enriched" style="color:var(--green)">0</b></span>
+          <span>♻️ Cache: <b id="apb-cached" style="color:var(--blue)">0</b></span>
+          <span>❌ ข้าม: <b id="apb-failed" style="color:var(--red)">0</b></span>
+          <span style="margin-left:auto">⏱ <b id="apb-elapsed">0s</b> &nbsp;|&nbsp; เหลือ: <b id="apb-eta">—</b></span>
+        </div>
+        <!-- Done action row -->
+        <div id="apb-done-row" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #99F6E4;display:flex;gap:8px;align-items:center">
+          <span style="font-size:10px;color:var(--teal)">✅ เสร็จสมบูรณ์ — ข้อมูลอัปเดตแล้ว</span>
+          <button class="btn btn-teal" style="font-size:10px;padding:4px 10px;margin-left:auto" onclick="loadDeals()">🔄 Reload Deals</button>
+        </div>
+      </div>
+
       <!-- Confirmation box (hidden until Preview clicked) -->
       <div id="analyze-confirm-box" style="display:none" class="analyze-confirm-box">
         <div id="analyze-confirm-summary"></div>
@@ -957,6 +983,29 @@ async function loadAll() {
     renderFromCache(cached);
   }
   await Promise.all([loadDeals(), loadStats()]);
+  // ตรวจว่ามี analyze กำลังทำงานอยู่ไหม (เช่น reload ระหว่าง analyze)
+  checkOngoingAnalysis();
+}
+
+async function checkOngoingAnalysis() {
+  try {
+    const r = await fetch(`${API}/analyze/status`);
+    const s = await r.json();
+    if (s.status === "running") {
+      // แสดง analyze panel + progress box อัตโนมัติ
+      const panel = document.getElementById("analyze-panel");
+      if (panel) panel.classList.add("show");
+      document.getElementById("analyze-progress-box").style.display = "block";
+      document.getElementById("apb-done-row").style.display = "none";
+      renderAnalyzeProgress(s);
+      startAnalyzePoller();
+      showToast("🧠 AI Analysis กำลังทำงานอยู่ — tracking progress...");
+    } else if (s.status === "done" && s.total > 0) {
+      // เสร็จแล้ว — แสดงผล แต่ไม่ต้อง poll
+      document.getElementById("analyze-progress-box").style.display = "block";
+      renderAnalyzeProgress(s);
+    }
+  } catch(e) { /* ignore */ }
 }
 
 async function fetchAllDeals() {
@@ -2488,17 +2537,127 @@ async function doRunAnalyze() {
       body: usingSelection ? JSON.stringify(body) : undefined,
     });
     const d = await r.json();
-    document.getElementById("analyze-status").textContent = d.message || "Started";
-    const modeStr = usingSelection ? `${selectedDealKeys.size} ทรัพย์ที่เลือก` : "deals ทั้งหมด";
-    showToast(`🧠 AI Analysis เริ่มทำงานแล้ว (${modeStr}) — รอสักครู่แล้ว reload`);
+    document.getElementById("analyze-status").textContent = "กำลังทำงาน...";
+    const modeStr = usingSelection ? `${selectedDealKeys.size} ทรัพย์ที่เลือก` : "batch";
+    showToast(`🧠 AI Analysis เริ่มแล้ว (${modeStr}) — กำลัง track progress...`);
     hideAnalyzeConfirm();
-    // Clear selection after sending
     if (usingSelection) clearSelection();
+    // Show progress box + start polling immediately
+    document.getElementById("analyze-progress-box").style.display = "block";
+    document.getElementById("apb-done-row").style.display = "none";
+    startAnalyzePoller();
   } catch(e) {
-    document.getElementById("analyze-status").textContent = "Error: "+e.message;
-    showToast("❌ Analyze error: "+e.message);
+    document.getElementById("analyze-status").textContent = "Error: " + e.message;
+    showToast("❌ Analyze error: " + e.message);
   }
-  setTimeout(()=>{ btn.disabled=false; btn.textContent="✅ ยืนยัน — Run เลย"; }, 4000);
+  btn.disabled = false;
+  btn.textContent = "✅ ยืนยัน — Run เลย";
+}
+
+// ─────────────────────────────────────────────
+// ANALYZE PROGRESS POLLER
+// ─────────────────────────────────────────────
+let _analyzePoller = null;
+
+function startAnalyzePoller() {
+  stopAnalyzePoller();
+  pollAnalyzeStatus();  // immediate
+  _analyzePoller = setInterval(pollAnalyzeStatus, 3000);
+}
+
+function stopAnalyzePoller() {
+  if (_analyzePoller) { clearInterval(_analyzePoller); _analyzePoller = null; }
+}
+
+async function pollAnalyzeStatus() {
+  try {
+    const r = await fetch(`${API}/analyze/status`);
+    const s = await r.json();
+    renderAnalyzeProgress(s);
+    if (s.status === "done" || s.status === "failed") {
+      stopAnalyzePoller();
+      if (s.status === "done" && s.total > 0) {
+        showToast(`✅ วิเคราะห์เสร็จ! Sonar: ${s.enriched} | Cache: ${s.cached} | ข้าม: ${s.failed_count}`);
+        // Auto-reload deals data
+        setTimeout(loadDeals, 1500);
+      }
+    }
+  } catch(e) { /* server ยังไม่ตอบ — ไม่ต้อง error */ }
+}
+
+function renderAnalyzeProgress(s) {
+  const box = document.getElementById("analyze-progress-box");
+  if (!box) return;
+
+  // ถ้า idle และไม่เคยรัน → ซ่อน progress box
+  if (s.status === "idle") return;
+
+  box.style.display = "block";
+
+  const total   = s.total   || 0;
+  const done    = s.done    || 0;
+  const pct     = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
+
+  // Title
+  const titleEl = document.getElementById("apb-title");
+  if (titleEl) {
+    if (s.status === "running") titleEl.textContent = "🧠 กำลังวิเคราะห์ด้วย Sonar Pro...";
+    else if (s.status === "done") titleEl.textContent = "✅ วิเคราะห์เสร็จสมบูรณ์";
+    else if (s.status === "failed") titleEl.textContent = "❌ เกิดข้อผิดพลาด";
+  }
+
+  // Count + bar
+  const countEl = document.getElementById("apb-count");
+  if (countEl) countEl.textContent = `${done} / ${total} (${pct}%)`;
+  const barEl = document.getElementById("apb-bar");
+  if (barEl) {
+    barEl.style.width = pct + "%";
+    barEl.style.background = s.status === "done" ? "var(--green)"
+                           : s.status === "failed" ? "var(--red)"
+                           : "var(--teal)";
+  }
+
+  // Current deal
+  const curEl = document.getElementById("apb-current");
+  if (curEl) {
+    if (s.current && s.status === "running") {
+      curEl.textContent = `📍 ${s.current.title || "ทรัพย์"} · ${s.current.location || "—"}`;
+    } else if (s.status === "done") {
+      curEl.textContent = "";
+    } else if (s.status === "failed") {
+      curEl.textContent = s.error || "";
+      curEl.style.color = "var(--red)";
+    }
+  }
+
+  // Stat badges
+  const el = id => document.getElementById(id);
+  if (el("apb-enriched")) el("apb-enriched").textContent = s.enriched || 0;
+  if (el("apb-cached"))   el("apb-cached").textContent   = s.cached   || 0;
+  if (el("apb-failed"))   el("apb-failed").textContent   = s.failed_count || 0;
+
+  // Time
+  const elapsed = s.elapsed || 0;
+  const fmtSec  = v => v < 60 ? `${v}s` : `${Math.floor(v/60)}m ${v%60}s`;
+  if (el("apb-elapsed")) el("apb-elapsed").textContent = fmtSec(elapsed);
+  if (el("apb-eta")) {
+    const eta = s.eta;
+    el("apb-eta").textContent = (eta == null || eta <= 0) ? "—"
+                               : eta < 60 ? `~${eta}s`
+                               : `~${Math.ceil(eta/60)} นาที`;
+  }
+
+  // Done row
+  const doneRow = el("apb-done-row");
+  if (doneRow) doneRow.style.display = (s.status === "done" || s.status === "failed") ? "flex" : "none";
+
+  // Status chip in header
+  const statusEl = document.getElementById("analyze-status");
+  if (statusEl) {
+    if (s.status === "running") statusEl.textContent = `กำลังทำ ${done}/${total}`;
+    else if (s.status === "done") statusEl.textContent = `เสร็จ ✅ ${s.enriched + s.cached}/${total}`;
+    else if (s.status === "failed") statusEl.textContent = "❌ Failed";
+  }
 }
 
 // ─────────────────────────────────────────────
