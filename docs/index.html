@@ -681,6 +681,19 @@ input,select{font-family:var(--font)}
           <div id="prov-checks"><!-- populated by buildProvChecks() --></div>
         </div>
       </div>
+      <!-- District multi-select dropdown (BKK only) -->
+      <div class="prov-wrap" id="dist-wrap">
+        <button class="prov-btn" id="dist-btn" onclick="toggleDistDropdown()">
+          <span id="dist-btn-label">📍 ทุกเขต</span><span style="font-size:9px;opacity:.6">▾</span>
+        </button>
+        <div class="prov-panel" id="dist-panel" style="display:none;min-width:220px">
+          <div class="prov-ctrl">
+            <button onclick="event.stopPropagation();selectAllDists(true)">เลือกทั้งหมด</button>
+            <button onclick="event.stopPropagation();selectAllDists(false)">ล้างทั้งหมด</button>
+          </div>
+          <div id="dist-checks"><!-- populated by buildDistrictChecks() --></div>
+        </div>
+      </div>
       <div class="select-wrap">
         <select id="source-select" onchange="filterSource=this.value;curPage=1;renderDeals()">
           <option value="">🏦 ทุกแหล่ง</option>
@@ -749,13 +762,6 @@ input,select{font-family:var(--font)}
           <input type="number" id="filter-price-min" class="range-input" placeholder="ต่ำสุด" min="0" step="100000" oninput="onRangeFilter()">
           <span class="range-dash">–</span>
           <input type="number" id="filter-price-max" class="range-input" placeholder="สูงสุด" min="0" step="100000" oninput="onRangeFilter()">
-        </div>
-      </div>
-      <div class="range-group">
-        <div class="range-group-lbl">📍 เขต / แขวง</div>
-        <div class="range-group-inputs">
-          <input type="text" id="filter-district" class="range-input" style="width:180px" placeholder="เช่น ลาดกระบัง, คลองหลวง..." list="district-list" oninput="onRangeFilter()">
-          <datalist id="district-list"><!-- populated dynamically --></datalist>
         </div>
       </div>
       <div class="range-group">
@@ -908,7 +914,6 @@ let filterAnalyzed="all"; // "all" | "analyzed" | "unanalyzed"
 let filterProfitMin = null, filterProfitMax = null;
 let filterCostMin   = null, filterCostMax   = null;
 let filterPriceMin  = null, filterPriceMax  = null;
-let filterDistrict  = "";
 let filterSqmMin    = null, filterSqmMax    = null;
 // Multi-province filter — default: BKK + Nonthaburi + Pathum Thani
 const DEFAULT_PROVS = new Set(["กรุงเทพมหานคร","นนทบุรี","ปทุมธานี"]);
@@ -1247,8 +1252,11 @@ function getProvince(loc) {
 function getDistrict(loc) {
   if (!loc) return "";
   const prov = getProvince(loc);
-  // ลบชื่อจังหวัดออกจากท้าย → เหลือเขต/อำเภอ
-  return prov ? loc.replace(prov, "").trim() : loc.trim();
+  let d = prov ? loc.replace(prov, "") : loc;
+  // remove กรุงเทพมหานคร variant ด้วย
+  d = d.replace("กรุงเทพมหานคร", "").replace("กรุงเทพ", "");
+  // strip trailing/leading commas, spaces
+  return d.replace(/^[\s,،、，]+|[\s,،、，]+$/g, "").trim();
 }
 
 function getPricePerSqm(d) {
@@ -1258,25 +1266,81 @@ function getPricePerSqm(d) {
   return Math.round(price / area);
 }
 
-function buildDistrictList() {
-  // แสดงเฉพาะ เขต/แขวง ของ กรุงเทพมหานคร เท่านั้น
+let filterDistricts    = new Set();   // empty + !_distExplicitEmpty = ทุกเขต
+let _distExplicitEmpty = false;
+
+function buildDistrictChecks() {
+  // เฉพาะ deals ที่อยู่ในกรุงเทพมหานคร
   const bkkDeals = deals.filter(d => {
     const loc = d.location || "";
     return loc.includes("กรุงเทพ") || loc.includes("กทม");
   });
-  const districts = [...new Set(
-    bkkDeals.map(d => getDistrict(d.location || "")).filter(Boolean)
-  )].sort((a,b) => a.localeCompare(b,"th"));
-  const dl = document.getElementById("district-list");
-  if (dl) dl.innerHTML = districts.map(d => `<option value="${d}">`).join("");
+  // นับจำนวน deals ต่อ district
+  const distCounts = {};
+  bkkDeals.forEach(d => {
+    const dist = getDistrict(d.location || "");
+    if (!dist) return;
+    distCounts[dist] = (distCounts[dist] || 0) + 1;
+  });
+  const districts = Object.keys(distCounts).sort((a,b) => a.localeCompare(b,"th"));
+  const container = document.getElementById("dist-checks");
+  if (!container) return;
+  container.innerHTML = districts.map(dist => {
+    const isChecked = (!_distExplicitEmpty && filterDistricts.size === 0) || filterDistricts.has(dist);
+    return `<label class="prov-check-item">
+      <input type="checkbox" value="${dist}" ${isChecked?"checked":""} onchange="onDistrictCheck(this)">
+      <span class="prov-name">${dist}</span>
+      <span class="prov-count">${distCounts[dist]}</span>
+    </label>`;
+  }).join("");
+}
+
+function updateDistrictBtn() {
+  const btn = document.getElementById("dist-btn-label");
+  if (!btn) return;
+  if (_distExplicitEmpty)
+    btn.textContent = "📍 0 เขต";
+  else if (filterDistricts.size === 0)
+    btn.textContent = "📍 ทุกเขต";
+  else
+    btn.textContent = `📍 ${filterDistricts.size} เขต`;
+}
+
+function onDistrictCheck(cb) {
+  if (cb.checked) { _distExplicitEmpty = false; filterDistricts.add(cb.value); }
+  else filterDistricts.delete(cb.value);
+  updateDistrictBtn(); curPage = 1; renderDeals();
+}
+
+function selectAllDists(checked) {
+  const all = [...document.querySelectorAll("#dist-checks input[type=checkbox]")].map(c=>c.value);
+  if (checked) { _distExplicitEmpty = false; filterDistricts = new Set(all); }
+  else          { _distExplicitEmpty = true;  filterDistricts = new Set(); }
+  buildDistrictChecks(); updateDistrictBtn(); curPage = 1; renderDeals();
+}
+
+function toggleDistDropdown() {
+  const panel = document.getElementById("dist-panel");
+  const btn   = document.getElementById("dist-btn");
+  if (!panel || !btn) return;
+  const open = panel.style.display !== "none";
+  panel.style.display = open ? "none" : "block";
+  btn.classList.toggle("open", !open);
+  if (!open) {
+    // close province panel if open
+    const pp = document.getElementById("prov-panel");
+    if (pp) pp.style.display = "none";
+    document.getElementById("prov-btn")?.classList.remove("open");
+  }
 }
 
 function populateFilters() {
   // Province multi-select dropdown
   buildProvChecks();
   updateProvBtn();
-  // District datalist autocomplete
-  buildDistrictList();
+  // District checkbox dropdown
+  buildDistrictChecks();
+  updateDistrictBtn();
 
   // Sources
   const sources = [...new Set(deals.map(d=>d.source_domain).filter(Boolean))].sort();
@@ -1422,10 +1486,17 @@ function applyFilters(list) {
       if (filterPriceMin !== null && bp < filterPriceMin) return false;
       if (filterPriceMax !== null && bp > filterPriceMax) return false;
     }
-    // ── District / sub-district text filter ───────────────────────────────
-    if (filterDistrict) {
-      const loc = (d.location || "").toLowerCase();
-      if (!loc.includes(filterDistrict.toLowerCase())) return false;
+    // ── District checkbox filter (BKK only) ───────────────────────────────
+    if (_distExplicitEmpty) {
+      // ถ้า deals อยู่ในกรุงเทพ → ซ่อน (เพราะ deselect ทั้งหมด)
+      const loc = d.location || "";
+      if (loc.includes("กรุงเทพ") || loc.includes("กทม")) return false;
+    } else if (filterDistricts.size > 0) {
+      const loc = d.location || "";
+      if (loc.includes("กรุงเทพ") || loc.includes("กทม")) {
+        const dist = getDistrict(loc);
+        if (!filterDistricts.has(dist)) return false;
+      }
     }
     // ── Price per sqm range filter ─────────────────────────────────────────
     if (filterSqmMin !== null || filterSqmMax !== null) {
@@ -1541,11 +1612,9 @@ function setAnalyzedFilter(val) {
 
 function clearRangeFilters() {
   filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = filterPriceMin = filterPriceMax = filterSqmMin = filterSqmMax = null;
-  filterDistrict = "";
   ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max","filter-price-min","filter-price-max","filter-sqm-min","filter-sqm-max"].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value = "";
   });
-  const distEl = document.getElementById("filter-district"); if(distEl) distEl.value = "";
   curPage = 1; updateResetChip(); renderDeals();
 }
 
@@ -1562,7 +1631,6 @@ function onRangeFilter() {
     filterPriceMax  = v("filter-price-max");
     filterSqmMin    = v("filter-sqm-min");
     filterSqmMax    = v("filter-sqm-max");
-    filterDistrict  = (document.getElementById("filter-district")?.value || "").trim();
     curPage = 1; updateResetChip(); renderDeals();
   }, 350);
 }
@@ -1570,11 +1638,11 @@ function onRangeFilter() {
 function resetFilters() {
   searchQuery=""; filterType=""; filterSource=""; dealFilter="all"; filterAnalyzed="all"; curPage=1;
   filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = filterPriceMin = filterPriceMax = filterSqmMin = filterSqmMax = null;
-  filterDistrict = "";
+  filterDistricts = new Set(); _distExplicitEmpty = false;
   ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max","filter-price-min","filter-price-max","filter-sqm-min","filter-sqm-max"].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value = "";
   });
-  const _distEl = document.getElementById("filter-district"); if(_distEl) _distEl.value = "";
+  buildDistrictChecks(); updateDistrictBtn();
   filterProvinces = new Set(DEFAULT_PROVS); _provExplicitEmpty = false;  // reset to 3 provinces default
   document.getElementById("search-box").value="";
   document.getElementById("source-select").value="";
@@ -1589,7 +1657,7 @@ function resetFilters() {
 function updateResetChip() {
   const provChanged = filterProvinces.size !== DEFAULT_PROVS.size ||
     [...DEFAULT_PROVS].some(p => !filterProvinces.has(p));
-  const hasRangeFilter = filterProfitMin!==null||filterProfitMax!==null||filterCostMin!==null||filterCostMax!==null||filterPriceMin!==null||filterPriceMax!==null||filterSqmMin!==null||filterSqmMax!==null||!!filterDistrict;
+  const hasRangeFilter = filterProfitMin!==null||filterProfitMax!==null||filterCostMin!==null||filterCostMax!==null||filterPriceMin!==null||filterPriceMax!==null||filterSqmMin!==null||filterSqmMax!==null||filterDistricts.size>0||_distExplicitEmpty;
   const hasFilter = searchQuery||filterType||filterSource||dealFilter==="hot"||provChanged||filterAnalyzed!=="all"||hasRangeFilter;
   document.getElementById("chip-reset").style.display = hasFilter?"":"none";
 }
@@ -1716,7 +1784,7 @@ function renderDeals() {
   // ป้องกัน loop: type + province → 0 → reset province → แต่ type ยังอยู่ → loop ไม่สิ้นสุด
   if (filtered.length === 0 && deals.length > 0 && filterProvinces.size > 0) {
     const hasOtherFilter = filterType || filterSource || filterAnalyzed !== "all"
-                        || searchQuery || dealFilter !== "all" || filterDistrict
+                        || searchQuery || dealFilter !== "all" || filterDistricts.size>0 || _distExplicitEmpty
                         || filterProfitMin!==null||filterProfitMax!==null
                         || filterCostMin!==null||filterCostMax!==null
                         || filterPriceMin!==null||filterPriceMax!==null
