@@ -438,20 +438,22 @@ async def _run_analysis(
     db = _get_supabase()
     analyzer = PerplexityAnalyzer()
 
-    # ── Pre-flight credit check ────────────────────────────────────────
+    # ── Pre-flight credit check (warning only, ไม่ block) ───────────────
     try:
         credits = await analyzer.check_credits()
         remaining = credits.get("remaining")
         if remaining is not None and remaining <= 0:
-            _analyze_state.update({
-                "status": "failed",
-                "error": f"🚫 API credit หมด! (ใช้ไป ${credits.get('usage_daily',0):.2f} / limit ${credits.get('limit',0)}) — เติมเครดิตที่ openrouter.ai",
-                "finished_at": datetime.now(timezone.utc).isoformat(),
-            })
-            logger.error(f"Credit exhausted: {credits}")
-            return
-        if remaining is not None:
-            logger.info(f"API credits remaining: ${remaining:.2f} / ${credits.get('limit',0)}")
+            logger.warning(
+                f"⚠️ API key daily limit exhausted: "
+                f"used ${credits.get('usage_daily',0):.2f} / limit ${credits.get('limit',0)} — "
+                f"increase limit at openrouter.ai → API Keys"
+            )
+            _analyze_state["error"] = (
+                f"⚠️ Key daily limit เต็ม (${credits.get('usage_daily',0):.2f}/${credits.get('limit',0)}) "
+                f"— ไปแก้ที่ openrouter.ai → API Keys → เพิ่ม daily limit"
+            )
+        elif remaining is not None:
+            logger.info(f"API key daily limit remaining: ${remaining:.2f} / ${credits.get('limit',0)}")
     except Exception as ce:
         logger.warning(f"Credit check failed (non-fatal): {ce}")
     start_time = datetime.now(timezone.utc)

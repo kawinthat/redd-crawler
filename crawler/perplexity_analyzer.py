@@ -47,7 +47,7 @@ MODEL_PRO = "perplexity/sonar-pro"
 
 
 class CreditExhausted(Exception):
-    """API credit/daily limit exhausted — stop entire batch."""
+    """Per-key daily spending limit exhausted — stop entire batch."""
     pass
 
 # ── Prompt Template ───────────────────────────────────────
@@ -221,6 +221,7 @@ class PerplexityAnalyzer:
                     return {
                         "limit": data.get("limit"),
                         "remaining": data.get("limit_remaining"),
+                        "limit_reset": data.get("limit_reset"),
                         "usage_daily": data.get("usage_daily"),
                     }
         except Exception as e:
@@ -306,12 +307,13 @@ class PerplexityAnalyzer:
                 # ── Detect credit exhaustion (403) ─────────────────────────
                 if resp.status_code == 403:
                     logger.error(
-                        f"🚫 API 403 Forbidden — daily credit limit exhausted! "
+                        f"🚫 API 403 — per-key daily spending limit exceeded! "
                         f"deal {deal.get('id','?')}"
                     )
                     raise CreditExhausted(
-                        "OpenRouter API credit หมด (403 Forbidden) — "
-                        "เติมเครดิตที่ openrouter.ai หรือรอ limit reset พรุ่งนี้"
+                        "🚫 API Key daily limit เต็ม (403) — "
+                        "ไปที่ openrouter.ai → API Keys → แก้ daily limit ให้สูงขึ้น "
+                        "(ตอนนี้ตั้งไว้ $5/วัน แต่ balance เหลือ $7.30)"
                     )
 
                 if resp.status_code == 429:

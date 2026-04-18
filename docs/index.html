@@ -2867,15 +2867,12 @@ async function doRunAnalyze() {
   try {
     const cr = await fetch(`${API}/analyze/credits`).then(r => r.json());
     if (cr.status === "ok" && !cr.can_analyze) {
-      const msg = `🚫 API credit หมดแล้ว! (ใช้ไป $${(cr.usage_daily||0).toFixed(2)} / limit $${cr.limit}) — เติมเครดิตที่ openrouter.ai หรือรอพรุ่งนี้`;
+      const msg = `⚠️ Key daily limit เต็ม ($${(cr.usage_daily||0).toFixed(2)} / $${cr.limit}/วัน) — แก้ที่ openrouter.ai → API Keys`;
       showToast(msg);
-      document.getElementById("analyze-status").textContent = msg;
-      btn.disabled = false;
-      btn.textContent = "✅ ยืนยัน — Run เลย";
-      return;
-    }
-    if (cr.status === "ok" && cr.remaining != null) {
-      document.getElementById("analyze-status").textContent = `💰 Credit เหลือ $${cr.remaining.toFixed(2)} — กำลังส่ง request...`;
+      document.getElementById("analyze-status").textContent = msg + " — กำลังลองส่ง request...";
+      // ไม่ block — ให้ลองส่งไป เผื่อ limit reset แล้ว
+    } else if (cr.status === "ok" && cr.remaining != null) {
+      document.getElementById("analyze-status").textContent = `💰 Key limit เหลือ $${cr.remaining.toFixed(2)}/${cr.limit} — กำลังส่ง request...`;
     }
   } catch(e) { /* non-fatal — proceed anyway */ }
 
