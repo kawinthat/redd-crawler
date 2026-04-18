@@ -350,9 +350,12 @@ class RealEstateCrawler:
         "npa-assets.gsb.or.th":       "GSBHarvester",
         "asset.home.scb":             "SCBHarvester",
         # ── กรมบังคับคดี ────────────────────────────────────────
-        "www.led.go.th":         "LEDHarvester",
-        "led.go.th":             "LEDHarvester",
-        "asset.led.go.th":       "LEDHarvester",
+        "www.led.go.th":         "LEDHarvesterV2",
+        "led.go.th":             "LEDHarvesterV2",
+        "asset.led.go.th":       "LEDHarvesterV2",
+        # ── KBank Property For Sale ──────────────────────────────
+        "www.kasikornbank.com":  "KBankHarvester",
+        "kasikornbank.com":      "KBankHarvester",
         # ── Market Benchmark Sites ───────────────────────────────
         "www.ddproperty.com":    "DDPropertyHarvester",
         "ddproperty.com":        "DDPropertyHarvester",
@@ -390,9 +393,12 @@ class RealEstateCrawler:
         elif harvester_name == "SCBHarvester":
             from crawler.scb_harvester import SCBHarvester
             return SCBHarvester(limit=100, delay=1.5)
-        elif harvester_name == "LEDHarvester":
-            from crawler.led_harvester import LEDHarvester
-            return LEDHarvester(rows_per_page=20, delay=2.0)
+        elif harvester_name == "LEDHarvesterV2":
+            from crawler.led_harvester_v2 import LEDHarvesterV2
+            return LEDHarvesterV2(delay=2.0)
+        elif harvester_name == "KBankHarvester":
+            from crawler.kbank_harvester import KBankHarvester
+            return KBankHarvester(page_size=12, delay=2.5)
         elif harvester_name == "DDPropertyHarvester":
             from crawler.ddproperty_harvester import DDPropertyHarvester
             return DDPropertyHarvester(rows_per_page=30, delay=1.5)
