@@ -216,6 +216,9 @@ input,select{font-family:var(--font)}
 .card-action-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentDim)}
 .card-action-btn.primary-action{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
 .card-action-btn.primary-action:hover{background:var(--accentDark)}
+.card-action-btn.analyze-single-btn{background:var(--teal);color:#fff;border-color:var(--teal);font-weight:700}
+.card-action-btn.analyze-single-btn:hover{background:#0d9488;border-color:#0d9488}
+.card-action-btn.analyze-single-btn:disabled{opacity:.6;cursor:wait;background:var(--panel2);color:var(--textMid);border-color:var(--border)}
 .hot-banner{background:var(--greenDim);border:1px solid var(--greenBorder);border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;margin-top:8px}
 .src-ref-btn{display:inline-block;padding:2px 7px;font-size:9px;border-radius:10px;border:1px solid #99F6E4;color:var(--teal);background:var(--tealDim);text-decoration:none;white-space:nowrap;transition:all .15s;cursor:pointer}
 .src-ref-btn:hover{background:var(--teal);color:#fff;border-color:var(--teal)}
@@ -2065,12 +2068,17 @@ function dealCard(d) {
         const finalUrl  = isBAMB ? _bamUrlB(codeB) : isGSBB ? "https://npa-assets.gsb.or.th" : url;
         const btnLabel  = isBAMB ? "ค้นหาบน BAM →" : isGSBB ? "ค้นหาบน GSB →" : "ดูทรัพย์ →";
         const btnLabelF = isBAMB ? "ค้นหาบน BAM →" : isGSBB ? "ค้นหาบน GSB →" : "ดูทรัพย์จากต้นทาง →";
+        const analyzeBtn = `<button class="card-action-btn analyze-single-btn" id="abtn-${cardId}" onclick="event.stopPropagation();analyzeSingleDeal('${escHtml(d.listing_url||'')}','${cardId}')" title="วิเคราะห์ทรัพย์นี้ด้วย Sonar Pro">${aiStatus==="done"?"🔄 Re-analyze":"🧠 Analyze"}</button>`;
         return hasBreakdown
           ? `<div class="card-actions">
               <button class="card-action-btn" onclick="toggleBreakdown('${breakdownId}',this)">📊 ดู ROI Breakdown</button>
+              ${analyzeBtn}
               <a href="${finalUrl}" target="_blank" rel="noopener" class="card-action-btn primary-action">${btnLabel}</a>
              </div>`
-          : `<a href="${finalUrl}" target="_blank" rel="noopener" class="card-action-btn primary-action" style="margin-top:auto">${btnLabelF}</a>`;
+          : `<div class="card-actions">
+              ${analyzeBtn}
+              <a href="${finalUrl}" target="_blank" rel="noopener" class="card-action-btn primary-action">${btnLabelF}</a>
+             </div>`;
       })()}
       ${(()=>{
         if (!hot) return "";
@@ -2131,6 +2139,61 @@ function toggleBreakdown(id, btn) {
   if (!el) return;
   const open = el.classList.toggle("open");
   btn.textContent = open ? "📊 ซ่อน ROI Breakdown" : "📊 ดู ROI Breakdown";
+}
+
+async function analyzeSingleDeal(listingUrl, cardId) {
+  if (!listingUrl) { showToast("❌ ไม่พบ listing URL"); return; }
+  const btn = document.getElementById("abtn-" + cardId);
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "⏳ กำลังวิเคราะห์...";
+    btn.style.opacity = "0.7";
+  }
+  showToast("🧠 กำลังส่งวิเคราะห์ทรัพย์นี้...");
+  try {
+    const r = await fetch(`${API}/analyze?limit=1&force=true`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ urls: [listingUrl], force_reanalyze: true }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      showToast("❌ " + (d.detail || d.message || "เกิดข้อผิดพลาด"));
+      if (btn) { btn.disabled = false; btn.textContent = "🧠 Analyze"; btn.style.opacity = ""; }
+      return;
+    }
+    // Poll สถานะจนเสร็จ
+    showToast("🧠 กำลังวิเคราะห์... รอสักครู่");
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      try {
+        const sr = await fetch(`${API}/analyze/status`).then(r => r.json());
+        if (btn) btn.textContent = `⏳ ${sr.done||0}/${sr.total||1}...`;
+        if (sr.status === "done" || sr.status === "failed" || attempts > 60) {
+          clearInterval(poll);
+          if (sr.status === "done" && (sr.enriched > 0 || sr.cached > 0)) {
+            showToast("✅ วิเคราะห์เสร็จ! กำลังโหลดข้อมูลใหม่...");
+            await loadDeals();
+          } else if (sr.status === "failed") {
+            showToast("❌ " + (sr.error || "วิเคราะห์ไม่สำเร็จ"));
+          } else {
+            showToast("⚠️ วิเคราะห์เสร็จแต่ไม่พบข้อมูลราคาตลาด");
+            await loadDeals();
+          }
+          if (btn) { btn.disabled = false; btn.textContent = "🔄 Re-analyze"; btn.style.opacity = ""; }
+        }
+      } catch(e) {
+        if (attempts > 60) {
+          clearInterval(poll);
+          if (btn) { btn.disabled = false; btn.textContent = "🧠 Analyze"; btn.style.opacity = ""; }
+        }
+      }
+    }, 3000);
+  } catch(e) {
+    showToast("❌ Error: " + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = "🧠 Analyze"; btn.style.opacity = ""; }
+  }
 }
 
 function updateDealTab() {
