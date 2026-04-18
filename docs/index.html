@@ -1014,33 +1014,67 @@ function dealCard(d) {
       ${(()=>{
         // ─ Extract asset code from URL (for copy + search fallback) ─
         const assetCodeMatch = url.match(/[?&](?:assetNo|code|id|asset)=([^&]+)/i);
-        const assetCode = assetCodeMatch ? assetCodeMatch[1] : (d.project_name||"").match(/^[A-Z0-9-]{6,}$/)?.[0] || null;
+        const assetCode = assetCodeMatch ? assetCodeMatch[1]
+                        : (d.raw_data && d.raw_data.asset_no) ? d.raw_data.asset_no
+                        : (d.project_name||"").match(/^[A-Z0-9-]{6,}$/)?.[0] || null;
         // ─ Detect sources where direct detail link may be unstable ─
         const srcDom = d.source_domain || "";
         const isBAM  = srcDom.includes("bam.co.th");
         const isGSB  = srcDom.includes("gsb.or.th");
-        const searchUrl = isBAM ? "https://www.bam.co.th/npa"
-                        : isGSB ? "https://npa-assets.gsb.or.th"
-                        : null;
+        // BAM detail URL 404s — ใช้ search page แทน
+        const bamSearchUrl = isBAM && assetCode
+          ? `https://www.bam.co.th/npa?search=${encodeURIComponent(assetCode)}`
+          : "https://www.bam.co.th/npa";
+        const gsbSearchUrl = "https://npa-assets.gsb.or.th";
+        const workingUrl = isBAM ? bamSearchUrl
+                         : isGSB ? gsbSearchUrl
+                         : url;
         const srcLabel = url !== "#" && url ? url.replace(/https?:\/\/(www\.)?/,"").split("?")[0].slice(0,48) : srcDom;
         return `<div class="card-source" style="cursor:default">
           <div>
             <div class="card-src-lbl">แหล่งที่มา${assetCode?` · รหัส: <span style="color:var(--gold);font-weight:700;cursor:pointer" onclick="navigator.clipboard.writeText('${assetCode}');showToast('คัดลอก ${assetCode} แล้ว')" title="คลิกเพื่อคัดลอก">${assetCode} 📋</span>`:""}</div>
             <span class="card-src-url">🔗 ${srcLabel}</span>
           </div>
-          ${url && url !== "#" ? `<a href="${url}" target="_blank" rel="noopener" style="color:var(--blue);font-size:18px" title="เปิดหน้าทรัพย์จากต้นทาง">↗</a>` : ""}
+          <a href="${workingUrl}" target="_blank" rel="noopener" style="color:var(--blue);font-size:18px" title="${isBAM?'ค้นหาบน BAM':'เปิดหน้าทรัพย์จากต้นทาง'}">↗</a>
         </div>
-        ${(isBAM||isGSB)&&searchUrl?`<div style="font-size:9px;color:var(--gray);margin-bottom:6px;line-height:1.5">⚠️ ถ้าลิงก์ขึ้น 404 — ทรัพย์อาจถูกขายแล้ว หรือ <a href="${searchUrl}" target="_blank" style="color:var(--blue)">ค้นหาด้วยรหัสบนเว็บธนาคาร ↗</a></div>`:""}`;
+        ${isBAM&&assetCode?`<div style="font-size:9px;color:#aaa;margin-bottom:6px;line-height:1.5;background:#1a1a0f;border-radius:4px;padding:4px 6px">🔍 กด ↗ เพื่อค้นหารหัส <b style="color:var(--gold)">${assetCode}</b> บน BAM.co.th</div>`:""}
+        ${isGSB?`<div style="font-size:9px;color:#aaa;margin-bottom:6px;line-height:1.5">🔍 กด ↗ ค้นหาด้วยรหัสบนเว็บ GSB NPA</div>`:""}`;
       })()}
       ${hasBreakdown?`<div class="card-actions">
         <button class="card-action-btn" onclick="toggleBreakdown('${breakdownId}',this)">📊 ดู ROI Breakdown</button>
-        <a href="${url}" target="_blank" rel="noopener" class="card-action-btn primary-action">ดูทรัพย์ →</a>
+        ${(()=>{
+          const srcDom2 = d.source_domain||"";
+          const isBAM2 = srcDom2.includes("bam.co.th");
+          const isGSB2 = srcDom2.includes("gsb.or.th");
+          const assetNo2 = (d.raw_data&&d.raw_data.asset_no)||url.match(/[?&]assetNo=([^&]+)/i)?.[1]||"";
+          const btnUrl = isBAM2 ? (assetNo2?`https://www.bam.co.th/npa?search=${encodeURIComponent(assetNo2)}`:"https://www.bam.co.th/npa")
+                       : isGSB2 ? "https://npa-assets.gsb.or.th"
+                       : url;
+          const btnLabel = isBAM2 ? "ค้นหาบน BAM →" : isGSB2 ? "ค้นหาบน GSB →" : "ดูทรัพย์ →";
+          return `<a href="${btnUrl}" target="_blank" rel="noopener" class="card-action-btn primary-action">${btnLabel}</a>`;
+        })()}
       </div>`:
-      `<a href="${url}" target="_blank" rel="noopener" class="card-action-btn primary-action" style="margin-top:auto">ดูทรัพย์จากต้นทาง →</a>`
+      `${(()=>{
+          const srcDom3 = d.source_domain||"";
+          const isBAM3 = srcDom3.includes("bam.co.th");
+          const isGSB3 = srcDom3.includes("gsb.or.th");
+          const assetNo3 = (d.raw_data&&d.raw_data.asset_no)||url.match(/[?&]assetNo=([^&]+)/i)?.[1]||"";
+          const btnUrl3 = isBAM3 ? (assetNo3?`https://www.bam.co.th/npa?search=${encodeURIComponent(assetNo3)}`:"https://www.bam.co.th/npa")
+                        : isGSB3 ? "https://npa-assets.gsb.or.th"
+                        : url;
+          const btnLabel3 = isBAM3 ? "ค้นหาบน BAM →" : isGSB3 ? "ค้นหาบน GSB →" : "ดูทรัพย์จากต้นทาง →";
+          return `<a href="${btnUrl3}" target="_blank" rel="noopener" class="card-action-btn primary-action" style="margin-top:auto">${btnLabel3}</a>`;
+      })()}`
       }
       ${hot?`<div class="hot-banner">
         <span style="color:var(--green);font-size:10px;font-weight:700">🔥 HOT DEAL — ROI ${rawRoi.toFixed(1)}%</span>
-        <a href="${url}" target="_blank" rel="noopener" style="font-size:10px">ดูทรัพย์ →</a>
+        ${(()=>{
+          const srcDom4 = d.source_domain||"";
+          const isBAM4 = srcDom4.includes("bam.co.th");
+          const assetNo4 = (d.raw_data&&d.raw_data.asset_no)||url.match(/[?&]assetNo=([^&]+)/i)?.[1]||"";
+          const hotUrl = isBAM4 ? (assetNo4?`https://www.bam.co.th/npa?search=${encodeURIComponent(assetNo4)}`:"https://www.bam.co.th/npa") : url;
+          return `<a href="${hotUrl}" target="_blank" rel="noopener" style="font-size:10px">${isBAM4?"ค้นหาบน BAM →":"ดูทรัพย์ →"}</a>`;
+        })()}
       </div>`:""}
       ${d.ai_analysis?`<div style="margin-top:8px;background:#0d2f2c22;border:1px solid var(--teal)22;border-radius:6px;padding:6px 8px;font-size:9px;color:var(--teal)">
         🧠 AI: ${typeof d.ai_analysis==="object"?d.ai_analysis.summary||JSON.stringify(d.ai_analysis).slice(0,80):String(d.ai_analysis).slice(0,80)}...
