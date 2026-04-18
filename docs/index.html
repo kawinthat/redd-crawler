@@ -1626,16 +1626,12 @@ function selectAll() {
 function renderDeals() {
   let filtered = applyFilters(deals);
 
-  // Safety: auto-reset province ONLY when province is the SOLE reason for 0 results
-  // (ถ้า type/source/analyzed filter อื่นเป็นสาเหตุ ไม่ต้อง reset province)
+  // Safety: auto-reset province เฉพาะเมื่อ (1) ผล = 0 และ (2) ไม่มี filter อื่น active
+  // ป้องกัน loop: type + province → 0 → reset province → แต่ type ยังอยู่ → loop ไม่สิ้นสุด
   if (filtered.length === 0 && deals.length > 0 && filterProvinces.size > 0) {
-    // ตรวจว่าถ้าเอา province ออก แล้วมีผลลัพธ์ไหม
-    const savedProvs = filterProvinces;
-    filterProvinces = new Set();
-    const withoutProv = applyFilters(deals);
-    filterProvinces = savedProvs;
-    if (withoutProv.length > 0) {
-      // province เป็นสาเหตุ → reset ได้
+    const hasOtherFilter = filterType || filterSource || filterAnalyzed !== "all"
+                        || searchQuery || dealFilter !== "all";
+    if (!hasOtherFilter) {
       const hiddenBy = [...filterProvinces].join(", ");
       filterProvinces = new Set();
       buildProvChecks();
@@ -1643,8 +1639,7 @@ function renderDeals() {
       showToast(`🗺 ไม่พบดีลใน "${hiddenBy}" — แสดงทุกจังหวัดแทน`);
       filtered = applyFilters(deals);
     }
-    // ถ้า withoutProv.length === 0 แปลว่า filter อื่น (type/source/analyzed) เป็นสาเหตุ
-    // ไม่ต้อง reset province → แสดง "ไม่พบผล" ตามปกติ
+    // มี filter อื่น active → province ไม่ถูก reset, แสดง "ไม่พบผล" ตามปกติ
   }
 
   const sorted = applySort(filtered);
