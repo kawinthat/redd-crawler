@@ -36,8 +36,12 @@ a:hover{color:var(--accentDark)}
 input,select{font-family:var(--font)}
 
 /* ── WAKE BANNER ── */
-#wake-banner{display:none;background:var(--yellowDim);border-bottom:1px solid var(--yellowBorder);padding:8px 20px;align-items:center;gap:10px;font-size:11px}
+#wake-banner{display:none;background:var(--yellowDim);border-bottom:1px solid var(--yellowBorder);padding:8px 20px;flex-direction:column;gap:6px;font-size:11px}
+#wake-banner .wb-row{display:flex;align-items:center;gap:10px}
 #wake-banner .wb-dot{width:6px;height:6px;border-radius:50%;background:var(--yellow);flex-shrink:0;animation:pulse 1.2s infinite}
+#wake-banner .wb-progress-track{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden;max-width:200px}
+#wake-banner .wb-progress-fill{height:100%;background:var(--yellow);border-radius:2px;transition:width .5s ease}
+#btn-scan.waking{animation:pulse 2s infinite;opacity:.8}
 
 /* ── HEADER ── */
 #header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 20px;display:flex;justify-content:space-between;align-items:center;height:56px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-sm)}
@@ -462,10 +466,16 @@ input,select{font-family:var(--font)}
 
 <!-- WAKE BANNER -->
 <div id="wake-banner">
-  <div class="wb-dot"></div>
-  <span style="color:var(--yellow);font-weight:600">กำลังเชื่อมต่อ server...</span>
-  <span style="color:var(--textMid)">Render.com อาจใช้เวลา 30-60 วินาทีในการ boot</span>
-  <button onclick="_wakeAttempt=0;checkAPI()" style="margin-left:auto;background:transparent;color:var(--yellow);border:1px solid var(--yellowBorder);border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer">🔄 ลองใหม่</button>
+  <div class="wb-row">
+    <div class="wb-dot"></div>
+    <span style="color:var(--yellow);font-weight:600" id="wb-title">กำลังเชื่อมต่อ server...</span>
+    <span style="color:var(--textMid)" id="wb-sub">Render.com อาจใช้เวลา 30-60 วินาทีในการ boot</span>
+    <button onclick="_wakeAttempt=0;checkAPI()" style="margin-left:auto;background:transparent;color:var(--yellow);border:1px solid var(--yellowBorder);border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer">🔄 ลองใหม่</button>
+  </div>
+  <div class="wb-row" id="wb-progress-row" style="display:none">
+    <div class="wb-progress-track"><div class="wb-progress-fill" id="wb-progress-fill" style="width:0%"></div></div>
+    <span id="wb-attempt-text" style="color:var(--textMid);font-size:10px"></span>
+  </div>
 </div>
 
 <!-- HEADER -->
@@ -924,8 +934,10 @@ async function checkAPI() {
     if (d.status === "ok") {
       _wakeAttempt = 0;
       setAPIStatus(true, "API Online ✓");
-      document.getElementById("btn-scan").disabled = false;
-      document.getElementById("btn-scan").textContent = "▶ เริ่มสแกน";
+      const scanBtn = document.getElementById("btn-scan");
+      scanBtn.disabled = false;
+      scanBtn.textContent = "▶ เริ่มสแกน";
+      scanBtn.classList.remove("waking");
       document.getElementById("btn-dryrun").style.display = "";
       document.getElementById("btn-analyze").style.display = "";
       document.getElementById("btn-reset-analysis").style.display = "";
@@ -934,10 +946,23 @@ async function checkAPI() {
       checkScanStatusOnLoad();
     } else { scheduleRetry(); }
   } catch(e) {
-    setAPIStatus(false, _wakeAttempt <= 1 ? "Offline / Starting..." : `กำลัง wake up... (${_wakeAttempt}/15)`);
-    document.getElementById("btn-scan").disabled = true;
-    document.getElementById("btn-scan").textContent = "⏳ รอ server...";
+    const MAX_WAKE = 15;
+    setAPIStatus(false, _wakeAttempt <= 1 ? "Offline / Starting..." : `กำลัง wake up... (${_wakeAttempt}/${MAX_WAKE})`);
+    const scanBtn = document.getElementById("btn-scan");
+    scanBtn.disabled = true;
+    scanBtn.innerHTML = '<span class="spinner" style="border-top-color:currentColor;border-color:rgba(160,130,230,.3);width:8px;height:8px"></span> รอ server...';
+    scanBtn.classList.add("waking");
     document.getElementById("wake-banner").style.display = "flex";
+    // update progress bar
+    if (_wakeAttempt > 1) {
+      const pct = Math.round((_wakeAttempt / MAX_WAKE) * 100);
+      const progRow = document.getElementById("wb-progress-row");
+      const progFill = document.getElementById("wb-progress-fill");
+      const attemptTxt = document.getElementById("wb-attempt-text");
+      if (progRow) progRow.style.display = "flex";
+      if (progFill) progFill.style.width = pct + "%";
+      if (attemptTxt) attemptTxt.textContent = `ครั้งที่ ${_wakeAttempt} จาก ${MAX_WAKE} (รอทุก 5 วิ)`;
+    }
 
     // แสดง cached deals ทันทีแม้ server ยังไม่ตอบ — ข้อมูลไม่หาย
     if (_wakeAttempt === 1 && deals.length === 0) {
@@ -959,9 +984,11 @@ function scheduleRetry() {
   if (_wakeAttempt < 15) setTimeout(checkAPI, 5000);
   else {
     setAPIStatus(false, "❌ ไม่สามารถเชื่อมต่อ");
-    document.getElementById("btn-scan").disabled = false;
-    document.getElementById("btn-scan").textContent = "🔄 ลองใหม่";
-    document.getElementById("btn-scan").onclick = ()=>{_wakeAttempt=0;checkAPI()};
+    const scanBtnR = document.getElementById("btn-scan");
+    scanBtnR.disabled = false;
+    scanBtnR.textContent = "🔄 ลองใหม่";
+    scanBtnR.classList.remove("waking");
+    scanBtnR.onclick = ()=>{_wakeAttempt=0;checkAPI()};
   }
 }
 
