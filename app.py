@@ -551,18 +551,34 @@ async def reset_analysis():
     """
     ล้างข้อมูล AI Analysis ทั้งหมดออกจาก deals
     — ไม่ลบตัว deal (listing_url, price, location ฯลฯ คงอยู่)
-    — เฉพาะ field ที่ Sonar Pro/analyzer เขียน เท่านั้น
+    — ลบเฉพาะ field ที่ Sonar Pro/analyzer เขียน
+    — ทำเป็น batch เพื่อกัน schema cache error ถ้า column ยังไม่ได้ migrate
     """
     db = _get_supabase()
 
-    # fields ทั้งหมดที่ analyzer เขียน — set เป็น null
-    null_fields: dict = {
-        # ── core AI output ──────────────────────────────────
+    # แบ่งเป็น 2 กลุ่ม:
+    # กลุ่ม A — columns ที่มีในทุก schema (migration เก่า)
+    core_fields: dict = {
         "ai_analysis":            None,
         "ai_analyzed_at":         None,
         "roi_data_source":        None,
         "source_urls":            None,
-        # ── ราคาตลาด 3 ระดับ (schema ใหม่) ───────────────
+        "market_value":           None,
+        "market_value_before_reno": None,
+        "market_price_sqm":       None,
+        "reno_cost_total":        None,
+        "reno_cost_sqm":          None,
+        "transfer_fee":           None,
+        "total_cost":             None,
+        "estimated_profit":       None,
+        "roi_percent":            None,
+        "roi_valid":              None,
+        "roi_flag":               None,
+        "priority":               None,
+    }
+
+    # กลุ่ม B — columns ใหม่จาก migration 006 (อาจยังไม่มีในบาง deploy)
+    new_fields: dict = {
         "price_original_low":     None,
         "price_original_high":    None,
         "price_good_low":         None,
@@ -570,43 +586,54 @@ async def reset_analysis():
         "price_reno_low":         None,
         "price_reno_high":        None,
         "rental_monthly_est":     None,
-        # ── ข้อมูลโครงการ (schema ใหม่) ───────────────────
         "project_official_name":  None,
         "project_developer":      None,
         "project_address":        None,
-        # ── market value / ฿ per sqm ──────────────────────
-        "market_value":           None,
         "market_value_min":       None,
         "market_value_max":       None,
-        "market_value_before_reno": None,
-        "market_price_sqm":       None,
         "market_price_sqm_min":   None,
         "market_price_sqm_max":   None,
-        # ── cost breakdown ─────────────────────────────────
-        "reno_cost_total":        None,
-        "reno_cost_sqm":          None,
-        "transfer_fee":           None,
-        "total_cost":             None,
-        # ── ROI ────────────────────────────────────────────
-        "estimated_profit":       None,
-        "estimated_profit_max":   None,
-        "roi_percent":            None,
         "roi_min":                None,
         "roi_max":                None,
-        "roi_valid":              None,
-        "roi_flag":               None,
-        "priority":               None,
+        "estimated_profit_max":   None,
     }
 
+    cleared = 0
+    reset_fields: list[str] = []
+    errors: list[str] = []
+
+    # รัน core fields ก่อน — ต้องสำเร็จ
     try:
-        # Supabase: update ทุก row (ใช้ neq id 0 เพื่อจับทุก row)
-        result = db.table("deals").update(null_fields).neq("id", 0).execute()
-        affected = len(result.data) if result.data else 0
-        logger.info(f"reset-analysis: cleared {affected} deals")
-        return {"status": "ok", "cleared": affected, "fields_reset": list(null_fields.keys())}
+        r = db.table("deals").update(core_fields).neq("id", 0).execute()
+        cleared = len(r.data) if r.data else 0
+        reset_fields.extend(core_fields.keys())
+        logger.info(f"reset-analysis core: cleared {cleared} deals")
     except Exception as e:
-        logger.error(f"reset-analysis error: {e}")
+        logger.error(f"reset-analysis core error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+    # รัน new fields — ถ้า column ไม่มีให้ข้ามไป (ไม่ error)
+    for col, val in new_fields.items():
+        try:
+            db.table("deals").update({col: val}).neq("id", 0).execute()
+            reset_fields.append(col)
+        except Exception as e:
+            err_msg = str(e)
+            if "column" in err_msg.lower() or "schema" in err_msg.lower():
+                logger.warning(f"reset-analysis: skip '{col}' — column not in schema yet (run migration 006)")
+                errors.append(f"{col}: not in schema")
+            else:
+                logger.warning(f"reset-analysis: '{col}' error — {err_msg}")
+                errors.append(f"{col}: {err_msg[:60]}")
+
+    logger.info(f"reset-analysis done: {cleared} deals | {len(reset_fields)} fields reset | {len(errors)} skipped")
+    return {
+        "status":        "ok",
+        "cleared":       cleared,
+        "fields_reset":  reset_fields,
+        "skipped_fields": errors,
+        "note":          "รัน migrations/006_rich_analysis_columns.sql ใน Supabase เพื่อ reset ทุก field" if errors else None,
+    }
 
 
 @app.get("/deals/stats")
