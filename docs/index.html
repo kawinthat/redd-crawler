@@ -434,8 +434,17 @@ input,select{font-family:var(--font)}
 /* ── ANIMATIONS ── */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes wipe-sweep{0%{background-position:200% center}100%{background-position:-200% center}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-3px)}40%{transform:translateX(3px)}60%{transform:translateX(-2px)}80%{transform:translateX(2px)}}
 .spinner{display:inline-block;width:10px;height:10px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
 .scanning-pulse{animation:pulse 1s infinite}
+#btn-reset-analysis.clearing{
+  background:linear-gradient(90deg,#3a1a1a,#7c2a2a,#e05555,#7c2a2a,#3a1a1a);
+  background-size:300% 100%;
+  animation:wipe-sweep 1.4s linear infinite;
+  color:#fff;border-color:transparent;
+}
+#btn-reset-analysis.done-flash{animation:shake .4s ease;}
 
 /* ── RESPONSIVE ── */
 @media(max-width:600px){
@@ -2562,14 +2571,25 @@ async function confirmResetAnalysis() {
   const btn = document.getElementById("btn-reset-analysis");
   const origText = btn.textContent;
   btn.disabled = true;
-  btn.textContent = "⏳ กำลังล้าง...";
+  btn.classList.add("clearing");
+  btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;border-color:rgba(255,255,255,.3)"></span> กำลังล้าง…';
+
+  // dots animation while waiting
+  let dots = 0;
+  const dotTimer = setInterval(() => {
+    dots = (dots + 1) % 4;
+    btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;border-color:rgba(255,255,255,.3)"></span> กำลังล้าง' + '.'.repeat(dots || 1);
+  }, 400);
 
   try {
     const r = await fetch(`${API}/deals/reset-analysis`, { method: "POST" });
     const d = await r.json();
+    clearInterval(dotTimer);
+    btn.classList.remove("clearing");
     if (r.ok && d.status === "ok") {
+      btn.classList.add("done-flash");
+      setTimeout(() => btn.classList.remove("done-flash"), 500);
       addLog("warn", `🗑 ล้าง AI Analysis ทั้งหมดแล้ว — ${d.cleared} deals ถูก reset`);
-      // reload deals ทันทีเพื่ออัพเดทหน้าจอ
       await loadDeals();
       showToast(`✅ ล้าง AI Analysis เรียบร้อย (${d.cleared} รายการ)`);
     } else {
@@ -2577,6 +2597,8 @@ async function confirmResetAnalysis() {
       addLog("error", "❌ reset-analysis failed: " + (d.detail || JSON.stringify(d)));
     }
   } catch (e) {
+    clearInterval(dotTimer);
+    btn.classList.remove("clearing");
     showToast("❌ เชื่อมต่อ API ไม่ได้: " + e.message);
     addLog("error", "❌ reset-analysis error: " + e.message);
   } finally {
