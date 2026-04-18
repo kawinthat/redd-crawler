@@ -16,7 +16,7 @@ from loguru import logger
 # DEDUP FINGERPRINT
 # ─────────────────────────────────────────────
 
-def make_dedup_key(deal: dict) -> str:
+def make_dedup_key(deal: dict):
     """สร้าง fingerprint สำหรับตรวจ duplicate ข้ามไซต์ (95% similarity).
 
     Logic:
@@ -25,7 +25,8 @@ def make_dedup_key(deal: dict) -> str:
     - property_type: ตรงตัว
     - province    : คำแรกของ location (เขต/จังหวัด)
 
-    Returns 16-char hex string (MD5 prefix).
+    Returns 16-char hex string (MD5 prefix)
+    หรือ None ถ้าข้อมูลไม่เพียงพอ — ข้าม dedup ใช้ listing_url เป็น unique key แทน
     """
     price = deal.get("price") or 0
     area  = (deal.get("area_sqm") or deal.get("usable_area_sqm")
@@ -36,6 +37,10 @@ def make_dedup_key(deal: dict) -> str:
     # Buckets — เผื่อ ±5%
     price_bucket = round(price / 50_000) if price else 0
     area_bucket  = round(area  / 5)      if area  else 0
+
+    # ถ้าไม่มีข้อมูลพื้นที่หรือราคา → ไม่ dedup เพื่อไม่ให้ข้าม deals จริง
+    if not price_bucket or not area_bucket:
+        return None
 
     raw = f"{price_bucket}:{area_bucket}:{ptype}:{loc}"
     return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
@@ -111,23 +116,24 @@ class SupabaseWriter:
         try:
             # ── Generate dedup fingerprint ──
             dkey = make_dedup_key(deal)
-            deal["dedup_key"] = dkey
+            deal["dedup_key"] = dkey  # None = ไม่มีข้อมูล area/price → ข้าม dedup
 
-            # ── In-scan dedup: ตรวจ duplicate ใน scan เดียวกัน ──
-            existing_url = self._seen_keys.get(dkey)
-            if existing_url and existing_url != deal.get("listing_url", ""):
-                self._dedup_skipped += 1
-                logger.debug(
-                    f"DEDUP skip — {deal.get('listing_url','')[:50]}\n"
-                    f"  ≈ {existing_url[:50]} (key={dkey})"
-                )
-                return False   # skip duplicate, not an error
+            if dkey is not None:
+                # ── In-scan dedup: ตรวจ duplicate ใน scan เดียวกัน ──
+                existing_url = self._seen_keys.get(dkey)
+                if existing_url and existing_url != deal.get("listing_url", ""):
+                    self._dedup_skipped += 1
+                    logger.debug(
+                        f"DEDUP skip — {deal.get('listing_url','')[:50]}\n"
+                        f"  ≈ {existing_url[:50]} (key={dkey})"
+                    )
+                    return False   # skip duplicate, not an error
 
-            # ── Register in seen map ──
-            self._seen_keys[dkey] = deal.get("listing_url", "")
+                # ── Register in seen map ──
+                self._seen_keys[dkey] = deal.get("listing_url", "")
 
-            # ── DB-level cross-scan dedup: ตรวจ dedup_key ใน DB ──
-            if self.enabled and deal.get("listing_url"):
+            # ── DB-level cross-scan dedup: ตรวจ dedup_key ใน DB (เฉพาะเมื่อมี key) ──
+            if dkey is not None and self.enabled and deal.get("listing_url"):
                 try:
                     existing = (
                         self._client.table("deals")

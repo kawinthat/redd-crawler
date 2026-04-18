@@ -124,7 +124,10 @@ async def _run_scan(req: ScanRequest):
             line_token = os.getenv("LINE_NOTIFY_TOKEN"),
         )
 
-        combined_stats = {"pages": 0, "scraped": 0, "saved": 0, "hot": 0, "sites": []}
+        combined_stats = {"pages": 0, "scraped": 0, "saved": 0, "hot": 0,
+                          "dedup_skipped": 0, "sites": [],
+                          "total_sites": len(target_urls), "done_sites": 0}
+        _scan_state["stats"] = combined_stats  # expose ทันที ไม่รอจบ
 
         for site_url in target_urls:
             logger.info(f"Scanning (unlimited): {site_url}")
@@ -140,14 +143,20 @@ async def _run_scan(req: ScanRequest):
             )
             try:
                 stats = await crawler.run(site_url, config)
-                combined_stats["pages"]   += stats.get("pages_crawled", 0)
-                combined_stats["scraped"] += stats.get("scraped", 0)
-                combined_stats["saved"]   += stats.get("saved", 0)
-                combined_stats["hot"]     += stats.get("hot_deals", 0)
+                combined_stats["pages"]        += stats.get("pages_crawled", 0)
+                combined_stats["scraped"]      += stats.get("scraped", 0)
+                combined_stats["saved"]        += stats.get("saved", 0)
+                combined_stats["hot"]          += stats.get("hot_deals", 0)
+                combined_stats["dedup_skipped"]+= stats.get("dedup_skipped", 0)
+                combined_stats["done_sites"]   += 1
                 combined_stats["sites"].append({"url": site_url, "status": "ok", **stats})
             except Exception as site_err:
                 logger.error(f"Site {site_url} failed: {site_err}")
+                combined_stats["done_sites"] += 1
                 combined_stats["sites"].append({"url": site_url, "status": "error", "error": str(site_err)})
+
+            # ── อัพเดท scan state หลังแต่ละไซต์ (ไม่รอจบทุกไซต์) ──
+            _scan_state["stats"] = dict(combined_stats)
 
         _scan_state["stats"]       = combined_stats
         _scan_state["status"]      = "done"

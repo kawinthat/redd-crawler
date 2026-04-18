@@ -1266,12 +1266,21 @@ function startPolling() {
       const status=d.status, stats=d.stats||{};
       if (stats.pages!==undefined) document.getElementById("s-pages").textContent=stats.pages;
       if (stats.scraped!==undefined) document.getElementById("s-scraped").textContent=stats.scraped;
-      if (stats.current_site) document.getElementById("s-status").textContent=`🔄 ${stats.current_site.replace(/https?:\/\/(www\.)?/,"").split("/")[0]}`;
+      if (stats.current_site) {
+        const siteShort = stats.current_site.replace(/https?:\/\/(www\.)?/,"").split("/")[0];
+        const doneSites = stats.done_sites||0;
+        const totalSites = stats.total_sites||7;
+        document.getElementById("s-status").textContent=`🔄 ${siteShort} (${doneSites}/${totalSites})`;
+      }
       if (status==="running") {
         const prog=stats.progress||"";
         const np=prog.includes("extract")?3:prog.includes("scrape")?2:1;
         if(np!==scanPhase){scanPhase=np;renderPipeline();}
-        if(pollCount%4===0) addLog("info",`⏳ scan... pages=${stats.pages||0} scraped=${stats.scraped||0} saved=${stats.saved||0} hot=${stats.hot||0}`);
+        if(pollCount%4===0) {
+          const dedup = stats.dedup_skipped>0 ? ` dedup_skip=${stats.dedup_skipped}` : "";
+          const site = stats.current_site ? ` [${stats.current_site.replace(/https?:\/\/(www\.)?/,"").split("/")[0]}]` : "";
+          addLog("info",`⏳ scan...${site} pages=${stats.pages||0} saved=${stats.saved||0} hot=${stats.hot||0}${dedup}`);
+        }
       }
       if (status==="done") {
         scanPhase=5; renderPipeline();
