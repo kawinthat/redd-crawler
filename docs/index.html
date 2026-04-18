@@ -751,6 +751,21 @@ input,select{font-family:var(--font)}
           <input type="number" id="filter-price-max" class="range-input" placeholder="สูงสุด" min="0" step="100000" oninput="onRangeFilter()">
         </div>
       </div>
+      <div class="range-group">
+        <div class="range-group-lbl">📍 เขต / แขวง</div>
+        <div class="range-group-inputs">
+          <input type="text" id="filter-district" class="range-input" style="width:180px" placeholder="เช่น ลาดกระบัง, คลองหลวง..." list="district-list" oninput="onRangeFilter()">
+          <datalist id="district-list"><!-- populated dynamically --></datalist>
+        </div>
+      </div>
+      <div class="range-group">
+        <div class="range-group-lbl">📐 ราคา / ตร.ม. (บาท)</div>
+        <div class="range-group-inputs">
+          <input type="number" id="filter-sqm-min" class="range-input" placeholder="ต่ำสุด" min="0" step="5000" oninput="onRangeFilter()">
+          <span class="range-dash">–</span>
+          <input type="number" id="filter-sqm-max" class="range-input" placeholder="สูงสุด" min="0" step="5000" oninput="onRangeFilter()">
+        </div>
+      </div>
       <button class="range-clear" onclick="clearRangeFilters()">✕ ล้างช่วง</button>
     </div>
 
@@ -893,6 +908,8 @@ let filterAnalyzed="all"; // "all" | "analyzed" | "unanalyzed"
 let filterProfitMin = null, filterProfitMax = null;
 let filterCostMin   = null, filterCostMax   = null;
 let filterPriceMin  = null, filterPriceMax  = null;
+let filterDistrict  = "";
+let filterSqmMin    = null, filterSqmMax    = null;
 // Multi-province filter — default: BKK + Nonthaburi + Pathum Thani
 const DEFAULT_PROVS = new Set(["กรุงเทพมหานคร","นนทบุรี","ปทุมธานี"]);
 let filterProvinces = new Set(DEFAULT_PROVS);  // empty = show ALL
@@ -1226,10 +1243,34 @@ function getProvince(loc) {
   return parts[parts.length - 1] || loc;
 }
 
+function getDistrict(loc) {
+  if (!loc) return "";
+  const prov = getProvince(loc);
+  // ลบชื่อจังหวัดออกจากท้าย → เหลือเขต/อำเภอ
+  return prov ? loc.replace(prov, "").trim() : loc.trim();
+}
+
+function getPricePerSqm(d) {
+  const area  = d.usable_area_sqm || d.area_sqm || 0;
+  const price = d.buy_price || d.price || 0;
+  if (!area || !price) return null;
+  return Math.round(price / area);
+}
+
+function buildDistrictList() {
+  const districts = [...new Set(
+    deals.map(d => getDistrict(d.location || "")).filter(Boolean)
+  )].sort((a,b) => a.localeCompare(b,"th"));
+  const dl = document.getElementById("district-list");
+  if (dl) dl.innerHTML = districts.map(d => `<option value="${d}">`).join("");
+}
+
 function populateFilters() {
   // Province multi-select dropdown
   buildProvChecks();
   updateProvBtn();
+  // District datalist autocomplete
+  buildDistrictList();
 
   // Sources
   const sources = [...new Set(deals.map(d=>d.source_domain).filter(Boolean))].sort();
@@ -1372,6 +1413,18 @@ function applyFilters(list) {
       if (filterPriceMin !== null && bp < filterPriceMin) return false;
       if (filterPriceMax !== null && bp > filterPriceMax) return false;
     }
+    // ── District / sub-district text filter ───────────────────────────────
+    if (filterDistrict) {
+      const loc = (d.location || "").toLowerCase();
+      if (!loc.includes(filterDistrict.toLowerCase())) return false;
+    }
+    // ── Price per sqm range filter ─────────────────────────────────────────
+    if (filterSqmMin !== null || filterSqmMax !== null) {
+      const sqmPrice = getPricePerSqm(d);
+      if (sqmPrice === null) return false;
+      if (filterSqmMin !== null && sqmPrice < filterSqmMin) return false;
+      if (filterSqmMax !== null && sqmPrice > filterSqmMax) return false;
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const hay = [d.project_name,d.location,d.property_type,d.source_domain,d.address,d.features]
@@ -1478,10 +1531,12 @@ function setAnalyzedFilter(val) {
 }
 
 function clearRangeFilters() {
-  filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = filterPriceMin = filterPriceMax = null;
-  ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max","filter-price-min","filter-price-max"].forEach(id=>{
+  filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = filterPriceMin = filterPriceMax = filterSqmMin = filterSqmMax = null;
+  filterDistrict = "";
+  ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max","filter-price-min","filter-price-max","filter-sqm-min","filter-sqm-max"].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value = "";
   });
+  const distEl = document.getElementById("filter-district"); if(distEl) distEl.value = "";
   curPage = 1; updateResetChip(); renderDeals();
 }
 
@@ -1496,16 +1551,21 @@ function onRangeFilter() {
     filterCostMax   = v("filter-cost-max");
     filterPriceMin  = v("filter-price-min");
     filterPriceMax  = v("filter-price-max");
+    filterSqmMin    = v("filter-sqm-min");
+    filterSqmMax    = v("filter-sqm-max");
+    filterDistrict  = (document.getElementById("filter-district")?.value || "").trim();
     curPage = 1; updateResetChip(); renderDeals();
   }, 350);
 }
 
 function resetFilters() {
   searchQuery=""; filterType=""; filterSource=""; dealFilter="all"; filterAnalyzed="all"; curPage=1;
-  filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = filterPriceMin = filterPriceMax = null;
-  ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max","filter-price-min","filter-price-max"].forEach(id=>{
+  filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = filterPriceMin = filterPriceMax = filterSqmMin = filterSqmMax = null;
+  filterDistrict = "";
+  ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max","filter-price-min","filter-price-max","filter-sqm-min","filter-sqm-max"].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value = "";
   });
+  const _distEl = document.getElementById("filter-district"); if(_distEl) _distEl.value = "";
   filterProvinces = new Set(DEFAULT_PROVS);  // reset to 3 provinces default
   document.getElementById("search-box").value="";
   document.getElementById("source-select").value="";
@@ -1520,7 +1580,7 @@ function resetFilters() {
 function updateResetChip() {
   const provChanged = filterProvinces.size !== DEFAULT_PROVS.size ||
     [...DEFAULT_PROVS].some(p => !filterProvinces.has(p));
-  const hasRangeFilter = filterProfitMin!==null||filterProfitMax!==null||filterCostMin!==null||filterCostMax!==null||filterPriceMin!==null||filterPriceMax!==null;
+  const hasRangeFilter = filterProfitMin!==null||filterProfitMax!==null||filterCostMin!==null||filterCostMax!==null||filterPriceMin!==null||filterPriceMax!==null||filterSqmMin!==null||filterSqmMax!==null||!!filterDistrict;
   const hasFilter = searchQuery||filterType||filterSource||dealFilter==="hot"||provChanged||filterAnalyzed!=="all"||hasRangeFilter;
   document.getElementById("chip-reset").style.display = hasFilter?"":"none";
 }
@@ -1647,7 +1707,11 @@ function renderDeals() {
   // ป้องกัน loop: type + province → 0 → reset province → แต่ type ยังอยู่ → loop ไม่สิ้นสุด
   if (filtered.length === 0 && deals.length > 0 && filterProvinces.size > 0) {
     const hasOtherFilter = filterType || filterSource || filterAnalyzed !== "all"
-                        || searchQuery || dealFilter !== "all";
+                        || searchQuery || dealFilter !== "all" || filterDistrict
+                        || filterProfitMin!==null||filterProfitMax!==null
+                        || filterCostMin!==null||filterCostMax!==null
+                        || filterPriceMin!==null||filterPriceMax!==null
+                        || filterSqmMin!==null||filterSqmMax!==null;
     if (!hasOtherFilter) {
       const hiddenBy = [...filterProvinces].join(", ");
       filterProvinces = new Set();
