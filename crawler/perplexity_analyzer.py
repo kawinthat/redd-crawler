@@ -383,9 +383,13 @@ class PerplexityAnalyzer:
             market_value_min = market_value_max = None
 
         # ── คำนวณ ROI ด้วยช่วงราคาจริงจาก Sonar Pro ──────────────────
+        # ถ้าไม่รู้ area ใช้ buy_price * 0.15 เป็น reno estimate (conservative)
+        eff_area = area_sqm if area_sqm > 0 else 0
+        reno_fallback = round(buy_price * 0.15) if (area_sqm == 0 and buy_price > 0) else 0
+
         def _calc_roi(market_val: int) -> tuple[float, float, float]:
             """Return (reno_total, total_cost, roi_pct) for a given market value."""
-            reno_total   = area_sqm * 5_000
+            reno_total   = (eff_area * 5_000) if eff_area > 0 else reno_fallback
             transfer_fee = buy_price * 0.055
             total_cost   = buy_price + reno_total + transfer_fee
             profit       = market_val - total_cost

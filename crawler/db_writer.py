@@ -62,19 +62,35 @@ def _get_client() -> "Client | None":
 
 
 DEALS_COLUMNS = frozenset({
+    # ── Core listing fields ─────────────────────────────────────────────────
     "listing_url", "source_domain", "source_type",
     "property_type", "project_name", "address", "location",
     "title_deed", "bedrooms", "bathrooms", "floors",
     "condition", "features", "auction_date", "contact",
-    "price", "area_sqm", "usable_area_sqm", "land_area_sqm",
+    "price", "area_sqm", "usable_area_sqm", "land_area_sqm", "buy_price",
+    # ── ROI / analysis basics ───────────────────────────────────────────────
     "roi_valid", "roi_percent", "roi_flag", "priority", "roi_data_source",
-    "estimated_profit", "total_cost",
-    "market_value",             # ราคาตลาดหลังรีโนเวท (สภาพดี)
-    "market_value_before_reno", # ราคาตลาดก่อนรีโนเวท (สภาพเดิม)
-    "reno_cost_total", "reno_cost_sqm", "transfer_fee", "market_price_sqm", "buy_price",
+    "estimated_profit", "estimated_profit_max", "total_cost",
+    "market_value", "market_value_before_reno",
+    "reno_cost_total", "reno_cost_sqm", "transfer_fee", "market_price_sqm",
+    # ── Rich AI analysis fields (migration 006) ─────────────────────────────
+    "ai_analysis",              # JSONB full analysis report
+    "ai_analyzed_at",           # timestamp ล่าสุดที่ analyze
     "source_urls",              # URL references for market prices (JSONB array)
-    "dedup_key",                # 16-char MD5 fingerprint for cross-scan dedup
-    "scraped_at", "updated_at", "raw_data",
+    # market value range
+    "market_value_min", "market_value_max",
+    "market_price_sqm_min", "market_price_sqm_max",
+    # ROI range
+    "roi_min", "roi_max",
+    # price tiers (3 levels from Sonar)
+    "price_original_low", "price_original_high",   # สภาพเดิม
+    "price_good_low", "price_good_high",            # สภาพดี
+    "price_reno_low", "price_reno_high",            # รีโนเวทใหม่
+    "rental_monthly_est",                           # ค่าเช่าประมาณ/เดือน
+    # project info
+    "project_official_name", "project_developer", "project_address",
+    # ── System fields ───────────────────────────────────────────────────────
+    "dedup_key", "scraped_at", "updated_at", "raw_data",
 })
 
 
