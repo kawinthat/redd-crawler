@@ -325,27 +325,35 @@ def hot_deals(limit: int = Query(200, ge=1, le=5000)):
 @app.post("/analyze")
 async def trigger_analysis(
     background_tasks: BackgroundTasks,
-    limit: int = Query(50, ge=1, le=200, description="จำนวน deals สูงสุดที่ analyze ต่อ batch"),
+    limit: int = Query(50, ge=1, le=500, description="จำนวน deals สูงสุดที่ analyze ต่อ batch"),
     hot_only: bool = Query(False, description="วิเคราะห์เฉพาะ HOT deals (ROI ≥ 30%)"),
+    provinces: str = Query(None, description="จังหวัดที่ต้องการวิเคราะห์ คั่นด้วยคอมม่า เช่น กรุงเทพมหานคร,นนทบุรี"),
 ):
     """
-    เรียก Perplexity Sonar วิเคราะห์ deals ที่ยังไม่ analyze (ai_analyzed_at IS NULL)
+    เรียก Perplexity Sonar Pro วิเคราะห์ deals ที่ยังไม่ analyze (ai_analyzed_at IS NULL)
 
     Token Efficiency:
-    - ใช้ sonar (standard) สำหรับ deals ทั่วไป
-    - ใช้ sonar-pro เฉพาะ HOT deals (ROI ≥ 30%)
+    - ตรวจ market pattern cache ก่อน — cache hit ไม่เสีย token เลย
+    - ใช้ sonar-pro สำหรับทุก deal ที่ไม่มีใน cache
     - Skip deals ที่ analyze แล้ว อัตโนมัติ
+    - ระบุ provinces เพื่อจำกัดขอบเขต ประหยัด token
     """
     perplexity_key = os.getenv("OPENROUTER_API_KEY", "")
     if not perplexity_key or not perplexity_key.startswith("sk-or-"):
         raise HTTPException(503, "OPENROUTER_API_KEY ยังไม่ได้ตั้งค่า หรือไม่ถูกต้อง")
 
-    background_tasks.add_task(_run_analysis, limit, hot_only)
-    return {"message": "Analysis started", "limit": limit, "hot_only": hot_only}
+    prov_list = [p.strip() for p in provinces.split(",")] if provinces else []
+    background_tasks.add_task(_run_analysis, limit, hot_only, prov_list)
+    return {
+        "message": "Analysis started",
+        "limit": limit,
+        "hot_only": hot_only,
+        "provinces": prov_list or "ทุกจังหวัด",
+    }
 
 
-async def _run_analysis(limit: int, hot_only: bool):
-    """Background task: fetch pending deals → Perplexity analyze → save back."""
+async def _run_analysis(limit: int, hot_only: bool, provinces: list[str] | None = None):
+    """Background task: fetch pending deals → market cache / Perplexity analyze → save back."""
     from crawler.perplexity_analyzer import PerplexityAnalyzer
 
     db = _get_supabase()
@@ -355,14 +363,27 @@ async def _run_analysis(limit: int, hot_only: bool):
         # ดึง deals ที่ยังไม่ analyze
         q = db.table("deals").select(
             "id,listing_url,source_domain,property_type,project_name,"
-            "location,price,area_sqm,land_area_sqm,roi_percent,priority,ai_analyzed_at"
+            "location,price,area_sqm,land_area_sqm,roi_percent,priority,condition,ai_analyzed_at"
         ).is_("ai_analyzed_at", "null")
 
         if hot_only:
             q = q.gte("roi_percent", 30)
 
-        pending = q.order("scraped_at", desc=True).limit(limit).execute().data or []
-        logger.info(f"Analyze batch: {len(pending)} pending deals")
+        # ดึงมามากกว่า limit เพื่อ post-filter จังหวัด
+        fetch_limit = limit * 5 if provinces else limit
+        all_pending = q.order("scraped_at", desc=True).limit(fetch_limit).execute().data or []
+
+        # กรองจังหวัด (post-filter เพราะ location เป็น free-text)
+        if provinces:
+            def _match_province(loc: str) -> bool:
+                loc = loc or ""
+                return any(p in loc for p in provinces)
+            pending = [d for d in all_pending if _match_province(d.get("location", ""))][:limit]
+            logger.info(f"Province filter {provinces}: {len(all_pending)} → {len(pending)} deals")
+        else:
+            pending = all_pending[:limit]
+
+        logger.info(f"Analyze batch: {len(pending)} pending deals | provinces={provinces or 'all'}")
 
         enriched = 0
         for deal in pending:

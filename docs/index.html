@@ -240,6 +240,22 @@ input,select{font-family:var(--font)}
 .analyze-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .analyze-title{color:var(--teal);font-size:12px;font-weight:700}
 .analyze-status{font-size:11px;color:var(--grayLight)}
+.analyze-step-lbl{font-size:10px;color:var(--gray);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.analyze-confirm-box{background:#0d2f2c33;border:1px solid var(--teal)44;border-radius:8px;padding:10px 12px;margin-top:10px}
+.analyze-confirm-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0;color:var(--grayLight)}
+.analyze-confirm-row b{color:var(--white)}
+
+/* ── PROVINCE MULTI-SELECT DROPDOWN ── */
+.prov-wrap{position:relative;display:inline-block}
+.prov-btn{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--grayLight);font-size:11px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:border-color .2s;display:flex;align-items:center;gap:5px}
+.prov-btn:hover,.prov-btn.open{border-color:var(--teal);color:var(--teal)}
+.prov-panel{position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:#1a2730;border:1px solid var(--border);border-radius:8px;padding:8px;min-width:200px;max-height:260px;overflow-y:auto;box-shadow:0 8px 24px #0008}
+.prov-ctrl{display:flex;gap:6px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.prov-ctrl button{flex:1;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--gray);font-size:10px;padding:3px 0;cursor:pointer;font-family:var(--font)}
+.prov-ctrl button:hover{border-color:var(--teal);color:var(--teal)}
+.prov-check-item{display:flex;align-items:center;gap:7px;padding:4px 2px;cursor:pointer;border-radius:4px;font-size:11px;color:var(--grayLight)}
+.prov-check-item:hover{color:var(--white)}
+.prov-check-item input[type=checkbox]{accent-color:var(--teal);cursor:pointer;width:13px;height:13px}
 
 /* ── EMPTY ── */
 .empty-state{text-align:center;padding:60px 20px;color:var(--gray)}
@@ -348,16 +364,50 @@ input,select{font-family:var(--font)}
     <!-- Analyze panel -->
     <div id="analyze-panel">
       <div class="analyze-head">
-        <span class="analyze-title">🧠 AI Analysis — Perplexity Sonar</span>
-        <span id="analyze-status" class="analyze-status">ยังไม่ได้เริ่ม</span>
+        <span class="analyze-title">🧠 AI Analysis — Perplexity Sonar Pro</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="analyze-status" class="analyze-status">ยังไม่ได้เริ่ม</span>
+          <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="document.getElementById('analyze-panel').classList.remove('show');hideAnalyzeConfirm()">✕</button>
+        </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-teal" id="btn-run-analyze" onclick="runAnalyze(false)">▶ วิเคราะห์ทั้งหมด</button>
-        <button class="btn btn-ghost" onclick="runAnalyze(true)">🔥 เฉพาะ HOT deals</button>
-        <input type="number" id="analyze-limit" value="50" min="1" max="200"
-          style="width:70px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--white);font-size:11px;outline:none" title="จำนวนสูงสุด">
-        <span style="color:var(--gray);font-size:10px">deals/batch</span>
-        <button class="btn btn-ghost" style="margin-left:auto;font-size:11px" onclick="document.getElementById('analyze-panel').classList.remove('show')">✕ ปิด</button>
+
+      <!-- Province selector -->
+      <div style="margin-bottom:10px">
+        <div class="analyze-step-lbl">📍 จังหวัดที่ต้องการวิเคราะห์</div>
+        <div id="analyze-prov-checks" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px">
+          <!-- populated by buildAnalyzeProvChecks() -->
+        </div>
+        <div style="margin-top:5px;display:flex;gap:8px">
+          <button style="font-size:10px;background:none;border:none;color:var(--teal);cursor:pointer;padding:0;font-family:var(--font)" onclick="analyzeSelectAllProvs(true)">+ เลือกทั้งหมด</button>
+          <button style="font-size:10px;background:none;border:none;color:var(--gray);cursor:pointer;padding:0;font-family:var(--font)" onclick="analyzeSelectAllProvs(false)">ล้าง</button>
+        </div>
+      </div>
+
+      <!-- Options row -->
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="color:var(--gray);font-size:10px">จำนวนสูงสุด:</span>
+          <input type="number" id="analyze-limit" value="50" min="1" max="500"
+            style="width:65px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:5px 7px;color:var(--white);font-size:11px;outline:none">
+          <span style="color:var(--gray);font-size:10px">deals</span>
+        </div>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--grayLight)">
+          <input type="checkbox" id="analyze-hot-only" style="accent-color:var(--teal)"> 🔥 เฉพาะ HOT deals
+        </label>
+      </div>
+
+      <!-- Preview / Confirm buttons -->
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-teal" id="btn-preview-analyze" onclick="previewAnalyze()">🔍 Preview ก่อน Run</button>
+      </div>
+
+      <!-- Confirmation box (hidden until Preview clicked) -->
+      <div id="analyze-confirm-box" style="display:none" class="analyze-confirm-box">
+        <div id="analyze-confirm-summary"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-teal" id="btn-run-analyze" onclick="doRunAnalyze()">✅ ยืนยัน — Run เลย</button>
+          <button class="btn btn-ghost" onclick="hideAnalyzeConfirm()">ยกเลิก</button>
+        </div>
       </div>
     </div>
 
@@ -367,10 +417,18 @@ input,select{font-family:var(--font)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input type="text" id="search-box" placeholder="ค้นหาโครงการ, ทำเล, ประเภท..." oninput="onSearch(this.value)" />
       </div>
-      <div class="select-wrap">
-        <select id="province-select" onchange="filterProvince=this.value;curPage=1;renderDeals()">
-          <option value="">🗺 ทุกจังหวัด</option>
-        </select>
+      <!-- Province multi-select dropdown -->
+      <div class="prov-wrap" id="prov-wrap">
+        <button class="prov-btn" id="prov-btn" onclick="toggleProvDropdown()">
+          <span id="prov-btn-label">🗺 3 จังหวัด</span><span style="font-size:9px;opacity:.6">▾</span>
+        </button>
+        <div class="prov-panel" id="prov-panel" style="display:none">
+          <div class="prov-ctrl">
+            <button onclick="event.stopPropagation();selectAllProvs(true)">เลือกทั้งหมด</button>
+            <button onclick="event.stopPropagation();selectAllProvs(false)">ล้างทั้งหมด</button>
+          </div>
+          <div id="prov-checks"><!-- populated by buildProvChecks() --></div>
+        </div>
       </div>
       <div class="select-wrap">
         <select id="source-select" onchange="filterSource=this.value;curPage=1;renderDeals()">
@@ -511,7 +569,12 @@ const PIPE_STEPS = [
 // STATE
 // ─────────────────────────────────────────────
 let deals=[], hotDeals=[], srcStats={};
-let dealFilter="all", filterType="", filterProvince="", filterSource="", sortBy="roi";
+let dealFilter="all", filterType="", filterSource="", sortBy="roi";
+// Multi-province filter — default: BKK + Nonthaburi + Pathum Thani
+const DEFAULT_PROVS = new Set(["กรุงเทพมหานคร","นนทบุรี","ปทุมธานี"]);
+let filterProvinces = new Set(DEFAULT_PROVS);  // empty = show ALL
+// Analyze province set (independent from dashboard filter)
+let analyzeProvs = new Set(DEFAULT_PROVS);
 let searchQuery="", viewMode="card", curPage=1;
 let logs=[], scanPhase=0, pollInterval=null, isRunning=false;
 let _wakeAttempt=0;
@@ -745,12 +808,9 @@ function getProvince(loc) {
 }
 
 function populateFilters() {
-  // Provinces
-  const provinces = [...new Set(deals.map(d=>getProvince(d.location||"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"th"));
-  const pSel = document.getElementById("province-select");
-  const pVal = pSel.value;
-  pSel.innerHTML = '<option value="">🗺 ทุกจังหวัด</option>' +
-    provinces.map(p=>`<option value="${p}"${pVal===p?" selected":""}>${p}</option>`).join("");
+  // Province multi-select dropdown
+  buildProvChecks();
+  updateProvBtn();
 
   // Sources
   const sources = [...new Set(deals.map(d=>d.source_domain).filter(Boolean))].sort();
@@ -758,13 +818,73 @@ function populateFilters() {
   const sVal = sSel.value;
   sSel.innerHTML = '<option value="">🏦 ทุกแหล่ง</option>' +
     sources.map(s=>`<option value="${s}"${sVal===s?" selected":""}>${s}</option>`).join("");
+
+  // Also rebuild analyze province checkboxes
+  buildAnalyzeProvChecks();
 }
+
+function buildProvChecks() {
+  const provinces = [...new Set(deals.map(d=>getProvince(d.location||"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"th"));
+  const container = document.getElementById("prov-checks");
+  if (!container) return;
+  container.innerHTML = provinces.map(p => {
+    const checked = filterProvinces.size===0 || filterProvinces.has(p);
+    return `<label class="prov-check-item">
+      <input type="checkbox" value="${p}" ${checked?"checked":""} onchange="onProvCheck(this)">
+      ${p}
+    </label>`;
+  }).join("");
+}
+
+function onProvCheck(cb) {
+  if (cb.checked) filterProvinces.add(cb.value);
+  else filterProvinces.delete(cb.value);
+  updateProvBtn(); curPage=1; renderDeals();
+}
+
+function updateProvBtn() {
+  const all = [...new Set(deals.map(d=>getProvince(d.location||"")).filter(Boolean))];
+  const btn = document.getElementById("prov-btn-label");
+  if (!btn) return;
+  if (filterProvinces.size === 0 || filterProvinces.size === all.length)
+    btn.textContent = "🗺 ทุกจังหวัด";
+  else
+    btn.textContent = `🗺 ${filterProvinces.size} จังหวัด`;
+}
+
+function selectAllProvs(checked) {
+  const all = [...new Set(deals.map(d=>getProvince(d.location||"")).filter(Boolean))];
+  if (checked) filterProvinces = new Set(all);
+  else filterProvinces = new Set();
+  buildProvChecks(); updateProvBtn(); curPage=1; renderDeals();
+}
+
+function toggleProvDropdown() {
+  const panel = document.getElementById("prov-panel");
+  const btn   = document.getElementById("prov-btn");
+  const open  = panel.style.display !== "none";
+  panel.style.display = open ? "none" : "block";
+  btn.classList.toggle("open", !open);
+}
+
+// Close dropdown on outside click
+document.addEventListener("click", e => {
+  const wrap = document.getElementById("prov-wrap");
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById("prov-panel").style.display = "none";
+    document.getElementById("prov-btn")?.classList.remove("open");
+  }
+});
 
 function applyFilters(list) {
   return list.filter(d => {
     if (dealFilter === "hot" && (d.roi_percent||0) < 30) return false;
     if (filterType && d.property_type !== filterType) return false;
-    if (filterProvince && getProvince(d.location||"") !== filterProvince) return false;
+    // Multi-province filter: empty set = show all
+    if (filterProvinces.size > 0) {
+      const prov = getProvince(d.location||"");
+      if (!filterProvinces.has(prov)) return false;
+    }
     if (filterSource && d.source_domain !== filterSource) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -1413,21 +1533,93 @@ function openAnalyze() {
   panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
-async function runAnalyze(hotOnly=false) {
-  const limit = parseInt(document.getElementById("analyze-limit").value)||50;
-  const btn   = document.getElementById("btn-run-analyze");
-  btn.disabled=true; btn.textContent="⏳ กำลังวิเคราะห์...";
-  document.getElementById("analyze-status").textContent="กำลังส่ง request...";
+// ── Analyze province helpers ──────────────────────────
+function buildAnalyzeProvChecks() {
+  const provinces = [...new Set(deals.map(d=>getProvince(d.location||"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"th"));
+  const container = document.getElementById("analyze-prov-checks");
+  if (!container) return;
+  container.innerHTML = provinces.map(p => {
+    const checked = analyzeProvs.has(p);
+    return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--grayLight);background:var(--panel2);border:1px solid ${checked?"var(--teal)":"var(--border)"};border-radius:6px;padding:4px 8px" id="aprov-lbl-${CSS.escape(p)}">
+      <input type="checkbox" value="${p}" ${checked?"checked":""} style="accent-color:var(--teal)" onchange="onAnalyzeProvCheck(this,'${p}')">
+      ${p}
+    </label>`;
+  }).join("");
+}
+
+function onAnalyzeProvCheck(cb, prov) {
+  if (cb.checked) analyzeProvs.add(prov);
+  else analyzeProvs.delete(prov);
+  // Update border color
+  const lbl = document.getElementById(`aprov-lbl-${CSS.escape(prov)}`);
+  if (lbl) lbl.style.borderColor = cb.checked ? "var(--teal)" : "var(--border)";
+  hideAnalyzeConfirm();
+}
+
+function analyzeSelectAllProvs(checked) {
+  const all = [...new Set(deals.map(d=>getProvince(d.location||"")).filter(Boolean))];
+  analyzeProvs = checked ? new Set(all) : new Set();
+  buildAnalyzeProvChecks(); hideAnalyzeConfirm();
+}
+
+function hideAnalyzeConfirm() {
+  document.getElementById("analyze-confirm-box").style.display = "none";
+}
+
+function previewAnalyze() {
+  const limit  = parseInt(document.getElementById("analyze-limit").value)||50;
+  const hotOnly = document.getElementById("analyze-hot-only").checked;
+
+  // Count deals matching criteria from loaded data
+  let candidates = deals.filter(d => !d.ai_analyzed_at);
+  if (hotOnly) candidates = candidates.filter(d=>(d.roi_percent||0)>=30);
+  if (analyzeProvs.size > 0)
+    candidates = candidates.filter(d=>analyzeProvs.has(getProvince(d.location||"")));
+  const toProcess = Math.min(candidates.length, limit);
+
+  // Estimate: cache hits save tokens; assume ~30% cache hit rate initially
+  const estApiCalls = Math.round(toProcess * 0.7);
+  const provList = analyzeProvs.size > 0
+    ? [...analyzeProvs].join(", ")
+    : "ทุกจังหวัด";
+
+  const summary = `
+    <div class="analyze-confirm-row"><span>จังหวัด</span><b>${provList}</b></div>
+    <div class="analyze-confirm-row"><span>Deals รอวิเคราะห์ (ไม่มี AI data)</span><b>${candidates.length.toLocaleString()} deals</b></div>
+    <div class="analyze-confirm-row"><span>จะประมวลผล (batch)</span><b>${toProcess.toLocaleString()} deals</b></div>
+    <div class="analyze-confirm-row"><span>ประเภท</span><b>${hotOnly?"🔥 HOT deals เท่านั้น (ROI ≥ 30%)":"ทั้งหมด"}</b></div>
+    <div class="analyze-confirm-row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+      <span>ประมาณ Sonar Pro API calls</span><b style="color:var(--gold)">~${estApiCalls} calls</b>
+    </div>
+    <div style="font-size:9px;color:var(--gray);margin-top:4px">♻️ Deals ในโครงการ/ทำเลเดียวกันจะใช้ cache แทน — ไม่เสีย token</div>
+  `;
+  document.getElementById("analyze-confirm-summary").innerHTML = summary;
+  document.getElementById("analyze-confirm-box").style.display = "block";
+}
+
+async function doRunAnalyze() {
+  const limit   = parseInt(document.getElementById("analyze-limit").value)||50;
+  const hotOnly = document.getElementById("analyze-hot-only").checked;
+  const btn     = document.getElementById("btn-run-analyze");
+
+  btn.disabled = true;
+  btn.textContent = "⏳ กำลังส่ง...";
+  document.getElementById("analyze-status").textContent = "กำลังส่ง request...";
+
   try {
-    const r = await fetch(`${API}/analyze?limit=${limit}&hot_only=${hotOnly}`,{method:"POST"});
+    const provsParam = analyzeProvs.size > 0
+      ? "&provinces=" + encodeURIComponent([...analyzeProvs].join(","))
+      : "";
+    const r = await fetch(`${API}/analyze?limit=${limit}&hot_only=${hotOnly}${provsParam}`, {method:"POST"});
     const d = await r.json();
-    document.getElementById("analyze-status").textContent=d.message||"Started";
-    showToast("🧠 AI Analysis เริ่มทำงาน — รอสักครู่แล้ว reload");
+    document.getElementById("analyze-status").textContent = d.message || "Started";
+    showToast("🧠 AI Analysis เริ่มทำงานแล้ว — รอสักครู่แล้ว reload");
+    hideAnalyzeConfirm();
   } catch(e) {
-    document.getElementById("analyze-status").textContent="Error: "+e.message;
+    document.getElementById("analyze-status").textContent = "Error: "+e.message;
     showToast("❌ Analyze error: "+e.message);
   }
-  setTimeout(()=>{btn.disabled=false;btn.textContent="▶ วิเคราะห์ทั้งหมด";},3000);
+  setTimeout(()=>{ btn.disabled=false; btn.textContent="✅ ยืนยัน — Run เลย"; }, 4000);
 }
 
 // ─────────────────────────────────────────────
