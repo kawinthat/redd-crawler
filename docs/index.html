@@ -1142,9 +1142,20 @@ function applyFilters(list) {
   });
 }
 
+function calcFreshRoi(d) {
+  if (d.market_value && d.market_value > 0) {
+    const bp   = d.buy_price || d.price || 0;
+    const reno = d.reno_cost_total || 0;
+    const fee  = (d.transfer_fee && d.transfer_fee > 0) ? d.transfer_fee : Math.round(bp * 0.055);
+    const cost = bp + reno + fee;
+    if (cost > 0) return (d.market_value - cost) / cost * 100;
+  }
+  return d.roi_percent || 0;
+}
+
 function applySort(list) {
   return [...list].sort((a,b) => {
-    if (sortBy === "roi")        return (b.roi_percent||0)-(a.roi_percent||0);
+    if (sortBy === "roi")        return calcFreshRoi(b) - calcFreshRoi(a);
     if (sortBy === "price-asc")  return (a.price||0)-(b.price||0);
     if (sortBy === "price-desc") return (b.price||0)-(a.price||0);
     if (sortBy === "area")       return (b.area_sqm||0)-(a.area_sqm||0);
@@ -1403,11 +1414,20 @@ function goPage(p) {
 const slideIdx = {};
 
 function dealCard(d) {
-  const rawRoi    = d.roi_percent || 0;
-  const roiSuspect= rawRoi > 999 || d.roi_valid === false;
+  // ── Fresh ROI calculation (ใช้ market_value จาก Sonar Pro ถ้ามี — แม่นยำกว่า d.roi_percent ใน DB) ──
+  let displayRoi = d.roi_percent || 0;
+  if (d.market_value && d.market_value > 0) {
+    const _bp   = d.buy_price || d.price || 0;
+    const _reno = d.reno_cost_total || 0;
+    const _fee  = (d.transfer_fee && d.transfer_fee > 0) ? d.transfer_fee : Math.round(_bp * 0.055);
+    const _cost = _bp + _reno + _fee;
+    if (_cost > 0) displayRoi = (d.market_value - _cost) / _cost * 100;
+  }
+  const rawRoi    = displayRoi;
+  const roiSuspect= rawRoi > 999 || (d.roi_valid === false && !(d.market_value > 0));
   const hot       = rawRoi >= 30 && !roiSuspect;
   const roiColor  = roiSuspect?"var(--textLight)":rawRoi>=30?"var(--green)":rawRoi>=15?"var(--yellow)":"var(--red)";
-  const roiPct    = roiSuspect ? 0 : Math.min(rawRoi, 100);
+  const roiPct    = roiSuspect ? 0 : Math.min(Math.max(rawRoi, 0), 100);
   const roiLabel  = roiSuspect?"⚠️ N/A":rawRoi>=30?"🟢 ควรซื้อ":rawRoi>=15?"🟡 พิจารณา":"🔴 ข้าม";
   const roiDisp   = roiSuspect ? "N/A" : rawRoi.toFixed(1)+"%";
   const priceM    = d.price ? (d.price/1e6).toFixed(2) : "—";
