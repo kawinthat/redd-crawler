@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <!-- Background gradient: deep indigo → violet -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#4338ca"/>
+    </linearGradient>
+    <!-- Glow filter for scan arc -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Clip to rounded square -->
+    <clipPath id="clip">
+      <rect width="64" height="64" rx="14"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+
+  <!-- Subtle grid lines (scan aesthetic) -->
+  <g clip-path="url(#clip)" opacity="0.06">
+    <line x1="0" y1="16" x2="64" y2="16" stroke="white" stroke-width="0.5"/>
+    <line x1="0" y1="32" x2="64" y2="32" stroke="white" stroke-width="0.5"/>
+    <line x1="0" y1="48" x2="64" y2="48" stroke="white" stroke-width="0.5"/>
+    <line x1="16" y1="0" x2="16" y2="64" stroke="white" stroke-width="0.5"/>
+    <line x1="32" y1="0" x2="32" y2="64" stroke="white" stroke-width="0.5"/>
+    <line x1="48" y1="0" x2="48" y2="64" stroke="white" stroke-width="0.5"/>
+  </g>
+
+  <!-- House body (white, slight transparency) -->
+  <g clip-path="url(#clip)">
+    <!-- House roof (triangle) -->
+    <polygon points="32,9 55,32 9,32" fill="white" opacity="0.92"/>
+    <!-- Roof ridge highlight -->
+    <polygon points="32,9 55,32 9,32" fill="none" stroke="white" stroke-width="0.5" opacity="0.4"/>
+
+    <!-- House body rectangle -->
+    <rect x="13" y="32" width="38" height="22" rx="1.5" fill="white" opacity="0.92"/>
+
+    <!-- Door (indigo on white) -->
+    <rect x="25" y="40" width="14" height="14" rx="2" fill="#312e81"/>
+
+    <!-- Door knob -->
+    <circle cx="36" cy="47" r="1.2" fill="#6366F1"/>
+
+    <!-- Windows (2 small) -->
+    <rect x="15" y="36" width="7" height="6" rx="1" fill="#c7d2fe" opacity="0.7"/>
+    <rect x="42" y="36" width="7" height="6" rx="1" fill="#c7d2fe" opacity="0.7"/>
+  </g>
+
+  <!-- Scan pulse arc — green HOT DEAL indicator -->
+  <g filter="url(#glow)">
+    <!-- Outer arc -->
+    <path d="M 7 58 A 36 36 0 0 1 57 58"
+          stroke="#10B981" stroke-width="2.5" fill="none"
+          stroke-linecap="round" opacity="0.5"/>
+    <!-- Inner arc (brighter) -->
+    <path d="M 13 58 A 28 28 0 0 1 51 58"
+          stroke="#10B981" stroke-width="2.5" fill="none"
+          stroke-linecap="round" opacity="0.8"/>
+    <!-- Center pulse dot -->
+    <circle cx="32" cy="58" r="3.5" fill="#10B981"/>
+    <circle cx="32" cy="58" r="1.8" fill="white"/>
+  </g>
+
+  <!-- RE: brand mark — top-left corner chip -->
+  <rect x="4" y="4" width="22" height="10" rx="3" fill="#6366F1" opacity="0.9"/>
+  <text x="6" y="13"
+        font-family="'IBM Plex Mono', 'Courier New', monospace"
+        font-weight="700" font-size="7.5"
+        fill="white" letter-spacing="0.3">RE:DD</text>
+</svg>
