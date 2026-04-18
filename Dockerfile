@@ -26,7 +26,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Playwright Chromium browser ──────────────────────────────────────────────
 # ติดตั้ง Chromium สำหรับ sites ที่ต้องการ JS rendering (LED, GH Bank, etc.)
-RUN playwright install chromium --with-deps 2>/dev/null || true
+# NOTE: ไม่ใช้ 2>/dev/null || true เพราะถ้า install ล้มเหลว build ต้อง fail ให้เห็น
+RUN playwright install chromium --with-deps
 
 # ── Source code ──────────────────────────────────────────────────────────────
 COPY . .

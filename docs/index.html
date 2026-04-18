@@ -1257,7 +1257,10 @@ function getAIStatus(d) {
   const hasSummary  = !!(ai.summary_th || ai.summary);
   const hasSources  = Array.isArray(ai.data_sources) && ai.data_sources.length > 0;
   const hasProjects = ai.comparable_projects && Object.keys(ai.comparable_projects).length > 0;
-  return (hasSummary || hasSources || hasProjects) ? "done" : "empty";
+  // รองรับ new 4-section format: ถ้ามี project name หรือ pricing data ถือว่า done
+  const hasNewProj  = !!(ai.project?.official_name || ai.project?.developer || ai.project?.exact_address);
+  const hasNewPrice = !!(ai.pricing?.after_reno_low || ai.pricing?.original_low || ai.pricing?.good_condition_low);
+  return (hasSummary || hasSources || hasProjects || hasNewProj || hasNewPrice) ? "done" : "empty";
 }
 function isAnalyzed(d) { return getAIStatus(d) !== "none"; }
 function isAISuccess(d) { return getAIStatus(d) === "done"; }
