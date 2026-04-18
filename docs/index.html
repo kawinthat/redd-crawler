@@ -912,7 +912,8 @@ let filterDistrict  = "";
 let filterSqmMin    = null, filterSqmMax    = null;
 // Multi-province filter — default: BKK + Nonthaburi + Pathum Thani
 const DEFAULT_PROVS = new Set(["กรุงเทพมหานคร","นนทบุรี","ปทุมธานี"]);
-let filterProvinces = new Set(DEFAULT_PROVS);  // empty = show ALL
+let filterProvinces = new Set(DEFAULT_PROVS);
+let _provExplicitEmpty = false;  // true = user กด "ล้างทั้งหมด" → deselect all → show 0 deals
 // Analyze province set (independent from dashboard filter)
 let analyzeProvs = new Set(DEFAULT_PROVS);
 // Analyze extra filters
@@ -1258,8 +1259,13 @@ function getPricePerSqm(d) {
 }
 
 function buildDistrictList() {
+  // แสดงเฉพาะ เขต/แขวง ของ กรุงเทพมหานคร เท่านั้น
+  const bkkDeals = deals.filter(d => {
+    const loc = d.location || "";
+    return loc.includes("กรุงเทพ") || loc.includes("กทม");
+  });
   const districts = [...new Set(
-    deals.map(d => getDistrict(d.location || "")).filter(Boolean)
+    bkkDeals.map(d => getDistrict(d.location || "")).filter(Boolean)
   )].sort((a,b) => a.localeCompare(b,"th"));
   const dl = document.getElementById("district-list");
   if (dl) dl.innerHTML = districts.map(d => `<option value="${d}">`).join("");
@@ -1296,7 +1302,7 @@ function buildProvChecks() {
   const container = document.getElementById("prov-checks");
   if (!container) return;
   container.innerHTML = provinces.map(p => {
-    const checked = filterProvinces.size===0 || filterProvinces.has(p);
+    const checked = (!_provExplicitEmpty && filterProvinces.size===0) || filterProvinces.has(p);
     const cnt = provCounts[p] || 0;
     const ai  = provAI[p] || 0;
     const aiTag = ai > 0 ? `<span class="prov-ai-count">🧠${ai}</span>` : "";
@@ -1309,7 +1315,7 @@ function buildProvChecks() {
 }
 
 function onProvCheck(cb) {
-  if (cb.checked) filterProvinces.add(cb.value);
+  if (cb.checked) { _provExplicitEmpty = false; filterProvinces.add(cb.value); }
   else filterProvinces.delete(cb.value);
   updateProvBtn(); curPage=1; renderDeals();
 }
@@ -1318,7 +1324,9 @@ function updateProvBtn() {
   const all = [...new Set(deals.map(d=>getProvince(d.location||"")).filter(Boolean))];
   const btn = document.getElementById("prov-btn-label");
   if (!btn) return;
-  if (filterProvinces.size === 0 || filterProvinces.size === all.length)
+  if (_provExplicitEmpty)
+    btn.textContent = "🗺 0 จังหวัด";
+  else if (filterProvinces.size === 0 || filterProvinces.size === all.length)
     btn.textContent = "🗺 ทุกจังหวัด";
   else
     btn.textContent = `🗺 ${filterProvinces.size} จังหวัด`;
@@ -1326,8 +1334,8 @@ function updateProvBtn() {
 
 function selectAllProvs(checked) {
   const all = [...new Set(deals.map(d=>getProvince(d.location||"")).filter(Boolean))];
-  if (checked) filterProvinces = new Set(all);
-  else filterProvinces = new Set();
+  if (checked) { _provExplicitEmpty = false; filterProvinces = new Set(all); }
+  else          { _provExplicitEmpty = true;  filterProvinces = new Set(); }
   buildProvChecks(); updateProvBtn(); curPage=1; renderDeals();
 }
 
@@ -1387,6 +1395,7 @@ function applyFilters(list) {
     }
     if (filterType && d.property_type !== filterType) return false;
     // Multi-province filter: empty set = show all
+    if (_provExplicitEmpty) return false;  // ล้างทั้งหมด → show 0 deals
     if (filterProvinces.size > 0) {
       const prov = getProvince(d.location||"");
       if (!filterProvinces.has(prov)) return false;
@@ -1566,7 +1575,7 @@ function resetFilters() {
     const el = document.getElementById(id); if(el) el.value = "";
   });
   const _distEl = document.getElementById("filter-district"); if(_distEl) _distEl.value = "";
-  filterProvinces = new Set(DEFAULT_PROVS);  // reset to 3 provinces default
+  filterProvinces = new Set(DEFAULT_PROVS); _provExplicitEmpty = false;  // reset to 3 provinces default
   document.getElementById("search-box").value="";
   document.getElementById("source-select").value="";
   document.getElementById("chip-analyzed")?.classList.remove("active");
@@ -1714,7 +1723,7 @@ function renderDeals() {
                         || filterSqmMin!==null||filterSqmMax!==null;
     if (!hasOtherFilter) {
       const hiddenBy = [...filterProvinces].join(", ");
-      filterProvinces = new Set();
+      filterProvinces = new Set(); _provExplicitEmpty = false;
       buildProvChecks();
       updateProvBtn();
       showToast(`🗺 ไม่พบดีลใน "${hiddenBy}" — แสดงทุกจังหวัดแทน`);
