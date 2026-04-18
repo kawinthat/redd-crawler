@@ -504,10 +504,37 @@ async def _run_analysis(
             try:
                 result = await analyzer.analyze_deal(deal)
                 if result:
-                    update_data = {k: v for k, v in result.items() if k != "ai_analysis"}
+                    # ── whitelist: เฉพาะ column ที่มีอยู่ใน deals table ─────────
+                    VALID_COLS = {
+                        "ai_analysis", "ai_analyzed_at", "updated_at",
+                        "roi_data_source", "roi_percent", "roi_min", "roi_max",
+                        "roi_valid", "roi_flag", "priority",
+                        "market_value", "market_value_min", "market_value_max",
+                        "market_value_before_reno",
+                        "market_price_sqm", "market_price_sqm_min", "market_price_sqm_max",
+                        "price_original_low", "price_original_high",
+                        "price_good_low", "price_good_high",
+                        "price_reno_low", "price_reno_high",
+                        "rental_monthly_est",
+                        "reno_cost_total", "reno_cost_sqm", "transfer_fee",
+                        "total_cost", "estimated_profit", "estimated_profit_max",
+                        "project_official_name", "project_developer", "project_address",
+                        "source_urls",
+                    }
+                    update_data = {
+                        k: v for k, v in result.items()
+                        if k in VALID_COLS and k != "ai_analysis"
+                    }
                     update_data["ai_analysis"] = result.get("ai_analysis")
                     update_data["updated_at"]  = datetime.now(timezone.utc).isoformat()
-                    db.table("deals").update(update_data).eq("id", deal["id"]).execute()
+                    try:
+                        db.table("deals").update(update_data).eq("id", deal["id"]).execute()
+                    except Exception as db_err:
+                        logger.error(
+                            f"DB update FAILED deal {deal.get('id')}: {db_err} "
+                            f"| fields={list(update_data.keys())}"
+                        )
+                        raise
                     # Distinguish cache vs Sonar Pro
                     if result.get("roi_data_source") == "cache":
                         _analyze_state["cached"] += 1
@@ -516,7 +543,7 @@ async def _run_analysis(
                 else:
                     _analyze_state["failed_count"] += 1
             except Exception as deal_err:
-                logger.warning(f"Deal analyze error ({deal.get('id')}): {deal_err}")
+                logger.error(f"Deal analyze error ({deal.get('id')}): {deal_err}")
                 _analyze_state["failed_count"] += 1
 
         elapsed_total = (datetime.now(timezone.utc) - start_time).total_seconds()
