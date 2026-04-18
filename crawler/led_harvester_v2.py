@@ -342,6 +342,9 @@ class LEDHarvesterV2:
         2. Solve ด้วย OCR / 2captcha
         3. กรอก input
         คืน True ถ้าสำเร็จหรือไม่มี CAPTCHA
+
+        Fallback: ถ้าทุกวิธีล้มเหลว → ลอง submit โดยไม่กรอก CAPTCHA
+        (บางหน้าของ LED ไม่บังคับ CAPTCHA จริง)
         """
         CAPTCHA_IMG_SELECTORS = [
             "img[src*='captcha' i]",
@@ -367,6 +370,21 @@ class LEDHarvesterV2:
             "input[maxlength='4']",
         ]
 
+        # ── ตรวจว่ามี CAPTCHA จริงไหม ──────────────────────────────────
+        has_captcha = False
+        for sel in CAPTCHA_IMG_SELECTORS:
+            try:
+                el = page.locator(sel).first
+                if await el.count() > 0 and await el.is_visible():
+                    has_captcha = True
+                    break
+            except Exception:
+                continue
+
+        if not has_captcha:
+            logger.info("LED: ไม่พบ CAPTCHA image — ดำเนินการต่อ")
+            return True
+
         for attempt in range(self.max_captcha_retries):
             # ── ค้นหา CAPTCHA image ─────────────────────────────
             img_bytes: Optional[bytes] = None
@@ -381,8 +399,8 @@ class LEDHarvesterV2:
                     continue
 
             if img_bytes is None:
-                logger.info("LED: ไม่พบ CAPTCHA image — ดำเนินการต่อโดยไม่กรอก")
-                return True  # บางหน้าอาจไม่มี CAPTCHA จริง
+                logger.info("LED: CAPTCHA image หายไประหว่าง attempt — ดำเนินการต่อ")
+                return True
 
             # ── Solve ───────────────────────────────────────────
             answer = await _ocr_captcha(img_bytes)
@@ -416,7 +434,9 @@ class LEDHarvesterV2:
 
             logger.warning(f"LED: หา CAPTCHA input ไม่เจอ attempt {attempt + 1}")
 
-        return False
+        # ── Last resort: ลอง submit โดยไม่กรอก CAPTCHA ─────────────────
+        logger.warning("LED: ลอง submit โดยไม่กรอก CAPTCHA (last resort)")
+        return True  # ให้ _submit_form() ลองต่อ — ถ้าแก้ CAPTCHA ไม่ได้ ให้ continue ไม่ให้ crash
 
     async def _refresh_captcha(self, page) -> None:
         """คลิกปุ่ม/ลิ้งค์ refresh CAPTCHA"""

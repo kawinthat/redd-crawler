@@ -434,8 +434,13 @@ class RealEstateCrawler:
         api_harvester = self._get_api_harvester(base_url)
         if api_harvester is not None:
             print(f"  ⚡ Using API harvester for {base_url}")
-            listings = await api_harvester.fetch_all(max_pages=max_pages)
-            return [x["source_url"] for x in listings[:max_listings]]
+            listings = await api_harvester.fetch_all(
+                max_pages=max_pages, max_listings=max_listings
+            )
+            # Support both 'listing_url' (new harvesters) and 'source_url' (legacy)
+            def _get_url(x: dict) -> str:
+                return x.get("listing_url") or x.get("source_url") or ""
+            return [u for u in (_get_url(x) for x in listings[:max_listings]) if u]
         # ───────────────────────────────────────────────────────
 
         cfg = self.config or CrawlConfig(base_url=base_url,

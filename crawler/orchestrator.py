@@ -95,6 +95,13 @@ class AutonomousCrawler:
             self._stats["links_found"] = len(listing_urls)
             logger.info(f"📋 พบ {len(listing_urls)} listing URLs (API records: {len(api_data)})")
 
+            # ── อัพเดท live_stats["pages"] หลัง harvest เสร็จ (ทั้ง API และ Playwright path) ──
+            # สำหรับ API harvester: pages_crawled = จำนวน listings ที่ดึงได้
+            # สำหรับ Playwright:    pages_crawled = จำนวนหน้าที่ paginate ผ่าน
+            harvested_count = len(api_data) if api_data else self._stats.get("pages_crawled", 0)
+            if harvested_count > 0:
+                self.live_stats["pages"] = self.live_stats.get("pages", 0) + harvested_count
+
             if not listing_urls and not api_data:
                 logger.warning("ไม่พบ listing — จบการทำงาน")
                 self._stats["finished_at"] = datetime.now(timezone.utc).isoformat()
@@ -111,7 +118,6 @@ class AutonomousCrawler:
                 self._stats["pages_crawled"] = len(api_data)
                 # live stats: แสดงจำนวน scraped ทันที
                 self.live_stats["scraped"] = self.live_stats.get("scraped", 0) + len(api_data)
-                self.live_stats["pages"]   = self.live_stats.get("pages", 0)   + len(api_data)
 
                 for url, record in api_data.items():
                     deal = self._api_record_to_deal(record)
@@ -255,6 +261,7 @@ class AutonomousCrawler:
                     break
 
                 self._stats["pages_crawled"] += 1
+                self.live_stats["pages"] = self.live_stats.get("pages", 0) + 1
                 new_links = self.harvester.extract_listing_links(html, current_url)
                 all_urls.update(new_links)
                 logger.info(f"  Page {page_num}: +{len(new_links)} URLs (total {len(all_urls)})")
