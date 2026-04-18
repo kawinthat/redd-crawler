@@ -235,6 +235,31 @@ input,select{font-family:var(--font)}
 .roi-pill.low{background:var(--redDim);color:var(--red);border:1px solid var(--redBorder)}
 .roi-pill.suspect{background:var(--panel2);color:var(--textMid);border:1px solid var(--border)}
 
+/* ── RICH AI ANALYSIS REPORT ── */
+.ai-report{font-size:10.5px;line-height:1.6}
+.ai-report-section{margin-bottom:10px}
+.ai-report-hd{font-size:9px;font-weight:800;color:var(--textLight);letter-spacing:.6px;
+  text-transform:uppercase;margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid var(--border)}
+.ai-tbl{width:100%;border-collapse:collapse}
+.ai-tbl td{padding:2px 4px;vertical-align:top;font-size:10px}
+.ai-tbl td:first-child{color:var(--textMid);white-space:nowrap;width:44%;padding-right:6px}
+.ai-tbl td:last-child{color:var(--text);font-weight:600}
+.price-tier{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:4px}
+.price-tier-box{background:var(--bg);border:1px solid var(--border);border-radius:5px;
+  padding:5px 6px;text-align:center}
+.price-tier-lbl{font-size:8.5px;color:var(--textLight);margin-bottom:2px;line-height:1.3}
+.price-tier-val{font-weight:800;font-size:11px}
+.price-tier-val.tier-a{color:var(--textMid)}
+.price-tier-val.tier-b{color:var(--yellow)}
+.price-tier-val.tier-c{color:var(--green)}
+.loc-chip{display:inline-block;background:var(--panel2);border:1px solid var(--border);
+  border-radius:4px;padding:2px 6px;font-size:9px;margin:2px 2px 0 0;color:var(--textMid)}
+.loc-chip b{color:var(--text)}
+.ai-source-links{margin-top:5px;font-size:9px;color:var(--textLight)}
+.ai-source-links a{color:var(--blue);text-decoration:none}
+.ai-source-links a:hover{text-decoration:underline}
+.roi-range-big{font-size:15px;font-weight:900;letter-spacing:-.3px}
+
 /* ── LOG ── */
 #log-wrap{background:var(--panel);border-radius:10px;border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow-sm)}
 .log-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--panel2)}
@@ -1693,107 +1718,175 @@ function dealCard(d) {
       <span class="img-src-badge" style="background:${srcCol}22;color:${srcCol};border:1px solid ${srcCol}44">${(src.split(".")[0]||"").toUpperCase()}</span>
     </div>`;
 
-  // ── ROI Breakdown — แสดงเมื่อมีข้อมูลราคาตลาดจาก Sonar Pro ──────────────
-  // คำนวณสดทุกครั้ง ห้ามใช้ค่า stale จาก DB (estimated_profit / total_cost)
-  const hasBreakdown = !!(d.market_value && d.market_value > 0);
-  const breakdownId = "bd-" + cardId;
+  // ── Rich AI Report Breakdown ────────────────────────────────────────
+  const hasBreakdown = !!(d.market_value_min || d.market_value || d.ai_analysis);
+  const breakdownId  = "bd-" + cardId;
+
+  function _priceRange(low, high) {
+    if (!low && !high) return "—";
+    if (low && high && low !== high) return `฿${fmtNum(low)} – ฿${fmtNum(high)}`;
+    return `฿${fmtNum(low || high)}`;
+  }
+
   const breakdownHTML = hasBreakdown ? `
     <div class="roi-breakdown" id="${breakdownId}">
       ${(()=>{
         const buyPrice   = d.buy_price || d.price || 0;
         const renoTotal  = d.reno_cost_total || 0;
-        const renoArea   = d.area_sqm || d.usable_area_sqm || 0;
-        const renoSqm    = d.reno_cost_sqm || (renoArea>0 && renoTotal>0 ? Math.round(renoTotal/renoArea) : null);
-        // ── ต้นทุน ──────────────────────────────────────────────────────────
-        // ค่าโอน 5.5% (2%โอน + 0.5%อากร + 1%จดจำนอง + 2%รายได้จากการโอน ≈ 5.5%)
-        const transfer    = d.transfer_fee && d.transfer_fee > 0
-                            ? d.transfer_fee
-                            : Math.round(buyPrice * 0.055);
-        const transferPct = buyPrice > 0 ? (transfer/buyPrice*100).toFixed(1) : "5.5";
-        // คำนวณต้นทุนรวมจาก line items จริงเสมอ — ห้ามใช้ d.total_cost (อาจ stale)
-        const totalCost   = buyPrice + renoTotal + transfer;
-        // ── ราคาตลาด (ช่วง low–high) ─────────────────────────────────────
-        const mktMin      = d.market_value_min || d.market_value || 0;
-        const mktMax      = d.market_value_max || d.market_value || 0;
-        const mktMidVal   = mktMin > 0 && mktMax > 0 ? Math.round((mktMin+mktMax)/2) : (mktMin||mktMax);
-        const sqmMin      = d.market_price_sqm_min || d.market_price_sqm || null;
-        const sqmMax      = d.market_price_sqm_max || d.market_price_sqm || null;
-        const hasValRange = mktMin > 0 && mktMax > 0 && mktMin !== mktMax;
-        const hasSqmRange = sqmMin && sqmMax && sqmMin !== sqmMax;
-        // ฿/ตร.ม. display
-        const sqmDisp = hasSqmRange
-          ? `฿${fmtNum(sqmMin)}–${fmtNum(sqmMax)}/ตร.ม.`
-          : sqmMin ? `฿${fmtNum(sqmMin)}/ตร.ม.` : "";
-        // ช่วงราคารวม display
-        const mktAfterDisp = hasValRange
-          ? `฿${fmtNum(mktMin)} – ฿${fmtNum(mktMax)}`
-          : mktMidVal > 0 ? `฿${fmtNum(mktMidVal)}` : "—";
+        const renoArea   = d.area_sqm || 0;
+        const renoSqm    = d.reno_cost_sqm || (renoArea>0&&renoTotal>0?Math.round(renoTotal/renoArea):null);
+        const transfer   = d.transfer_fee>0 ? d.transfer_fee : Math.round(buyPrice*0.055);
+        const transferPct= buyPrice>0 ? (transfer/buyPrice*100).toFixed(1) : "5.5";
+        const totalCost  = buyPrice + renoTotal + transfer;
 
-        // ── กำไร/ขาดทุน — ใช้ conservative (min) ──────────────────────
-        const profitMin   = mktMin > 0 ? mktMin - totalCost : null;
-        const profitMax   = mktMax > 0 ? mktMax - totalCost : null;
-        const hasProfitRange = profitMin !== null && profitMax !== null && profitMin !== profitMax;
-        const profitDisp  = profitMin === null
-          ? "—"
-          : hasProfitRange
-            ? `${profitMin>=0?"+":"-"}฿${fmtNum(Math.abs(Math.round(profitMin)))} – ${profitMax>=0?"+":"-"}฿${fmtNum(Math.abs(Math.round(profitMax)))}`
-            : `${profitMin>=0?"+":"-"}฿${fmtNum(Math.abs(Math.round(profitMin)))}`;
-        const profitIsLoss = profitMin !== null && profitMin < 0;
+        // ── ราคา 3 ระดับ ───────────────────────────────────────────────
+        const origLow    = d.price_original_low  || null;
+        const origHigh   = d.price_original_high || null;
+        const goodLow    = d.price_good_low       || null;
+        const goodHigh   = d.price_good_high      || null;
+        const renoLow    = d.price_reno_low       || d.market_value_min || d.market_value || null;
+        const renoHigh   = d.price_reno_high      || d.market_value_max || d.market_value || null;
+        const rental     = d.rental_monthly_est   || null;
 
-        // ── ROI — ช่วง ─────────────────────────────────────────────────
-        const roiCalcMin  = mktMin > 0 && totalCost > 0 ? (profitMin / totalCost) * 100 : null;
-        const roiCalcMax  = mktMax > 0 && totalCost > 0 ? (profitMax / totalCost) * 100 : null;
-        const hasRoiCalcRange = roiCalcMin !== null && roiCalcMax !== null && Math.abs(roiCalcMax - roiCalcMin) >= 1;
-        const roiDisp2    = roiCalcMin === null
-          ? "—"
-          : hasRoiCalcRange
-            ? `${roiCalcMin>=0?"+":""}${roiCalcMin.toFixed(1)}% ~ ${roiCalcMax>=0?"+":""}${roiCalcMax.toFixed(1)}%`
-            : `${roiCalcMin>=0?"+":""}${roiCalcMin.toFixed(1)}%`;
-        const roiCol2     = roiCalcMin===null?"var(--textLight)":roiCalcMin>=30?"var(--green)":roiCalcMin>=15?"var(--yellow)":"var(--red)";
+        // ── กำไร/ROI range ────────────────────────────────────────────
+        const profMin    = renoLow  ? renoLow  - totalCost : null;
+        const profMax    = renoHigh ? renoHigh - totalCost : null;
+        const roiMin2    = profMin != null && totalCost>0 ? (profMin/totalCost*100) : null;
+        const roiMax2    = profMax != null && totalCost>0 ? (profMax/totalCost*100) : null;
+        const roiHasR    = roiMin2!=null && roiMax2!=null && Math.abs(roiMax2-roiMin2)>=1;
+        const roiDisp3   = roiMin2==null ? "—"
+          : roiHasR ? `${roiMin2>=0?"+":""}${roiMin2.toFixed(1)}% – ${roiMax2>=0?"+":""}${roiMax2.toFixed(1)}%`
+          : `${roiMin2>=0?"+":""}${roiMin2.toFixed(1)}%`;
+        const roiCol3    = roiMin2==null?"var(--textLight)":roiMin2>=30?"var(--green)":roiMin2>=15?"var(--yellow)":"var(--red)";
+        const profDisp   = profMin==null ? "—"
+          : profMin!==profMax && profMax!=null
+            ? `${profMin>=0?"+":"-"}฿${fmtNum(Math.abs(Math.round(profMin)))} – ${profMax>=0?"+":"-"}฿${fmtNum(Math.abs(Math.round(profMax)))}`
+            : `${profMin>=0?"+":"-"}฿${fmtNum(Math.abs(Math.round(profMin)))}`;
 
-        // ── แหล่งข้อมูล listing URLs ──────────────────────────────────
-        const srcUrls = (d.source_urls || []).filter(u => typeof u === "string" && u.startsWith("http"));
-        const urlsHTML = srcUrls.length > 0
-          ? `<div style="margin-top:6px;font-size:9px;color:var(--textMid)">🔗 แหล่งอ้างอิง:<br>${srcUrls.slice(0,3).map(u=>{
-              const host = u.replace(/^https?:\/\/(www\.)?/,"").split("/")[0];
-              return `<a href="${u}" target="_blank" style="color:var(--blue);text-decoration:none">${host}</a>`;
-            }).join(" · ")}</div>`
-          : "";
+        // ── Project info ──────────────────────────────────────────────
+        const projName   = d.project_official_name || d.project_name || null;
+        const projDev    = d.project_developer || null;
+        const projAddr   = d.project_address || null;
+        const projBed    = d.bedrooms || (d.ai_analysis?.project?.bedrooms) || null;
+        const projBath   = d.bathrooms || (d.ai_analysis?.project?.bathrooms) || null;
+        const projUsable = d.ai_analysis?.project?.usable_sqm_low || null;
+        const amenities  = (d.ai_analysis?.project?.amenities || []).slice(0,4);
 
-        return `
-      <div style="font-size:9px;font-weight:700;color:var(--textLight);letter-spacing:.5px;margin-bottom:4px">── ต้นทุน ──────────────────────</div>
-      <div class="rb-row"><span class="rb-lbl">ราคาซื้อ</span><span class="rb-val">฿${fmtNum(buyPrice)}</span></div>
-      <div class="rb-row"><span class="rb-lbl">ค่ารีโนเวท${renoSqm?" <span style='font-size:9px;color:var(--textLight)'>(฿"+fmtNum(renoSqm)+"/ตร.ม.)</span>":""}</span><span class="rb-val">฿${fmtNum(renoTotal)}</span></div>
-      <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง <span style="font-size:9px;color:var(--textLight)">(${transferPct}%)</span></span><span class="rb-val">฿${fmtNum(transfer)}</span></div>
-      <div class="rb-row rb-total" style="border-top:1px solid var(--border);margin-top:3px;padding-top:3px"><span class="rb-lbl" style="font-weight:800">ต้นทุนรวม</span><span class="rb-val" style="color:var(--yellow);font-size:13px">฿${fmtNum(totalCost)}</span></div>
+        // ── Target buyers ─────────────────────────────────────────────
+        const buyers     = d.ai_analysis?.target_buyers || {};
+        const buyCols    = [
+          buyers.primary_group   ? ["กลุ่มหลัก",    buyers.primary_group]   : null,
+          buyers.income_range    ? ["ช่วงรายได้",   buyers.income_range]    : null,
+          buyers.main_occupations?.length ? ["อาชีพหลัก", buyers.main_occupations.slice(0,3).join(", ")] : null,
+          buyers.secondary_group ? ["กลุ่มรอง",     buyers.secondary_group] : null,
+        ].filter(Boolean);
 
-      <div style="font-size:9px;font-weight:700;color:var(--textLight);letter-spacing:.5px;margin:8px 0 4px">── ราคาตลาดหลังรีโนเวท (จากเว็บประกาศขาย) ─</div>
-      ${mktMin>0
-        ? `<div class="rb-row">
-             <span class="rb-lbl">ช่วงราคาตลาด ${sqmDisp?`<span style='font-size:9px;color:var(--textLight)'>(${sqmDisp})</span>`:""}
-             </span>
-             <span class="rb-val" style="color:var(--green)">${mktAfterDisp}</span>
-           </div>`
-        : `<div class="rb-row"><span class="rb-lbl">ราคาตลาด</span><span class="rb-val" style="color:var(--textLight)">— ยังไม่มีข้อมูล</span></div>`
-      }
+        // ── Location access ───────────────────────────────────────────
+        const locAccess  = (d.ai_analysis?.location_access || []).slice(0,5);
 
-      <div style="height:1px;background:var(--border);margin:6px 0"></div>
-      <div class="rb-row rb-total">
-        <span class="rb-lbl" style="font-weight:800">${profitIsLoss?"❌ ขาดทุน":"💰 กำไรโดยประมาณ"}</span>
-        <span class="rb-val" style="color:${profitIsLoss?"var(--red)":"var(--green)"};font-size:13px;font-weight:900">${profitDisp}</span>
+        // ── Source URLs ───────────────────────────────────────────────
+        const srcUrls    = (d.source_urls||[]).filter(u=>typeof u==="string"&&u.startsWith("http"));
+
+        return `<div class="ai-report">
+
+      ${/* ── ส่วน 1: ต้นทุน ── */""}
+      <div class="ai-report-section">
+        <div class="ai-report-hd">💸 ต้นทุนการลงทุน</div>
+        <table class="ai-tbl">
+          <tr><td>ราคาซื้อ (NPA)</td><td style="color:var(--text)">฿${fmtNum(buyPrice)}</td></tr>
+          <tr><td>ค่ารีโนเวท${renoSqm?` <span style="font-size:9px;color:var(--textLight)">(฿${fmtNum(renoSqm)}/ตร.ม.)</span>`:""}</td><td>฿${fmtNum(renoTotal)}</td></tr>
+          <tr><td>ค่าโอน+จดจำนอง (${transferPct}%)</td><td>฿${fmtNum(transfer)}</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="font-weight:800;color:var(--text)">ต้นทุนรวม</td><td style="color:var(--yellow);font-weight:900;font-size:12px">฿${fmtNum(totalCost)}</td></tr>
+        </table>
       </div>
-      <div class="rb-row" style="margin-top:3px">
-        <span class="rb-lbl">ROI (conservative ~ optimistic)</span>
-        <span class="rb-val" style="color:${roiCol2};font-weight:800;font-size:12px">${roiDisp2}</span>
+
+      ${/* ── ส่วน 2: ราคาตลาด 3 ระดับ ── */""}
+      <div class="ai-report-section">
+        <div class="ai-report-hd">💰 ราคาขายตลาด (เว็บประกาศขาย)</div>
+        <div class="price-tier">
+          <div class="price-tier-box">
+            <div class="price-tier-lbl">🏚 สภาพเดิม<br>ไม่รีโนเวท</div>
+            <div class="price-tier-val tier-a">${_priceRange(origLow,origHigh)}</div>
+          </div>
+          <div class="price-tier-box">
+            <div class="price-tier-lbl">🏠 สภาพดี<br>ต่อเติมบ้าง</div>
+            <div class="price-tier-val tier-b">${_priceRange(goodLow,goodHigh)}</div>
+          </div>
+          <div class="price-tier-box" style="border-color:var(--greenBorder);background:var(--greenDim)">
+            <div class="price-tier-lbl" style="color:var(--green)">🏡 รีโนเวทใหม่<br>พร้อมอยู่</div>
+            <div class="price-tier-val tier-c">${_priceRange(renoLow,renoHigh)}</div>
+          </div>
+        </div>
+        ${rental?`<div style="margin-top:5px;font-size:9px;color:var(--textMid)">🏘 ค่าเช่าโดยประมาณ: <b style="color:var(--blue)">฿${fmtNum(rental)}/เดือน</b></div>`:""}
       </div>
-      ${urlsHTML}
-      <div style="font-size:9px;color:var(--textMid);margin-top:6px;line-height:1.5">
+
+      ${/* ── ส่วน 3: กำไร + ROI ── */""}
+      <div class="ai-report-section" style="background:${roiMin2!=null&&roiMin2>=30?"var(--greenDim)":roiMin2!=null&&roiMin2>=15?"var(--yellowDim)":"var(--panel2)"};border:1px solid ${roiMin2!=null&&roiMin2>=30?"var(--greenBorder)":roiMin2!=null&&roiMin2>=15?"var(--yellowBorder)":"var(--border)"};border-radius:6px;padding:6px 8px">
+        <div class="ai-report-hd">📈 สรุปผลตอบแทน</div>
+        <table class="ai-tbl">
+          <tr><td>กำไรโดยประมาณ</td><td style="color:${profMin!=null&&profMin>=0?"var(--green)":"var(--red)"};font-weight:900">${profDisp}</td></tr>
+          <tr><td>ROI (ต่ำสุด–สูงสุด)</td><td><span class="roi-range-big" style="color:${roiCol3}">${roiDisp3}</span></td></tr>
+        </table>
+      </div>
+
+      ${/* ── ส่วน 4: ข้อมูลโครงการ ── */""}
+      ${projName||projDev||projAddr?`
+      <div class="ai-report-section">
+        <div class="ai-report-hd">📍 ข้อมูลโครงการ</div>
+        <table class="ai-tbl">
+          ${projName?`<tr><td>ชื่อโครงการ</td><td>${projName}</td></tr>`:""}
+          ${projDev ?`<tr><td>ผู้พัฒนา</td><td>${projDev}</td></tr>`:""}
+          ${projAddr?`<tr><td>ที่ตั้ง</td><td style="font-size:9px">${projAddr}</td></tr>`:""}
+          ${projBed||projBath?`<tr><td>ห้องนอน/น้ำ</td><td>${projBed||"?"}BR / ${projBath||"?"}Bath</td></tr>`:""}
+          ${projUsable?`<tr><td>พื้นที่ใช้สอย</td><td>~${projUsable} ตร.ม.</td></tr>`:""}
+          ${amenities.length?`<tr><td>สิ่งอำนวยฯ</td><td style="font-size:9px">${amenities.join(", ")}</td></tr>`:""}
+        </table>
+      </div>`:""}
+
+      ${/* ── ส่วน 5: กลุ่มลูกค้า ── */""}
+      ${buyCols.length?`
+      <div class="ai-report-section">
+        <div class="ai-report-hd">👥 กลุ่มลูกค้าเป้าหมาย</div>
+        <table class="ai-tbl">
+          ${buyCols.map(([lbl,val])=>`<tr><td>${lbl}</td><td>${val}</td></tr>`).join("")}
+        </table>
+      </div>`:""}
+
+      ${/* ── ส่วน 6: ทำเล ── */""}
+      ${locAccess.length?`
+      <div class="ai-report-section">
+        <div class="ai-report-hd">🗺️ ทำเลและการเดินทาง</div>
+        <div style="margin-top:4px">
+          ${locAccess.map(loc=>`<span class="loc-chip"><b>${loc.point||""}</b>${loc.detail?" "+loc.detail:""}</span>`).join("")}
+        </div>
+      </div>`:""}
+
+      ${/* ── สรุป ── */""}
+      ${d.ai_analysis?.summary_th?`
+      <div class="ai-report-section" style="border-top:1px solid var(--border);padding-top:6px;margin-top:2px">
+        <div class="ai-report-hd">📝 สรุปภาพรวม</div>
+        <div style="font-size:9.5px;color:var(--textMid);line-height:1.6">${d.ai_analysis.summary_th}</div>
+      </div>`:""}
+
+      ${/* ── แหล่งอ้างอิง ── */""}
+      ${srcUrls.length?`
+      <div class="ai-source-links">
+        🔗 แหล่งอ้างอิง:
+        ${srcUrls.slice(0,5).map(u=>{
+          const host=u.replace(/^https?:\/\/(www\.)?/,"").split("/")[0];
+          return `<a href="${u}" target="_blank">${host}</a>`;
+        }).join(" · ")}
+      </div>`:""}
+
+      <div style="font-size:9px;color:var(--textLight);margin-top:6px">
         ${d.roi_data_source==="sonar_pro"
-          ? "✅ ราคาจากเว็บประกาศขายจริง (Sonar Pro)"
+          ? "✅ ราคาจากเว็บประกาศขายจริง (Sonar Pro + Perplexity)"
           : d.roi_data_source==="cache"
             ? "♻️ ราคาตลาดจาก pattern cache"
-            : "⚠️ ยังไม่มีราคาตลาด — กด Re-analyze เพื่อดึงข้อมูล"}
-      </div>`;
+            : "⚠️ ยังไม่มีการวิเคราะห์ — กด 🧠 Analyze เพื่อดึงข้อมูล"}
+      </div>
+
+    </div>`;
       })()}
     </div>` : "";
 

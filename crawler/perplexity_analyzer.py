@@ -45,55 +45,86 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL_PRO = "perplexity/sonar-pro"
 
 # ── Prompt Template ───────────────────────────────────────
-# เข้มงวด: ค้นเฉพาะเว็บฝากขายบ้านเท่านั้น + บังคับ URL จริง + ราคาเป็นช่วง low-high
+# ขอข้อมูลครบ 4 ส่วน: โครงการ / ราคา 3 ระดับ / กลุ่มลูกค้า / ทำเล
+# แหล่งข้อมูล: เฉพาะเว็บฝากขายเท่านั้น ห้ามประมาณ
 PROMPT_TEMPLATE = """\
-ค้นหาประกาศขายจริงของอสังหาริมทรัพย์ใกล้เคียง จากเว็บฝากขายบ้านต่อไปนี้เท่านั้น:
-• ddproperty.com
-• fazwaz.co.th
-• propertyonlineplus.com
-• baania.com
-• livinginsider.com
-• dotproperty.co.th
-• kaidee.com
+วิเคราะห์ทรัพย์อสังหาริมทรัพย์นี้โดยค้นหาข้อมูลจากเว็บฝากขายบ้านต่อไปนี้เท่านั้น:
+• ddproperty.com  • fazwaz.co.th  • baania.com  • livinginsider.com
+• dotproperty.co.th  • propertyonlineplus.com  • kaidee.com
+• ghbhomecenter.com (ธอส.)  • facebook.com/marketplace (ประกาศขายบ้าน)
 
-ทรัพย์เป้าหมาย (ต้องการเปรียบเทียบราคาขาย):
+ทรัพย์เป้าหมาย:
 ประเภท: {type_th}
 โครงการ/หมู่บ้าน: {project_name}
-พื้นที่: {area}
-จังหวัด: {province}
-เขต/อำเภอ: {district}
-สภาพเป้าหมาย: สภาพดี พร้อมอยู่ (เทียบเท่าหลังรีโนเวทแล้ว)
+พื้นที่/ขนาด: {area}
+จังหวัด: {province}  |  เขต/อำเภอ: {district}
+ราคา NPA (ราคาซื้อ): {buy_price_fmt}
 
-ขั้นตอน:
-1. ค้นหาประกาศขายที่ใกล้เคียงที่สุด (ประเภท + ทำเล + ขนาด) จากเว็บในรายการข้างต้นเท่านั้น
-2. คำนวณ ฿/ตร.ม. ของแต่ละประกาศที่เจอ
-3. รายงานช่วงราคา: ต่ำสุด (low) และ สูงสุด (high) ฿/ตร.ม. จากประกาศจริงที่ค้นเจอ
+ต้องการข้อมูล 4 ส่วน:
 
-กฎเหล็ก (ห้ามฝ่าฝืนเด็ดขาด):
-1. ห้ามใช้แหล่งอื่นนอกจากเว็บฝากขายบ้านในรายการข้างต้น — ห้ามใช้ข่าว บทความ ราคาประเมิน ธปท. DDinsight หรือแหล่งอื่นใด
-2. ห้ามประมาณหรือคาดเดาราคา — ถ้าค้นไม่เจอประกาศจริง ให้ใส่ null ทุก field
-3. listing_urls ต้องเป็น URL ประกาศขายจริง ห้ามใส่ URL หน้าหลักหรือหน้าค้นหา
-4. ตอบ JSON เท่านั้น ห้ามมีข้อความอื่น ห้าม markdown ห้าม backtick
+[ส่วนที่ 1 — ข้อมูลโครงการ]
+ค้นหา: ชื่อทางการของโครงการ, ผู้พัฒนา/เจ้าของโครงการ, ที่อยู่จริง (ตำบล อำเภอ จังหวัด รหัสไปรษณีย์),
+จำนวนห้องนอน/ห้องน้ำ, พื้นที่ใช้สอย (ตร.ม.), สิ่งอำนวยความสะดวกในโครงการ
 
-JSON (หน่วย: บาท/ตร.ม.):
+[ส่วนที่ 2 — ราคาขาย 3 ระดับ (สำคัญมาก)]
+ค้นหาประกาศขายจริงจากเว็บที่ระบุเท่านั้น แบ่งเป็น:
+  ระดับ A — สภาพเดิม ไม่รีโนเวท (ราคาต่ำสุด-สูงสุด พร้อม URL ประกาศ)
+  ระดับ B — สภาพดี / ต่อเติมบ้าง / มีผู้เช่า (ราคาต่ำสุด-สูงสุด พร้อม URL ประกาศ)
+  ระดับ C — รีโนเวทใหม่ ปรับปรุงครบ พร้อมอยู่ (ราคาต่ำสุด-สูงสุด พร้อม URL ประกาศ)
+  ค่าเช่า — ราคาเช่าต่อเดือนโดยประมาณ (ถ้าหาเจอ)
+
+[ส่วนที่ 3 — กลุ่มลูกค้าเป้าหมาย]
+วิเคราะห์: กลุ่มหลัก, ช่วงรายได้, อาชีพหลัก (2-3 อาชีพ), กลุ่มรอง
+
+[ส่วนที่ 4 — ทำเลและการเดินทาง]
+ระยะทาง/เวลาไปยัง: BTS/MRT ใกล้ที่สุด, ห้างสรรพสินค้า, ทางพิเศษ/วงแหวน, นิคมอุตสาหกรรม/โรงงาน
+
+กฎเหล็ก:
+1. ราคาต้องมาจากประกาศจริงจากเว็บที่ระบุเท่านั้น ห้ามประมาณหรือคาดเดา
+2. listing_urls ต้องเป็น URL ประกาศขายจริง ห้ามใส่ URL หน้าค้นหาหรือหน้าหลัก
+3. ถ้าหาข้อมูลจริงไม่เจอ ให้ใส่ null ห้ามกรอกตัวเลขเอง
+4. ตอบ JSON เท่านั้น ห้ามมีข้อความอื่น ห้าม backtick ห้าม markdown
+
+JSON (ราคาหน่วย: บาท):
 {{
-  "listing_urls": [],
-  "market_price_sqm_low": null,
-  "market_price_sqm_high": null,
-  "comparable_count": null,
-  "comparable_projects": [],
-  "target_buyers": [],
+  "project": {{
+    "official_name": null,
+    "developer": null,
+    "exact_address": null,
+    "bedrooms": null,
+    "bathrooms": null,
+    "usable_sqm_low": null,
+    "usable_sqm_high": null,
+    "amenities": []
+  }},
+  "pricing": {{
+    "original_low": null,
+    "original_high": null,
+    "original_urls": [],
+    "good_condition_low": null,
+    "good_condition_high": null,
+    "good_condition_urls": [],
+    "after_reno_low": null,
+    "after_reno_high": null,
+    "after_reno_urls": [],
+    "rental_monthly": null
+  }},
+  "target_buyers": {{
+    "primary_group": null,
+    "income_range": null,
+    "main_occupations": [],
+    "secondary_group": null
+  }},
+  "location_access": [],
   "summary_th": null
 }}
 
-คำอธิบาย fields:
-- listing_urls: URL ประกาศขายจริงที่ค้นเจอ (จากเว็บฝากขายเท่านั้น)
-- market_price_sqm_low: ราคาต่ำสุด ฿/ตร.ม. จากประกาศที่ค้นเจอ (สภาพดี)
-- market_price_sqm_high: ราคาสูงสุด ฿/ตร.ม. จากประกาศที่ค้นเจอ (สภาพดี)
-- comparable_count: จำนวนประกาศที่ค้นเจอและใช้อ้างอิง
-- comparable_projects: โครงการ/หมู่บ้านจากประกาศที่ค้นเจอ
-- target_buyers: กลุ่มผู้ซื้อเป้าหมายที่เหมาะสม
-- summary_th: สรุป 2-3 ประโยค: (1) ช่วงราคาที่ค้นเจอจากเว็บใด (2) ศักยภาพการลงทุน (3) ข้อควรระวัง"""
+คำอธิบาย:
+- pricing.original_low/high: ราคาระดับ A (สภาพเดิม)
+- pricing.good_condition_low/high: ราคาระดับ B (สภาพดี)
+- pricing.after_reno_low/high: ราคาระดับ C (รีโนเวทใหม่) ← ใช้คำนวณ ROI
+- location_access: array ของ {{"point":"BTS คูคต","detail":"10-15 นาที ขับรถ"}}
+- summary_th: สรุป 3-4 ประโยค: ราคาที่ค้นเจอ, ศักยภาพ Flip/Rent, ข้อควรระวัง"""
 
 TYPE_TH_MAP = {
     "house":      "บ้านเดี่ยว",
@@ -127,12 +158,16 @@ def _build_prompt(deal: dict) -> str:
     condition_th = CONDITION_TH_MAP.get(deal.get("condition", "fair"), "พอใช้")
     project     = deal.get("project_name") or "-"
 
+    buy_price = deal.get("buy_price") or deal.get("price") or 0
+    buy_price_fmt = f"฿{buy_price:,.0f}" if buy_price else "ไม่ระบุ"
+
     return PROMPT_TEMPLATE.format(
         type_th=type_th,
         project_name=project,
         area=area_str,
         province=province,
         district=district,
+        buy_price_fmt=buy_price_fmt,
     )
 
 
@@ -227,7 +262,7 @@ class PerplexityAnalyzer:
                             },
                             {"role": "user", "content": prompt},
                         ],
-                        "max_tokens":  800,    # เพิ่มจาก 600 เพราะ listing_urls ใช้ token
+                        "max_tokens":  1500,   # เพิ่มเพราะ 4 ส่วนข้อมูลต้องการ token มากขึ้น
                         "temperature": 0.0,   # 0 = deterministic, ห้ามคาดเดา
                     },
                 )
@@ -250,11 +285,16 @@ class PerplexityAnalyzer:
             return None
 
         # ── Map fields → Supabase deal columns ─────────────────────────
-        # Extract real listing URLs from response
-        listing_urls = [
-            u for u in (analysis.get("listing_urls") or [])
-            if isinstance(u, str) and u.startswith("http")
-        ]
+        # รวบรวม listing URLs จากทุก tier ใน pricing
+        pricing    = analysis.get("pricing") or {}
+        proj_info  = analysis.get("project") or {}
+
+        all_urls: list[str] = []
+        for url_field in ("original_urls", "good_condition_urls", "after_reno_urls"):
+            all_urls += [u for u in (pricing.get(url_field) or [])
+                         if isinstance(u, str) and u.startswith("http")]
+        # deduplicate ไม่เปลี่ยนลำดับ
+        listing_urls = list(dict.fromkeys(all_urls))
 
         enrichment: dict[str, Any] = {
             "ai_analysis":     analysis,
@@ -267,62 +307,76 @@ class PerplexityAnalyzer:
         area_sqm  = deal.get("area_sqm") or deal.get("land_area_sqm") or 0
         buy_price = deal.get("buy_price") or deal.get("price") or 0
 
-        # ── ราคาตลาดหลังรีโนเวท (สภาพดี) — เป็นช่วง low/high ──────────
-        sqm_low  = analysis.get("market_price_sqm_low")
-        sqm_high = analysis.get("market_price_sqm_high")
-
-        # Validate: ต้องเป็นตัวเลข > 0 และสมเหตุสมผล (ไม่น้อยกว่า 5,000 หรือเกิน 500,000 ฿/ตร.ม.)
-        def _valid_sqm(v) -> bool:
+        # ── ราคา 3 ระดับ — ดึงจาก pricing block ────────────────────────
+        def _parse_price(v) -> Optional[int]:
+            """ตรวจสอบและแปลงราคา → int (ต้องอยู่ในช่วง 50,000–500,000,000 บาท)"""
             try:
                 f = float(v)
-                return 5_000 <= f <= 500_000
+                return int(f) if 50_000 <= f <= 500_000_000 else None
             except (TypeError, ValueError):
-                return False
+                return None
 
-        has_low  = sqm_low  is not None and _valid_sqm(sqm_low)
-        has_high = sqm_high is not None and _valid_sqm(sqm_high)
+        orig_low   = _parse_price(pricing.get("original_low"))
+        orig_high  = _parse_price(pricing.get("original_high"))
+        good_low   = _parse_price(pricing.get("good_condition_low"))
+        good_high  = _parse_price(pricing.get("good_condition_high"))
+        reno_low   = _parse_price(pricing.get("after_reno_low"))
+        reno_high  = _parse_price(pricing.get("after_reno_high"))
+        rental     = _parse_price(pricing.get("rental_monthly"))
 
-        if has_low and has_high and area_sqm > 0:
-            sqm_low_f  = float(sqm_low)
-            sqm_high_f = float(sqm_high)
-            # Normalize: low ต้องไม่สูงกว่า high
-            if sqm_low_f > sqm_high_f:
-                sqm_low_f, sqm_high_f = sqm_high_f, sqm_low_f
+        # บันทึก 3 ระดับราคาลง enrichment (สำหรับแสดงผลใน dashboard)
+        if orig_low:  enrichment["price_original_low"]  = orig_low
+        if orig_high: enrichment["price_original_high"] = orig_high
+        if good_low:  enrichment["price_good_low"]      = good_low
+        if good_high: enrichment["price_good_high"]     = good_high
+        if reno_low:  enrichment["price_reno_low"]      = reno_low
+        if reno_high: enrichment["price_reno_high"]     = reno_high
+        if rental:    enrichment["rental_monthly_est"]  = rental
 
-            val_min = int(sqm_low_f  * area_sqm)
-            val_max = int(sqm_high_f * area_sqm)
-            val_mid = int((val_min + val_max) / 2)   # midpoint ใช้เป็น market_value หลัก
+        # บันทึกข้อมูลโครงการ
+        if proj_info.get("official_name"):
+            enrichment["project_official_name"] = proj_info["official_name"]
+        if proj_info.get("developer"):
+            enrichment["project_developer"] = proj_info["developer"]
+        if proj_info.get("exact_address"):
+            enrichment["project_address"] = proj_info["exact_address"]
 
-            enrichment["market_price_sqm_min"] = int(sqm_low_f)
-            enrichment["market_price_sqm_max"] = int(sqm_high_f)
-            enrichment["market_price_sqm"]     = int((sqm_low_f + sqm_high_f) / 2)
-            enrichment["market_value_min"]     = val_min
-            enrichment["market_value_max"]     = val_max
-            enrichment["market_value"]         = val_mid   # backward compat
-            market_value_min = val_min
-            market_value_max = val_max
-        elif has_low and area_sqm > 0:
-            # มีแค่ low — ใช้ low เป็นทั้ง min และ max
-            sqm_low_f = float(sqm_low)
-            val_min   = int(sqm_low_f * area_sqm)
-            enrichment["market_price_sqm_min"] = int(sqm_low_f)
-            enrichment["market_price_sqm_max"] = int(sqm_low_f)
-            enrichment["market_price_sqm"]     = int(sqm_low_f)
-            enrichment["market_value_min"]     = val_min
-            enrichment["market_value_max"]     = val_min
-            enrichment["market_value"]         = val_min
-            market_value_min = market_value_max = val_min
-        elif has_high and area_sqm > 0:
-            # มีแค่ high — ใช้ high เป็นทั้ง min และ max
-            sqm_high_f = float(sqm_high)
-            val_max    = int(sqm_high_f * area_sqm)
-            enrichment["market_price_sqm_min"] = int(sqm_high_f)
-            enrichment["market_price_sqm_max"] = int(sqm_high_f)
-            enrichment["market_price_sqm"]     = int(sqm_high_f)
-            enrichment["market_value_min"]     = val_max
-            enrichment["market_value_max"]     = val_max
-            enrichment["market_value"]         = val_max
-            market_value_min = market_value_max = val_max
+        # ── ราคา after_reno ใช้คำนวณ ROI (เป้าหมายราคาขาย) ──────────
+        # ถ้าไม่มี after_reno ให้ fallback ไป good_condition
+        market_value_min = reno_low or good_low
+        market_value_max = reno_high or good_high or market_value_min
+
+        if market_value_min:
+            # ตรวจสอบความสมเหตุสมผล: ต้องไม่ต่ำกว่าราคาซื้อ × 0.5
+            if buy_price > 0 and market_value_min < buy_price * 0.5:
+                logger.warning(
+                    f"Price sanity fail deal {deal.get('id','?')}: "
+                    f"after_reno {market_value_min:,.0f} < buy_price*0.5 — clearing"
+                )
+                market_value_min = market_value_max = None
+            # ตรวจสอบ: after_reno ต้องสูงกว่า original (ปกติต้องรีโนเวทแล้วแพงขึ้น)
+            elif orig_high and market_value_min < orig_high * 0.8:
+                logger.warning(
+                    f"Price logic fail deal {deal.get('id','?')}: "
+                    f"after_reno_low {market_value_min:,.0f} < original_high*0.8 — clearing"
+                )
+                market_value_min = market_value_max = None
+
+        if market_value_min and market_value_max:
+            val_mid = int((market_value_min + market_value_max) / 2)
+            enrichment["market_value_min"] = market_value_min
+            enrichment["market_value_max"] = market_value_max
+            enrichment["market_value"]     = val_mid   # backward compat
+
+            # คำนวณ ฿/ตร.ม. ถ้ามี usable_sqm
+            usable_sqm = area_sqm
+            if proj_info.get("usable_sqm_low"):
+                try: usable_sqm = float(proj_info["usable_sqm_low"])
+                except: pass
+            if usable_sqm > 0:
+                enrichment["market_price_sqm_min"] = int(market_value_min / usable_sqm)
+                enrichment["market_price_sqm_max"] = int(market_value_max / usable_sqm)
+                enrichment["market_price_sqm"]     = int(val_mid / usable_sqm)
         else:
             market_value_min = market_value_max = None
 
@@ -396,10 +450,10 @@ class PerplexityAnalyzer:
 
         logger.info(
             f"✅ Sonar Pro analyzed deal {deal.get('id','?')} — "
-            f"฿/ตร.ม. {enrichment.get('market_price_sqm_min',0):,.0f}"
-            f"~{enrichment.get('market_price_sqm_max',0):,.0f} | "
-            f"value ฿{enrichment.get('market_value_min',0):,.0f}"
-            f"~฿{enrichment.get('market_value_max',0):,.0f} | "
+            f"orig ฿{enrichment.get('price_original_low',0):,.0f}"
+            f"~{enrichment.get('price_original_high',0):,.0f} | "
+            f"reno ฿{enrichment.get('price_reno_low',0):,.0f}"
+            f"~฿{enrichment.get('price_reno_high',0):,.0f} | "
             f"ROI {enrichment.get('roi_min',0):.1f}%~{enrichment.get('roi_max',0):.1f}% | "
             f"urls={len(listing_urls)}"
         )
