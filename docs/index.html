@@ -6,85 +6,93 @@
 <title>RE:DD — Autonomous Deal Scanner</title>
 <style>
 :root {
-  --bg:#070e14; --panel:#0d1c26; --panel2:#111f2c; --border:#1c3040; --border2:#243d50;
-  --petrol:#1A3C4A; --gold:#C9A84C; --goldLight:#e0c06e; --goldDim:#8a6b2a;
-  --white:#F0EDE8; --gray:#4e6a7a; --grayMid:#6b8a9b; --grayLight:#9ab0bd;
-  --green:#22d07a; --greenDim:#0d3320; --yellow:#f0b429; --red:#e05555; --redDim:#2a1010;
-  --blue:#3b9eff; --purple:#9b6dff; --amber:#f59e0b; --teal:#14b8a6;
+  --bg:#F9FAFB; --panel:#FFFFFF; --panel2:#F3F4F6; --border:#E5E7EB; --border2:#D1D5DB;
+  --accent:#6366F1; --accentLight:#818CF8; --accentDim:#EEF2FF; --accentDark:#4F46E5;
+  --text:#111827; --textMid:#6B7280; --textLight:#9CA3AF;
+  --green:#10B981; --greenDim:#ECFDF5; --greenBorder:#A7F3D0;
+  --yellow:#F59E0B; --yellowDim:#FFFBEB; --yellowBorder:#FDE68A;
+  --red:#EF4444; --redDim:#FEF2F2; --redBorder:#FECACA;
+  --blue:#3B82F6; --blueDim:#EFF6FF;
+  --orange:#F97316; --orangeDim:#FFF7ED;
+  --teal:#14B8A6; --tealDim:#F0FDFA;
+  --purple:#8B5CF6; --purpleDim:#F5F3FF;
   --font:'IBM Plex Sans Thai','Noto Sans Thai',system-ui,sans-serif;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08),0 2px 4px rgba(0,0,0,.04);
+  --shadow-lg:0 10px 30px rgba(0,0,0,.10),0 4px 8px rgba(0,0,0,.06);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--white);font-family:var(--font);min-height:100vh;font-size:14px}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;font-size:14px}
 button{cursor:pointer;font-family:inherit}
-a{color:var(--blue);text-decoration:none;transition:color .15s}
-a:hover{color:var(--goldLight)}
+a{color:var(--accent);text-decoration:none;transition:color .15s}
+a:hover{color:var(--accentDark)}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
 input,select{font-family:var(--font)}
 
 /* ── WAKE BANNER ── */
-#wake-banner{display:none;background:#0a1920;border-bottom:1px solid #f0b42922;padding:8px 20px;align-items:center;gap:10px;font-size:11px}
+#wake-banner{display:none;background:var(--yellowDim);border-bottom:1px solid var(--yellowBorder);padding:8px 20px;align-items:center;gap:10px;font-size:11px}
 #wake-banner .wb-dot{width:6px;height:6px;border-radius:50%;background:var(--yellow);flex-shrink:0;animation:pulse 1.2s infinite}
 
 /* ── HEADER ── */
-#header{background:linear-gradient(120deg,#050b10 0%,#0d1c26 60%,#101e2b 100%);border-bottom:1px solid var(--border);padding:0 20px;display:flex;justify-content:space-between;align-items:center;height:56px;position:sticky;top:0;z-index:100}
+#header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 20px;display:flex;justify-content:space-between;align-items:center;height:56px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-sm)}
 .brand{display:flex;align-items:baseline;gap:10px}
-.brand-logo{color:var(--gold);font-size:20px;font-weight:900;letter-spacing:-0.5px}
+.brand-logo{color:var(--accent);font-size:20px;font-weight:900;letter-spacing:-0.5px}
 .brand-sep{color:var(--border2);font-weight:300}
-.brand-sub{color:var(--grayMid);font-size:12px;font-weight:400}
-#live-badge{background:var(--greenDim);border:1px solid #22d07a44;color:var(--green);font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;display:none;animation:pulse 2s infinite}
+.brand-sub{color:var(--textMid);font-size:12px;font-weight:400}
+#live-badge{background:var(--greenDim);border:1px solid var(--greenBorder);color:var(--green);font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;display:none;animation:pulse 2s infinite}
 .hdr-right{display:flex;gap:8px;align-items:center}
 #api-chip{display:flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:10px}
-.chip-dot{width:6px;height:6px;border-radius:50%;background:var(--gray);transition:all .4s}
-.chip-dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+.chip-dot{width:6px;height:6px;border-radius:50%;background:var(--textLight);transition:all .4s}
+.chip-dot.online{background:var(--green)}
 .chip-dot.error{background:var(--red)}
-#api-label{color:var(--grayLight)}
+#api-label{color:var(--textMid)}
 
 /* ── BUTTONS ── */
 .btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;font-family:var(--font);white-space:nowrap}
-.btn-primary{background:linear-gradient(135deg,var(--gold),var(--goldLight));color:#0d1c26}
-.btn-primary:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover:not(:disabled){background:var(--accentDark);transform:translateY(-1px);box-shadow:var(--shadow-md)}
 .btn-primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
-.btn-ghost{background:transparent;color:var(--grayLight);border:1px solid var(--border)}
-.btn-ghost:hover{border-color:var(--gold);color:var(--goldLight)}
-.btn-danger{background:var(--redDim);color:var(--red);border:1px solid #e0555533;display:none}
-.btn-danger:hover{background:#3a1515}
-.btn-teal{background:#0d2f2c;color:var(--teal);border:1px solid #14b8a633}
-.btn-teal:hover{background:#113534}
+.btn-ghost{background:transparent;color:var(--textMid);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);background:var(--accentDim)}
+.btn-danger{background:var(--redDim);color:var(--red);border:1px solid var(--redBorder);display:none}
+.btn-danger:hover{background:#FEE2E2}
+.btn-teal{background:var(--tealDim);color:var(--teal);border:1px solid #99F6E4}
+.btn-teal:hover{background:#CCFBF1}
 
 /* ── STATS RIBBON ── */
 #stats-ribbon{background:var(--panel);border-bottom:1px solid var(--border);padding:0 20px;display:flex;gap:0;overflow-x:auto}
 .stat-cell{padding:10px 20px 10px 0;display:flex;flex-direction:column;border-right:1px solid var(--border);margin-right:20px;flex-shrink:0;min-width:90px}
 .stat-cell:last-child{border-right:none}
 .stat-val{font-size:22px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
-.stat-lbl{color:var(--gray);font-size:9px;margin-top:3px;font-weight:500;letter-spacing:.4px}
+.stat-lbl{color:var(--textLight);font-size:9px;margin-top:3px;font-weight:500;letter-spacing:.4px}
 .stat-sub{font-size:9px;margin-top:2px;font-weight:500}
 .scan-meta{margin-left:auto;padding:10px 0;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:4px;flex-shrink:0}
-.scan-meta-lbl{color:var(--gray);font-size:9px}
-.scan-meta-val{color:var(--grayLight);font-size:10px}
+.scan-meta-lbl{color:var(--textLight);font-size:9px}
+.scan-meta-val{color:var(--textMid);font-size:10px}
 
 /* ── PIPELINE ── */
 #pipeline{background:var(--panel2);border-bottom:1px solid var(--border);padding:10px 20px}
 .pipe-wrap{display:flex;align-items:center;gap:0;position:relative}
 .pipe-node{display:flex;flex-direction:column;align-items:center;flex:1;position:relative;z-index:1}
 .pipe-line{flex:1;height:2px;background:var(--border);transition:background .4s;margin:0 -2px;position:relative;top:-14px;z-index:0}
-.pipe-line.done{background:var(--gold)}
-.pipe-line.active{background:linear-gradient(90deg,var(--gold),var(--border))}
-.pipe-icon{width:36px;height:36px;border-radius:50%;background:var(--bg);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .4s}
-.pipe-icon.done{background:var(--gold);border-color:var(--gold);color:#0d1c26;font-size:12px;font-weight:800}
-.pipe-icon.active{border-color:var(--goldLight);box-shadow:0 0 16px #C9A84C44;animation:pulse 1.5s infinite}
-.pipe-lbl{font-size:8.5px;color:var(--gray);margin-top:5px;text-align:center;line-height:1.3;max-width:52px;transition:color .4s}
-.pipe-lbl.done{color:var(--gold)}
-.pipe-lbl.active{color:var(--white)}
+.pipe-line.done{background:var(--accent)}
+.pipe-line.active{background:linear-gradient(90deg,var(--accent),var(--border))}
+.pipe-icon{width:36px;height:36px;border-radius:50%;background:var(--panel);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .4s;box-shadow:var(--shadow-sm)}
+.pipe-icon.done{background:var(--accent);border-color:var(--accent);color:#fff;font-size:12px;font-weight:800}
+.pipe-icon.active{border-color:var(--accentLight);box-shadow:0 0 0 3px var(--accentDim);animation:pulse 1.5s infinite}
+.pipe-lbl{font-size:8.5px;color:var(--textLight);margin-top:5px;text-align:center;line-height:1.3;max-width:52px;transition:color .4s}
+.pipe-lbl.done{color:var(--accent)}
+.pipe-lbl.active{color:var(--text)}
 
 /* ── TABS ── */
 #tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--border);padding:0 16px;gap:2px}
-.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--grayMid);padding:10px 16px;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;white-space:nowrap;font-family:var(--font)}
-.tab:hover{color:var(--white)}
-.tab.active{border-bottom-color:var(--gold);color:var(--gold);font-weight:700}
-.tab-badge{background:var(--greenDim);color:var(--green);border:1px solid #22d07a33;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:5px}
-.tab-badge.red{background:var(--redDim);color:var(--red);border-color:#e0555533}
+.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--textMid);padding:10px 16px;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;white-space:nowrap;font-family:var(--font)}
+.tab:hover{color:var(--text)}
+.tab.active{border-bottom-color:var(--accent);color:var(--accent);font-weight:700}
+.tab-badge{background:var(--greenDim);color:var(--green);border:1px solid var(--greenBorder);font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:5px}
+.tab-badge.red{background:var(--redDim);color:var(--red);border-color:var(--redBorder)}
 
 /* ── CONTENT AREA ── */
 #content{padding:16px 20px;min-height:calc(100vh - 200px)}
@@ -92,229 +100,265 @@ input,select{font-family:var(--font)}
 /* ── SOURCE CARDS ── */
 .source-section{margin-bottom:20px}
 .section-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.section-title{font-size:11px;font-weight:700;letter-spacing:.6px}
-.section-line{flex:1;height:1px;opacity:.15}
+.section-title{font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--textMid)}
+.section-line{flex:1;height:1px;background:var(--border);opacity:1}
 .src-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
-.src-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;transition:border-color .2s}
-.src-card:hover{border-color:var(--border2)}
+.src-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;transition:box-shadow .2s,border-color .2s;box-shadow:var(--shadow-sm)}
+.src-card:hover{border-color:var(--border2);box-shadow:var(--shadow-md)}
 .src-card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
-.src-name{font-weight:700;font-size:13px;margin-bottom:3px}
-.src-desc{color:var(--grayMid);font-size:10px;line-height:1.5;margin-bottom:10px}
-.src-url-row{background:#040a0f;border-radius:6px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center}
-.src-url{font-size:10px;color:var(--blue)}
-.src-url:hover{color:var(--goldLight)}
+.src-name{font-weight:700;font-size:13px;margin-bottom:3px;color:var(--text)}
+.src-desc{color:var(--textMid);font-size:10px;line-height:1.5;margin-bottom:10px}
+.src-url-row{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center}
+.src-url{font-size:10px;color:var(--accent)}
+.src-url:hover{color:var(--accentDark)}
 .src-stat{display:flex;gap:12px;margin-top:10px}
 .src-stat-item{text-align:center}
-.src-stat-val{font-weight:700;font-size:14px}
-.src-stat-lbl{color:var(--gray);font-size:9px;margin-top:1px}
+.src-stat-val{font-weight:700;font-size:14px;color:var(--text)}
+.src-stat-lbl{color:var(--textLight);font-size:9px;margin-top:1px}
 
 /* ── DEAL FILTERS ── */
 #deal-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
 .search-wrap{position:relative;flex:1;min-width:200px;max-width:380px}
-.search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--gray);pointer-events:none}
-#search-box{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 12px 7px 32px;color:var(--white);font-size:12px;outline:none;transition:border .2s}
-#search-box:focus{border-color:#C9A84C55}
-#search-box::placeholder{color:var(--gray)}
-.select-wrap select{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--white);font-size:11px;outline:none;cursor:pointer;transition:border .2s}
-.select-wrap select:focus{border-color:#C9A84C55}
+.search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--textLight);pointer-events:none}
+#search-box{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 12px 7px 32px;color:var(--text);font-size:12px;outline:none;transition:border .2s;box-shadow:var(--shadow-sm)}
+#search-box:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accentDim)}
+#search-box::placeholder{color:var(--textLight)}
+.select-wrap select{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:11px;outline:none;cursor:pointer;transition:border .2s;box-shadow:var(--shadow-sm)}
+.select-wrap select:focus{border-color:var(--accent)}
 .filter-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.chip{background:transparent;border:1px solid var(--border);border-radius:16px;padding:3px 10px;font-size:11px;color:var(--grayMid);cursor:pointer;transition:all .2s;font-family:var(--font);white-space:nowrap}
-.chip:hover{border-color:var(--gold);color:var(--goldLight)}
-.chip.active{background:var(--gold);color:#0d1c26;border-color:var(--gold);font-weight:700}
-.chip.hot.active{background:var(--green);border-color:var(--green);color:#071810}
-.result-count{color:var(--gold);font-size:11px;font-weight:700;padding:3px 10px;background:#C9A84C12;border:1px solid #C9A84C22;border-radius:12px;white-space:nowrap}
-.view-toggle{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
-.view-btn{background:transparent;border:none;color:var(--gray);padding:6px 10px;font-size:13px;cursor:pointer;transition:all .2s}
-.view-btn.active{background:var(--panel2);color:var(--gold)}
+.chip{background:transparent;border:1px solid var(--border);border-radius:16px;padding:3px 10px;font-size:11px;color:var(--textMid);cursor:pointer;transition:all .2s;font-family:var(--font);white-space:nowrap}
+.chip:hover{border-color:var(--accent);color:var(--accent);background:var(--accentDim)}
+.chip.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+.chip.hot.active{background:var(--green);border-color:var(--green);color:#fff}
+.result-count{color:var(--accent);font-size:11px;font-weight:700;padding:3px 10px;background:var(--accentDim);border:1px solid #C7D2FE;border-radius:12px;white-space:nowrap}
+.view-toggle{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:var(--shadow-sm)}
+.view-btn{background:transparent;border:none;color:var(--textLight);padding:6px 10px;font-size:13px;cursor:pointer;transition:all .2s}
+.view-btn.active{background:var(--accentDim);color:var(--accent)}
 
 /* ── SORT ROW ── */
 .sort-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.sort-label{color:var(--gray);font-size:10px;font-weight:600}
-.sort-chip{background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:10px;color:var(--grayMid);cursor:pointer;transition:all .2s;font-family:var(--font)}
-.sort-chip.active{border-color:var(--goldDim);color:var(--goldLight);background:#C9A84C0f}
+.sort-label{color:var(--textLight);font-size:10px;font-weight:600}
+.sort-chip{background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:10px;color:var(--textMid);cursor:pointer;transition:all .2s;font-family:var(--font)}
+.sort-chip.active{border-color:var(--accent);color:var(--accent);background:var(--accentDim)}
 
 /* ── DEAL CARDS ── */
 #deals-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
-.deal-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;transition:transform .15s,border-color .2s}
-.deal-card:hover{transform:translateY(-2px);border-color:var(--border2)}
-.deal-card.hot{border-color:#22d07a33;background:linear-gradient(160deg,var(--panel),#0a2017)}
-.deal-card.hot:hover{border-color:#22d07a66}
+.deal-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;transition:transform .15s,box-shadow .2s;box-shadow:var(--shadow-sm)}
+.deal-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.deal-card.hot{border-left:3px solid var(--green);background:var(--panel)}
+.deal-card.hot:hover{box-shadow:0 4px 16px rgba(16,185,129,.12)}
 
 /* image */
-.img-wrap{position:relative;width:100%;height:168px;background:#040a0f;overflow:hidden;flex-shrink:0}
+.img-wrap{position:relative;width:100%;height:168px;background:var(--panel2);overflow:hidden;flex-shrink:0}
 .img-wrap img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s}
 .deal-card:hover .img-wrap img{transform:scale(1.03)}
-.img-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--border2);font-size:40px;background:linear-gradient(135deg,#040a0f,#0d1c26)}
-.slide-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.6);border:none;color:#fff;font-size:15px;width:26px;height:38px;border-radius:4px;cursor:pointer;z-index:2;display:flex;align-items:center;justify-content:center}
+.img-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--border2);font-size:40px;background:var(--panel2)}
+.slide-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.85);border:none;color:var(--text);font-size:15px;width:26px;height:38px;border-radius:4px;cursor:pointer;z-index:2;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-sm)}
 .slide-btn.prev{left:5px}
 .slide-btn.next{right:5px}
 .slide-dots{position:absolute;bottom:5px;left:0;right:0;display:flex;justify-content:center;gap:4px;z-index:2}
-.sdot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.35);cursor:pointer;border:none;padding:0;transition:background .2s}
+.sdot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.6);cursor:pointer;border:none;padding:0;transition:background .2s}
 .sdot.active{background:#fff;width:12px;border-radius:3px}
-.img-count{position:absolute;top:6px;right:7px;background:rgba(0,0,0,.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;z-index:2}
+.img-count{position:absolute;top:6px;right:7px;background:rgba(0,0,0,.5);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;z-index:2}
 /* ── Promotion Badge ── */
-.deal-card.promo{border-color:#ff6b2b44}
-.deal-card.promo:hover{border-color:#ff6b2b99}
-.promo-badge{display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#ff6b2b,#ff4500);color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;letter-spacing:.4px;text-transform:uppercase;box-shadow:0 0 8px #ff450055}
-.price-original{font-size:10px;color:var(--gray);text-decoration:line-through;margin-right:4px}
-.price-discount{color:#ff6b2b;font-weight:700;font-size:11px}
-.price-save{font-size:9px;color:#ff6b2b;background:#ff450015;border-radius:4px;padding:1px 5px;margin-left:3px}
+.deal-card.promo{border-left:3px solid var(--orange)}
+.deal-card.promo:hover{box-shadow:0 4px 16px rgba(249,115,22,.12)}
+.promo-badge{display:inline-flex;align-items:center;gap:4px;background:var(--orange);color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;letter-spacing:.4px;text-transform:uppercase}
+.price-original{font-size:10px;color:var(--textLight);text-decoration:line-through;margin-right:4px}
+.price-discount{color:var(--orange);font-weight:700;font-size:11px}
+.price-save{font-size:9px;color:var(--orange);background:var(--orangeDim);border-radius:4px;padding:1px 5px;margin-left:3px}
 /* ── Lightbox ── */
-#lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;flex-direction:column}
+#lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;align-items:center;justify-content:center;flex-direction:column}
 #lb-overlay.open{display:flex}
-#lb-img{max-width:92vw;max-height:80vh;border-radius:8px;object-fit:contain;box-shadow:0 0 40px #000}
-#lb-close{position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;line-height:1;opacity:.8}
-#lb-close:hover{opacity:1}
-#lb-prev,#lb-next{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.12);border:none;color:#fff;font-size:28px;width:44px;height:60px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#lb-img{max-width:92vw;max-height:80vh;border-radius:8px;object-fit:contain;box-shadow:var(--shadow-lg)}
+#lb-close{position:absolute;top:16px;right:20px;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:24px;cursor:pointer;line-height:1;opacity:.9;border-radius:6px;padding:2px 8px}
+#lb-close:hover{opacity:1;background:rgba(255,255,255,.25)}
+#lb-prev,#lb-next{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:none;color:#fff;font-size:28px;width:44px;height:60px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 #lb-prev{left:16px}
 #lb-next{right:16px}
-#lb-counter{color:#ffffffaa;font-size:12px;margin-top:10px}
+#lb-counter{color:rgba(255,255,255,.7);font-size:12px;margin-top:10px}
 .img-src-badge{position:absolute;top:6px;left:7px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;z-index:2}
 
 /* card body */
 .card-body{padding:12px 14px 14px;flex:1;display:flex;flex-direction:column;gap:0}
-.card-title{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
-.card-loc{color:var(--grayMid);font-size:10px;margin-bottom:10px;display:flex;align-items:center;gap:4px}
+.card-title{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;color:var(--text)}
+.card-loc{color:var(--textMid);font-size:10px;margin-bottom:10px;display:flex;align-items:center;gap:4px}
 .card-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px}
-.cf{background:#040a0f;border-radius:6px;padding:6px 8px}
-.cf-lbl{color:var(--gray);font-size:8.5px;font-weight:600;letter-spacing:.3px}
-.cf-val{font-weight:700;font-size:12px;margin-top:2px}
+.cf{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+.cf-lbl{color:var(--textLight);font-size:8.5px;font-weight:600;letter-spacing:.3px}
+.cf-val{font-weight:700;font-size:12px;margin-top:2px;color:var(--text)}
 .roi-bar-wrap{margin-bottom:10px}
 .roi-bar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
-.roi-bar-lbl{font-size:9px;color:var(--gray);font-weight:600}
+.roi-bar-lbl{font-size:9px;color:var(--textLight);font-weight:600}
 .roi-flag{font-size:11px;font-weight:700}
 .roi-bar-track{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
 .roi-bar-fill{height:100%;border-radius:3px;transition:width .5s}
-.card-source{background:#040a0f;border-radius:6px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;text-decoration:none;transition:background .2s;margin-bottom:8px}
-.card-source:hover{background:#0a1620}
-.card-src-lbl{color:var(--gray);font-size:8.5px;margin-bottom:2px}
-.card-src-url{font-size:10px;color:var(--blue)}
-.roi-breakdown{background:#040a0f;border-radius:6px;padding:8px 10px;margin-bottom:8px;display:none}
+.card-source{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;text-decoration:none;transition:background .2s,border-color .2s;margin-bottom:8px}
+.card-source:hover{background:var(--accentDim);border-color:#C7D2FE}
+.card-src-lbl{color:var(--textLight);font-size:8.5px;margin-bottom:2px}
+.card-src-url{font-size:10px;color:var(--accent)}
+.roi-breakdown{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px;display:none}
 .roi-breakdown.open{display:block}
 .rb-row{display:flex;justify-content:space-between;font-size:10px;padding:2px 0}
-.rb-lbl{color:var(--gray)}
-.rb-val{font-weight:600}
-.rb-total{border-top:1px solid var(--border);margin-top:4px;padding-top:4px;font-weight:700}
+.rb-lbl{color:var(--textMid)}
+.rb-val{font-weight:600;color:var(--text)}
+.rb-total{border-top:1px solid var(--border);margin-top:4px;padding-top:4px;font-weight:700;color:var(--text)}
 .card-actions{display:flex;gap:6px;margin-top:auto}
-.card-action-btn{flex:1;background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:10px;color:var(--grayMid);cursor:pointer;transition:all .2s;font-family:var(--font);text-align:center;text-decoration:none;display:block}
-.card-action-btn:hover{border-color:var(--gold);color:var(--goldLight)}
-.card-action-btn.primary-action{background:var(--gold);color:#0d1c26;border-color:var(--gold);font-weight:700}
-.card-action-btn.primary-action:hover{filter:brightness(1.1)}
-.hot-banner{background:linear-gradient(90deg,#0a2017,#0d2a1a);border:1px solid #22d07a22;border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;margin-top:8px}
-.src-ref-btn{display:inline-block;padding:2px 7px;font-size:9px;border-radius:10px;border:1px solid var(--teal);color:var(--teal);background:#0d2f2c22;text-decoration:none;white-space:nowrap;transition:all .15s;cursor:pointer}
-.src-ref-btn:hover{background:var(--teal);color:#0d1c26;border-color:var(--teal)}
+.card-action-btn{flex:1;background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:10px;color:var(--textMid);cursor:pointer;transition:all .2s;font-family:var(--font);text-align:center;text-decoration:none;display:block}
+.card-action-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentDim)}
+.card-action-btn.primary-action{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+.card-action-btn.primary-action:hover{background:var(--accentDark)}
+.hot-banner{background:var(--greenDim);border:1px solid var(--greenBorder);border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.src-ref-btn{display:inline-block;padding:2px 7px;font-size:9px;border-radius:10px;border:1px solid #99F6E4;color:var(--teal);background:var(--tealDim);text-decoration:none;white-space:nowrap;transition:all .15s;cursor:pointer}
+.src-ref-btn:hover{background:var(--teal);color:#fff;border-color:var(--teal)}
 
 /* ── TABLE VIEW ── */
-#deals-table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
+#deals-table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);box-shadow:var(--shadow-sm)}
 #deals-table{width:100%;border-collapse:collapse;font-size:11px}
-#deals-table th{background:#040a0f;color:var(--grayMid);font-weight:600;font-size:10px;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.4px}
-#deals-table th:hover{color:var(--goldLight)}
+#deals-table th{background:var(--panel2);color:var(--textMid);font-weight:600;font-size:10px;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.4px}
+#deals-table th:hover{color:var(--accent)}
 #deals-table th .sort-arrow{margin-left:4px;color:var(--border2)}
-#deals-table th.sorted .sort-arrow{color:var(--gold)}
-#deals-table td{padding:8px 12px;border-bottom:1px solid #0a1520;vertical-align:middle}
+#deals-table th.sorted .sort-arrow{color:var(--accent)}
+#deals-table td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text)}
 #deals-table tr:last-child td{border-bottom:none}
-#deals-table tr:hover td{background:#0a1520}
+#deals-table tr:hover td{background:var(--panel2)}
 .tbl-title{font-weight:600;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tbl-loc{color:var(--grayMid);font-size:10px}
+.tbl-loc{color:var(--textMid);font-size:10px}
 .tbl-src-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;flex-shrink:0}
 .roi-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap}
-.roi-pill.hot{background:#22d07a15;color:var(--green);border:1px solid #22d07a33}
-.roi-pill.medium{background:#f0b42915;color:var(--yellow);border:1px solid #f0b42933}
-.roi-pill.low{background:#e0555515;color:var(--red);border:1px solid #e0555533}
-.roi-pill.suspect{background:#1c304022;color:var(--grayMid)}
+.roi-pill.hot{background:var(--greenDim);color:var(--green);border:1px solid var(--greenBorder)}
+.roi-pill.medium{background:var(--yellowDim);color:var(--yellow);border:1px solid var(--yellowBorder)}
+.roi-pill.low{background:var(--redDim);color:var(--red);border:1px solid var(--redBorder)}
+.roi-pill.suspect{background:var(--panel2);color:var(--textMid);border:1px solid var(--border)}
 
 /* ── LOG ── */
-#log-wrap{background:var(--panel);border-radius:10px;border:1px solid var(--border);overflow:hidden}
-.log-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
-#log-dot{width:6px;height:6px;border-radius:50%;background:var(--gray)}
-.log-title{color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.5px}
-#log-count{color:var(--gray);font-size:10px;margin-left:auto}
-#log-body{height:420px;overflow-y:auto;padding:12px 14px;font-family:'JetBrains Mono','Fira Mono','Courier New',monospace;font-size:10.5px;line-height:1.8}
-.ll{margin-bottom:0}
-.ll-ts{color:var(--border2);margin-right:8px;font-size:9.5px;user-select:none}
-.log-empty{color:var(--gray);text-align:center;padding-top:80px;font-size:12px}
+#log-wrap{background:var(--panel);border-radius:10px;border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow-sm)}
+.log-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--panel2)}
+#log-dot{width:6px;height:6px;border-radius:50%;background:var(--textLight)}
+.log-title{color:var(--text);font-size:11px;font-weight:700;letter-spacing:.5px}
+#log-count{color:var(--textLight);font-size:10px;margin-left:auto}
+#log-body{height:420px;overflow-y:auto;padding:12px 14px;font-family:'JetBrains Mono','Fira Mono','Courier New',monospace;font-size:10.5px;line-height:1.8;background:#FAFAFA}
+.ll{margin-bottom:0;color:var(--text)}
+.ll-ts{color:var(--textLight);margin-right:8px;font-size:9.5px;user-select:none}
+.log-empty{color:var(--textLight);text-align:center;padding-top:80px;font-size:12px}
 
 /* ── ANALYZE PANEL ── */
-#analyze-panel{background:var(--panel);border-radius:10px;border:1px solid var(--border);padding:14px;margin-bottom:14px;display:none}
+#analyze-panel{background:var(--panel);border-radius:10px;border:1px solid var(--border);padding:14px;margin-bottom:14px;display:none;box-shadow:var(--shadow-sm)}
 #analyze-panel.show{display:block}
 .analyze-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .analyze-title{color:var(--teal);font-size:12px;font-weight:700}
-.analyze-status{font-size:11px;color:var(--grayLight)}
-.analyze-step-lbl{font-size:10px;color:var(--gray);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
-.analyze-confirm-box{background:#0d2f2c33;border:1px solid var(--teal)44;border-radius:8px;padding:10px 12px;margin-top:10px}
-.analyze-confirm-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0;color:var(--grayLight)}
-.analyze-confirm-row b{color:var(--white)}
+.analyze-status{font-size:11px;color:var(--textMid)}
+.analyze-step-lbl{font-size:10px;color:var(--textMid);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.analyze-confirm-box{background:var(--tealDim);border:1px solid #99F6E4;border-radius:8px;padding:10px 12px;margin-top:10px}
+.analyze-confirm-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0;color:var(--textMid)}
+.analyze-confirm-row b{color:var(--text)}
 
 /* ── PROVINCE MULTI-SELECT DROPDOWN ── */
 .prov-wrap{position:relative;display:inline-block}
-.prov-btn{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--grayLight);font-size:11px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:border-color .2s;display:flex;align-items:center;gap:5px}
+.prov-btn{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--textMid);font-size:11px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:border-color .2s;display:flex;align-items:center;gap:5px;box-shadow:var(--shadow-sm)}
 .prov-btn:hover,.prov-btn.open{border-color:var(--teal);color:var(--teal)}
-.prov-panel{position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:#1a2730;border:1px solid var(--border);border-radius:8px;padding:8px;min-width:200px;max-height:260px;overflow-y:auto;box-shadow:0 8px 24px #0008}
+.prov-panel{position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px;min-width:200px;max-height:260px;overflow-y:auto;box-shadow:var(--shadow-lg)}
 .prov-ctrl{display:flex;gap:6px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-.prov-ctrl button{flex:1;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--gray);font-size:10px;padding:3px 0;cursor:pointer;font-family:var(--font)}
-.prov-ctrl button:hover{border-color:var(--teal);color:var(--teal)}
-.prov-check-item{display:flex;align-items:center;gap:7px;padding:4px 2px;cursor:pointer;border-radius:4px;font-size:11px;color:var(--grayLight)}
-.prov-check-item:hover{color:var(--white)}
+.prov-ctrl button{flex:1;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--textMid);font-size:10px;padding:3px 0;cursor:pointer;font-family:var(--font)}
+.prov-ctrl button:hover{border-color:var(--teal);color:var(--teal);background:var(--tealDim)}
+.prov-check-item{display:flex;align-items:center;gap:7px;padding:4px 2px;cursor:pointer;border-radius:4px;font-size:11px;color:var(--textMid)}
+.prov-check-item:hover{color:var(--text);background:var(--panel2)}
 .prov-check-item input[type=checkbox]{accent-color:var(--teal);cursor:pointer;width:13px;height:13px}
 
 /* ── EMPTY ── */
-.empty-state{text-align:center;padding:60px 20px;color:var(--gray)}
+.empty-state{text-align:center;padding:60px 20px;color:var(--textMid)}
 .empty-icon{font-size:40px;margin-bottom:12px;display:block}
-.empty-msg{font-size:13px;margin-bottom:8px;color:var(--grayMid)}
-.empty-sub{font-size:11px}
+.empty-msg{font-size:13px;margin-bottom:8px;color:var(--textMid)}
+.empty-sub{font-size:11px;color:var(--textLight)}
 
 /* ── PAGINATION ── */
 #pagination{display:flex;justify-content:center;align-items:center;gap:6px;margin-top:16px}
-.pg-btn{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;color:var(--grayMid);cursor:pointer;font-family:var(--font);transition:all .2s}
-.pg-btn:hover:not(:disabled){border-color:var(--gold);color:var(--goldLight)}
+.pg-btn{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;color:var(--textMid);cursor:pointer;font-family:var(--font);transition:all .2s;box-shadow:var(--shadow-sm)}
+.pg-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:var(--accentDim)}
 .pg-btn:disabled{opacity:.4;cursor:not-allowed}
-.pg-btn.active{background:var(--gold);color:#0d1c26;border-color:var(--gold);font-weight:700}
-.pg-info{color:var(--gray);font-size:11px;margin:0 4px}
+.pg-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+.pg-info{color:var(--textLight);font-size:11px;margin:0 4px}
 
 /* ── TOAST ── */
-#toast{position:fixed;bottom:20px;right:20px;background:#0d2530;border:1px solid var(--gold);border-radius:8px;padding:10px 16px;font-size:12px;color:var(--goldLight);z-index:999;transform:translateY(100px);transition:transform .3s;max-width:300px}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--text);border:1px solid var(--border2);border-radius:8px;padding:10px 16px;font-size:12px;color:#fff;z-index:999;transform:translateY(100px);transition:transform .3s;max-width:300px;box-shadow:var(--shadow-lg)}
 #toast.show{transform:translateY(0)}
 
 /* ── SCAN MODAL ── */
-#scan-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:500;align-items:flex-start;justify-content:center;padding-top:56px;overflow-y:auto}
+#scan-modal-overlay{display:none;position:fixed;inset:0;background:rgba(17,24,39,.5);z-index:500;align-items:flex-start;justify-content:center;padding-top:56px;overflow-y:auto;backdrop-filter:blur(2px)}
 #scan-modal-overlay.open{display:flex}
-#scan-modal{background:var(--panel2);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:680px;margin:20px auto;box-shadow:0 24px 60px #000a;position:relative;overflow:hidden}
-.scan-modal-hdr{background:linear-gradient(90deg,#0a1720,#0d1c26);border-bottom:1px solid var(--border);padding:14px 18px;display:flex;align-items:center;gap:10px}
-.scan-modal-title{font-size:14px;font-weight:800;color:var(--gold);letter-spacing:.3px}
-.scan-modal-close{margin-left:auto;background:none;border:none;color:var(--gray);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:4px;transition:color .15s}
-.scan-modal-close:hover{color:var(--white)}
+#scan-modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;width:100%;max-width:680px;margin:20px auto;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+.scan-modal-hdr{background:var(--panel2);border-bottom:1px solid var(--border);padding:14px 18px;display:flex;align-items:center;gap:10px}
+.scan-modal-title{font-size:14px;font-weight:800;color:var(--text);letter-spacing:.3px}
+.scan-modal-close{margin-left:auto;background:none;border:none;color:var(--textMid);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:4px;transition:all .15s}
+.scan-modal-close:hover{color:var(--text);background:var(--border)}
 .scan-modal-body{padding:16px 18px;max-height:calc(100vh - 180px);overflow-y:auto}
 .scan-group{margin-bottom:16px}
 .scan-group-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-.scan-group-title{font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--grayMid)}
-.scan-group-count{font-size:9px;color:var(--gray);background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 6px}
+.scan-group-title{font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--textMid)}
+.scan-group-count{font-size:9px;color:var(--textLight);background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:1px 6px}
 .scan-group-ctrl{margin-left:auto;display:flex;gap:6px}
-.scan-group-ctrl button{background:none;border:none;font-size:10px;color:var(--gray);cursor:pointer;font-family:var(--font);padding:0 2px;transition:color .15s}
-.scan-group-ctrl button:hover{color:var(--teal)}
+.scan-group-ctrl button{background:none;border:none;font-size:10px;color:var(--textLight);cursor:pointer;font-family:var(--font);padding:0 2px;transition:color .15s}
+.scan-group-ctrl button:hover{color:var(--accent)}
 .scan-site-row{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .15s;border:1px solid transparent}
-.scan-site-row:hover{background:#0a1620}
-.scan-site-row.checked{border-color:#1A3C4A80}
-.scan-site-cb{width:15px;height:15px;accent-color:var(--teal);cursor:pointer;flex-shrink:0;margin-top:2px}
+.scan-site-row:hover{background:var(--panel2)}
+.scan-site-row.checked{border-color:#C7D2FE;background:var(--accentDim)}
+.scan-site-cb{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;margin-top:2px}
 .scan-site-info{flex:1;min-width:0}
-.scan-site-name{font-size:12px;font-weight:700;color:var(--white);margin-bottom:1px}
-.scan-site-desc{font-size:10px;color:var(--grayMid);line-height:1.4;margin-bottom:3px}
-.scan-site-domain{font-size:9px;color:var(--blue)}
+.scan-site-name{font-size:12px;font-weight:700;color:var(--text);margin-bottom:1px}
+.scan-site-desc{font-size:10px;color:var(--textMid);line-height:1.4;margin-bottom:3px}
+.scan-site-domain{font-size:9px;color:var(--accent)}
 .scan-site-badge{display:inline-block;font-size:8px;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:.4px;margin-left:4px;vertical-align:middle}
-.badge-npa{background:#3b9eff22;color:#3b9eff;border:1px solid #3b9eff33}
-.badge-enforcement{background:#e0555522;color:var(--red);border:1px solid #e0555533}
-.badge-promotion{background:#ff6b2b22;color:#ff6b2b;border:1px solid #ff6b2b33}
-.badge-marketplace{background:#14b8a622;color:var(--teal);border:1px solid #14b8a633}
-.scan-modal-footer{background:#040a0f;border-top:1px solid var(--border);padding:12px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.scan-footer-count{font-size:11px;color:var(--grayMid)}
-.scan-footer-count b{color:var(--gold)}
+.badge-npa{background:var(--blueDim);color:var(--blue);border:1px solid #BFDBFE}
+.badge-enforcement{background:var(--redDim);color:var(--red);border:1px solid var(--redBorder)}
+.badge-promotion{background:var(--orangeDim);color:var(--orange);border:1px solid #FED7AA}
+.badge-marketplace{background:var(--tealDim);color:var(--teal);border:1px solid #99F6E4}
+.scan-modal-footer{background:var(--panel2);border-top:1px solid var(--border);padding:12px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.scan-footer-count{font-size:11px;color:var(--textMid)}
+.scan-footer-count b{color:var(--accent)}
 .scan-select-all-wrap{display:flex;gap:6px;margin-right:auto}
-.scan-select-all-wrap button{background:none;border:none;font-size:10px;cursor:pointer;font-family:var(--font);padding:2px 4px;border-radius:4px;color:var(--gray);transition:color .15s}
-.scan-select-all-wrap button:hover{color:var(--teal)}
+.scan-select-all-wrap button{background:none;border:none;font-size:10px;cursor:pointer;font-family:var(--font);padding:2px 4px;border-radius:4px;color:var(--textMid);transition:color .15s}
+.scan-select-all-wrap button:hover{color:var(--accent)}
+
+/* ── PROVINCE COUNT BADGES ── */
+.prov-count{font-size:9px;background:var(--accentDim);color:var(--accent);border-radius:8px;padding:1px 6px;margin-left:auto;font-weight:700}
+.prov-ai-count{font-size:9px;background:var(--greenDim);color:var(--green);border-radius:8px;padding:1px 5px;margin-left:3px;font-weight:700}
+.prov-check-item{display:flex;align-items:center;gap:6px;padding:4px 4px;cursor:pointer;border-radius:4px;font-size:11px;color:var(--textMid);width:100%}
+.prov-check-item:hover{color:var(--text);background:var(--panel2)}
+.prov-check-item input[type=checkbox]{accent-color:var(--teal);cursor:pointer;width:13px;height:13px;flex-shrink:0}
+.prov-name{flex:1;min-width:0}
+
+/* ── SELECT MODE ── */
+.deal-card{position:relative}
+.deal-sel-overlay{position:absolute;top:8px;left:8px;z-index:4;display:none}
+.select-mode-on .deal-sel-overlay{display:block}
+.deal-sel-cb{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.deal-card.deal-selected{border-color:var(--accent)!important;box-shadow:0 0 0 2px var(--accentDim),var(--shadow-sm)!important}
+.deal-card.deal-selected .img-wrap::after{content:'';position:absolute;inset:0;background:rgba(99,102,241,.08);pointer-events:none;z-index:1}
+
+/* ── SELECT ACTION BAR (floating) ── */
+#sel-action-bar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(120px);background:var(--text);color:#fff;border-radius:14px;padding:10px 18px;display:flex;align-items:center;gap:12px;z-index:450;transition:transform .3s cubic-bezier(.34,1.56,.64,1);box-shadow:var(--shadow-lg);white-space:nowrap;font-size:13px}
+#sel-action-bar.open{transform:translateX(-50%) translateY(0)}
+#sel-count-lbl{font-weight:700}
+.sel-bar-btn{background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s}
+.sel-bar-btn:hover{background:rgba(255,255,255,.28)}
+.sel-bar-btn.primary{background:var(--accent);color:#fff}
+.sel-bar-btn.primary:hover{background:var(--accentDark)}
+
+/* ── REANALYZE WARNING BOX ── */
+.reanalyze-warn{background:var(--yellowDim);border:1px solid var(--yellowBorder);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:11px}
+.reanalyze-warn-title{font-weight:700;color:var(--yellow);margin-bottom:4px;display:flex;align-items:center;gap:5px}
+.reanalyze-check-row{display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:11px;color:var(--textMid)}
+.reanalyze-check-row input{accent-color:var(--accent);cursor:pointer}
+
+/* ── ANALYZED CHIP ── */
+.chip.ai-chip.active{background:var(--teal);border-color:var(--teal);color:#fff}
+.chip.noai-chip.active{background:var(--textMid);border-color:var(--textMid);color:#fff}
+.deal-ai-badge{position:absolute;top:8px;right:7px;z-index:3;background:var(--teal);color:#fff;font-size:8px;font-weight:800;padding:2px 6px;border-radius:8px;letter-spacing:.3px}
 
 /* ── ANIMATIONS ── */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 @keyframes spin{to{transform:rotate(360deg)}}
-.spinner{display:inline-block;width:10px;height:10px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
+.spinner{display:inline-block;width:10px;height:10px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
 .scanning-pulse{animation:pulse 1s infinite}
 
 /* ── RESPONSIVE ── */
@@ -335,8 +379,8 @@ input,select{font-family:var(--font)}
 <div id="wake-banner">
   <div class="wb-dot"></div>
   <span style="color:var(--yellow);font-weight:600">กำลังเชื่อมต่อ server...</span>
-  <span style="color:var(--gray)">Render.com อาจใช้เวลา 30-60 วินาทีในการ boot</span>
-  <button onclick="_wakeAttempt=0;checkAPI()" style="margin-left:auto;background:transparent;color:var(--yellow);border:1px solid #f0b42966;border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer">🔄 ลองใหม่</button>
+  <span style="color:var(--textMid)">Render.com อาจใช้เวลา 30-60 วินาทีในการ boot</span>
+  <button onclick="_wakeAttempt=0;checkAPI()" style="margin-left:auto;background:transparent;color:var(--yellow);border:1px solid var(--yellowBorder);border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer">🔄 ลองใหม่</button>
 </div>
 
 <!-- HEADER -->
@@ -363,11 +407,11 @@ input,select{font-family:var(--font)}
 
 <!-- STATS RIBBON -->
 <div id="stats-ribbon">
-  <div class="stat-cell"><div class="stat-val" id="s-total" style="color:var(--white)">—</div><div class="stat-lbl">TOTAL DEALS</div></div>
+  <div class="stat-cell"><div class="stat-val" id="s-total" style="color:var(--text)">—</div><div class="stat-lbl">TOTAL DEALS</div></div>
   <div class="stat-cell"><div class="stat-val" id="s-hot" style="color:var(--green)">—</div><div class="stat-lbl">🔥 HOT ≥30%</div><div class="stat-sub" style="color:var(--green)" id="s-hot-pct"></div></div>
   <div class="stat-cell"><div class="stat-val" id="s-medium" style="color:var(--yellow)">—</div><div class="stat-lbl">🟡 MEDIUM ≥15%</div></div>
-  <div class="stat-cell"><div class="stat-val" id="s-avg" style="color:var(--goldLight)">—</div><div class="stat-lbl">AVG ROI</div></div>
-  <div class="stat-cell"><div class="stat-val" id="s-pages" style="color:var(--white)">—</div><div class="stat-lbl">PAGES CRAWLED</div></div>
+  <div class="stat-cell"><div class="stat-val" id="s-avg" style="color:var(--accent)">—</div><div class="stat-lbl">AVG ROI</div></div>
+  <div class="stat-cell"><div class="stat-val" id="s-pages" style="color:var(--text)">—</div><div class="stat-lbl">PAGES CRAWLED</div></div>
   <div class="stat-cell"><div class="stat-val" id="s-scraped" style="color:var(--blue)">—</div><div class="stat-lbl">SCRAPED</div></div>
   <div class="scan-meta">
     <div class="scan-meta-lbl">สแกนล่าสุด</div>
@@ -415,19 +459,19 @@ input,select{font-family:var(--font)}
         </div>
         <div style="margin-top:5px;display:flex;gap:8px">
           <button style="font-size:10px;background:none;border:none;color:var(--teal);cursor:pointer;padding:0;font-family:var(--font)" onclick="analyzeSelectAllProvs(true)">+ เลือกทั้งหมด</button>
-          <button style="font-size:10px;background:none;border:none;color:var(--gray);cursor:pointer;padding:0;font-family:var(--font)" onclick="analyzeSelectAllProvs(false)">ล้าง</button>
+          <button style="font-size:10px;background:none;border:none;color:var(--textMid);cursor:pointer;padding:0;font-family:var(--font)" onclick="analyzeSelectAllProvs(false)">ล้าง</button>
         </div>
       </div>
 
       <!-- Options row -->
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:5px">
-          <span style="color:var(--gray);font-size:10px">จำนวนสูงสุด:</span>
+          <span style="color:var(--textMid);font-size:10px">จำนวนสูงสุด:</span>
           <input type="number" id="analyze-limit" value="50" min="1" max="500"
-            style="width:65px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:5px 7px;color:var(--white);font-size:11px;outline:none">
-          <span style="color:var(--gray);font-size:10px">deals</span>
+            style="width:65px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:5px 7px;color:var(--text);font-size:11px;outline:none">
+          <span style="color:var(--textMid);font-size:10px">deals</span>
         </div>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--grayLight)">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--textMid)">
           <input type="checkbox" id="analyze-hot-only" style="accent-color:var(--teal)"> 🔥 เฉพาะ HOT deals
         </label>
       </div>
@@ -440,6 +484,15 @@ input,select{font-family:var(--font)}
       <!-- Confirmation box (hidden until Preview clicked) -->
       <div id="analyze-confirm-box" style="display:none" class="analyze-confirm-box">
         <div id="analyze-confirm-summary"></div>
+        <!-- Re-analyze warning (shown only when some deals already have AI data) -->
+        <div id="reanalyze-warn" class="reanalyze-warn" style="display:none">
+          <div class="reanalyze-warn-title">⚠️ มีทรัพย์ที่ Analyze แล้ว <span id="reanalyze-count"></span> รายการ</div>
+          <div style="color:var(--textMid);font-size:10px;margin-bottom:4px">ทรัพย์เหล่านี้มี AI data อยู่แล้ว — ต้องการ analyze ซ้ำหรือไม่?</div>
+          <label class="reanalyze-check-row">
+            <input type="checkbox" id="chk-reanalyze" onchange="onReanalyzeToggle()">
+            ✅ ยืนยัน — analyze ซ้ำด้วย (จะใช้ token เพิ่ม)
+          </label>
+        </div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button class="btn btn-teal" id="btn-run-analyze" onclick="doRunAnalyze()">✅ ยืนยัน — Run เลย</button>
           <button class="btn btn-ghost" onclick="hideAnalyzeConfirm()">ยกเลิก</button>
@@ -475,18 +528,21 @@ input,select{font-family:var(--font)}
         <button class="view-btn active" id="vbtn-card" onclick="setView('card')" title="Card view">⊞</button>
         <button class="view-btn" id="vbtn-table" onclick="setView('table')" title="Table view">☰</button>
       </div>
+      <button class="btn btn-ghost" id="btn-select-mode" style="font-size:11px" onclick="toggleSelectMode()" title="เลือกหลายรายการ">☑ เลือก</button>
       <button class="btn btn-ghost" style="font-size:11px" onclick="exportCSV()" title="Export to CSV">⬇ CSV</button>
     </div>
 
     <!-- Filter chips row -->
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px">
-      <span style="color:var(--gray);font-size:10px;font-weight:600">ประเภท:</span>
+      <span style="color:var(--textMid);font-size:10px;font-weight:600">ประเภท:</span>
       <button class="chip active" id="chip-all" onclick="setTypeChip('')">ทั้งหมด</button>
       <button class="chip" id="chip-house" onclick="setTypeChip('house')">🏠 บ้านเดี่ยว</button>
       <button class="chip" id="chip-townhouse" onclick="setTypeChip('townhouse')">🏘 ทาวน์เฮ้าส์</button>
       <button class="chip" id="chip-condo" onclick="setTypeChip('condo')">🏢 คอนโด</button>
       <button class="chip" id="chip-land" onclick="setTypeChip('land')">🌾 ที่ดิน</button>
       <button class="chip" id="chip-commercial" onclick="setTypeChip('commercial')">🏬 พาณิชย์</button>
+      <button class="chip ai-chip" id="chip-analyzed" onclick="setAnalyzedFilter('analyzed')">🧠 Analyzed</button>
+      <button class="chip noai-chip" id="chip-unanalyzed" onclick="setAnalyzedFilter('unanalyzed')">📋 ยังไม่ analyze</button>
       <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
         <button class="chip hot" id="chip-hot" onclick="toggleHot()">🔥 HOT</button>
         <button class="chip" id="chip-reset" onclick="resetFilters()" style="display:none;color:var(--red);border-color:#e0555544">✕ ล้าง</button>
@@ -534,11 +590,20 @@ input,select{font-family:var(--font)}
         <div id="log-dot"></div>
         <span class="log-title">AGENT LOG</span>
         <span id="log-count" style="margin-left:auto">0 events</span>
-        <button onclick="clearLog()" style="background:transparent;border:none;color:var(--gray);font-size:10px;cursor:pointer;margin-left:8px">🗑 ล้าง</button>
+        <button onclick="clearLog()" style="background:transparent;border:none;color:var(--textMid);font-size:10px;cursor:pointer;margin-left:8px">🗑 ล้าง</button>
       </div>
       <div id="log-body"><div class="log-empty">📡 กด "เริ่มสแกน" เพื่อดู live log</div></div>
     </div>
   </div>
+</div>
+
+<!-- FLOATING SELECT ACTION BAR -->
+<div id="sel-action-bar">
+  <span id="sel-count-lbl">0 ทรัพย์ที่เลือก</span>
+  <button class="sel-bar-btn" onclick="selectAll()">✓ ทั้งหมดในหน้านี้</button>
+  <button class="sel-bar-btn primary" onclick="analyzeSelected()">🧠 Analyze ที่เลือก</button>
+  <button class="sel-bar-btn" onclick="clearSelection()">✕ ล้าง</button>
+  <button class="sel-bar-btn" onclick="toggleSelectMode()" style="opacity:.7">⏹ ออก</button>
 </div>
 
 <!-- SCAN SOURCE SELECTION MODAL -->
@@ -629,14 +694,20 @@ const PIPE_STEPS = [
 // ─────────────────────────────────────────────
 let deals=[], hotDeals=[], srcStats={};
 let dealFilter="all", filterType="", filterSource="", sortBy="roi";
+let filterAnalyzed="all"; // "all" | "analyzed" | "unanalyzed"
 // Multi-province filter — default: BKK + Nonthaburi + Pathum Thani
 const DEFAULT_PROVS = new Set(["กรุงเทพมหานคร","นนทบุรี","ปทุมธานี"]);
 let filterProvinces = new Set(DEFAULT_PROVS);  // empty = show ALL
 // Analyze province set (independent from dashboard filter)
 let analyzeProvs = new Set(DEFAULT_PROVS);
+// Multi-select mode
+let selectMode = false;
+let selectedDealKeys = new Set(); // key = listing_url || String(id)
 let searchQuery="", viewMode="card", curPage=1;
 let logs=[], scanPhase=0, pollInterval=null, isRunning=false;
 let _wakeAttempt=0;
+
+function dealKey(d) { return d.listing_url || String(d.id || "") || JSON.stringify({p:d.price,l:d.location}); }
 
 function clearLog() {
   logs = [];
@@ -896,14 +967,26 @@ function populateFilters() {
 }
 
 function buildProvChecks() {
-  const provinces = [...new Set(deals.map(d=>getProvince(d.location||"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"th"));
+  // Count deals and analyzed deals per province
+  const provCounts = {}, provAI = {};
+  deals.forEach(d => {
+    const p = getProvince(d.location||"");
+    if (!p) return;
+    provCounts[p] = (provCounts[p]||0) + 1;
+    if (d.ai_analysis || d.ai_analyzed_at) provAI[p] = (provAI[p]||0) + 1;
+  });
+  const provinces = Object.keys(provCounts).sort((a,b)=>a.localeCompare(b,"th"));
   const container = document.getElementById("prov-checks");
   if (!container) return;
   container.innerHTML = provinces.map(p => {
     const checked = filterProvinces.size===0 || filterProvinces.has(p);
+    const cnt = provCounts[p] || 0;
+    const ai  = provAI[p] || 0;
+    const aiTag = ai > 0 ? `<span class="prov-ai-count">🧠${ai}</span>` : "";
     return `<label class="prov-check-item">
       <input type="checkbox" value="${p}" ${checked?"checked":""} onchange="onProvCheck(this)">
-      ${p}
+      <span class="prov-name">${p}</span>
+      <span class="prov-count">${cnt}</span>${aiTag}
     </label>`;
   }).join("");
 }
@@ -948,6 +1031,8 @@ document.addEventListener("click", e => {
   }
 });
 
+function isAnalyzed(d) { return !!(d.ai_analysis || d.ai_analyzed_at); }
+
 function applyFilters(list) {
   return list.filter(d => {
     if (dealFilter === "hot" && (d.roi_percent||0) < 30) return false;
@@ -958,6 +1043,8 @@ function applyFilters(list) {
       if (!filterProvinces.has(prov)) return false;
     }
     if (filterSource && d.source_domain !== filterSource) return false;
+    if (filterAnalyzed === "analyzed"   && !isAnalyzed(d)) return false;
+    if (filterAnalyzed === "unanalyzed" &&  isAnalyzed(d)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const hay = [d.project_name,d.location,d.property_type,d.source_domain,d.address,d.features]
@@ -1002,11 +1089,20 @@ function toggleHot() {
   curPage=1; updateResetChip(); renderDeals();
 }
 
+function setAnalyzedFilter(val) {
+  filterAnalyzed = filterAnalyzed===val ? "all" : val;
+  document.getElementById("chip-analyzed")?.classList.toggle("active",  filterAnalyzed==="analyzed");
+  document.getElementById("chip-unanalyzed")?.classList.toggle("active", filterAnalyzed==="unanalyzed");
+  curPage=1; updateResetChip(); renderDeals();
+}
+
 function resetFilters() {
-  searchQuery=""; filterType=""; filterSource=""; dealFilter="all"; curPage=1;
+  searchQuery=""; filterType=""; filterSource=""; dealFilter="all"; filterAnalyzed="all"; curPage=1;
   filterProvinces = new Set(DEFAULT_PROVS);  // reset to 3 provinces default
   document.getElementById("search-box").value="";
   document.getElementById("source-select").value="";
+  document.getElementById("chip-analyzed")?.classList.remove("active");
+  document.getElementById("chip-unanalyzed")?.classList.remove("active");
   buildProvChecks(); updateProvBtn();
   setTypeChip(""); dealFilter="all";
   document.getElementById("chip-hot").classList.remove("active");
@@ -1016,7 +1112,7 @@ function resetFilters() {
 function updateResetChip() {
   const provChanged = filterProvinces.size !== DEFAULT_PROVS.size ||
     [...DEFAULT_PROVS].some(p => !filterProvinces.has(p));
-  const hasFilter = searchQuery||filterType||filterSource||dealFilter==="hot"||provChanged;
+  const hasFilter = searchQuery||filterType||filterSource||dealFilter==="hot"||provChanged||filterAnalyzed!=="all";
   document.getElementById("chip-reset").style.display = hasFilter?"":"none";
 }
 
@@ -1040,6 +1136,75 @@ function setView(mode) {
   document.getElementById("deals-card-view").style.display = mode==="card"?"":"none";
   document.getElementById("deals-table-wrap").style.display = mode==="table"?"":"none";
   renderDeals();
+}
+
+// ─────────────────────────────────────────────
+// SELECT MODE
+// ─────────────────────────────────────────────
+function toggleSelectMode() {
+  selectMode = !selectMode;
+  if (!selectMode) {
+    selectedDealKeys.clear();
+    updateSelBar();
+  }
+  const btn = document.getElementById("btn-select-mode");
+  if (btn) {
+    btn.classList.toggle("active", selectMode);
+    btn.style.background = selectMode ? "var(--accentDim)" : "";
+    btn.style.borderColor = selectMode ? "var(--accent)" : "";
+    btn.style.color       = selectMode ? "var(--accent)" : "";
+  }
+  // Re-render with/without checkboxes
+  renderDeals();
+}
+
+function toggleDealSelect(key, cb) {
+  if (cb.checked) selectedDealKeys.add(key);
+  else            selectedDealKeys.delete(key);
+  // Update card border instantly without full re-render
+  const card = document.getElementById("dc-" + CSS.escape(key));
+  if (card) card.classList.toggle("deal-selected", cb.checked);
+  updateSelBar();
+}
+
+function updateSelBar() {
+  const bar = document.getElementById("sel-action-bar");
+  const lbl = document.getElementById("sel-count-lbl");
+  const cnt = selectedDealKeys.size;
+  if (lbl) lbl.textContent = `${cnt} ทรัพย์ที่เลือก`;
+  if (bar) bar.classList.toggle("open", cnt > 0 && selectMode);
+}
+
+function clearSelection() {
+  selectedDealKeys.clear();
+  document.querySelectorAll(".deal-card.deal-selected").forEach(el=>el.classList.remove("deal-selected"));
+  document.querySelectorAll(".deal-sel-cb").forEach(cb=>{ cb.checked = false; });
+  updateSelBar();
+}
+
+function analyzeSelected() {
+  if (selectedDealKeys.size === 0) { showToast("กรุณาเลือกทรัพย์ก่อน"); return; }
+  // Open analyze panel in deals tab
+  switchTab("deals");
+  const panel = document.getElementById("analyze-panel");
+  if (panel) panel.classList.add("show");
+  window.scrollTo({top:0,behavior:"smooth"});
+  // Update status to reflect selection
+  const statusEl = document.getElementById("analyze-status");
+  if (statusEl) statusEl.textContent = `โหมดเลือก: ${selectedDealKeys.size} ทรัพย์`;
+  // Trigger preview immediately
+  previewAnalyze();
+}
+
+function selectAll() {
+  const grid = document.getElementById("deals-grid");
+  if (!grid) return;
+  grid.querySelectorAll(".deal-sel-cb").forEach(cb => {
+    cb.checked = true;
+    selectedDealKeys.add(cb.dataset.key);
+    cb.closest(".deal-card")?.classList.add("deal-selected");
+  });
+  updateSelBar();
 }
 
 // ─────────────────────────────────────────────
@@ -1077,7 +1242,7 @@ function renderCardView(items, total) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
       <span class="empty-icon">${deals.length===0?"🔍":"🗂"}</span>
       <div class="empty-msg">${deals.length===0?"ยังไม่มีดีล — กด ▶ เริ่มสแกน":"ไม่พบทรัพย์ที่ตรงกับตัวกรอง"}</div>
-      ${deals.length>0?'<div class="empty-sub"><a href="#" onclick="resetFilters();return false" style="color:var(--gold)">ล้างตัวกรอง</a></div>':""}
+      ${deals.length>0?'<div class="empty-sub"><a href="#" onclick="resetFilters();return false" style="color:var(--accent)">ล้างตัวกรอง</a></div>':""}
     </div>`;
     return;
   }
@@ -1087,7 +1252,7 @@ function renderCardView(items, total) {
 function renderTableView(items, total) {
   const tbody = document.getElementById("deals-tbody");
   if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray)">ไม่พบทรัพย์</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--textMid)">ไม่พบทรัพย์</td></tr>`;
     return;
   }
   tbody.innerHTML = items.map(d=>{
@@ -1107,12 +1272,12 @@ function renderTableView(items, total) {
         <div class="tbl-title" title="${title}">${title}</div>
         <div class="tbl-loc">📍 ${d.location||"—"} · ${TYPE_TH[d.property_type]||d.property_type||"—"}</div>
       </td>
-      <td style="font-weight:700;color:var(--white)">${price}</td>
-      <td style="color:var(--grayLight)">${area}</td>
-      <td style="color:${COND_COL[cond]||'var(--gray)'};">${cond}</td>
+      <td style="font-weight:700;color:var(--text)">${price}</td>
+      <td style="color:var(--textMid)">${area}</td>
+      <td style="color:${COND_COL[cond]||'var(--textMid)'};">${cond}</td>
       <td>
         <span class="tbl-src-dot" style="background:${srcCol}"></span>
-        <span style="font-size:10px;color:var(--grayMid)">${(d.source_domain||"—").split(".")[0]}</span>
+        <span style="font-size:10px;color:var(--textMid)">${(d.source_domain||"—").split(".")[0]}</span>
       </td>
       <td>${url!=="—"&&url?"<a href='"+url+"' target='_blank' style='color:var(--blue);font-size:10px'>ดูทรัพย์ →</a>":"—"}</td>
     </tr>`;
@@ -1154,7 +1319,7 @@ function dealCard(d) {
   const rawRoi    = d.roi_percent || 0;
   const roiSuspect= rawRoi > 999 || d.roi_valid === false;
   const hot       = rawRoi >= 30 && !roiSuspect;
-  const roiColor  = roiSuspect?"var(--gray)":rawRoi>=30?"var(--green)":rawRoi>=15?"var(--yellow)":"var(--red)";
+  const roiColor  = roiSuspect?"var(--textLight)":rawRoi>=30?"var(--green)":rawRoi>=15?"var(--yellow)":"var(--red)";
   const roiPct    = roiSuspect ? 0 : Math.min(rawRoi, 100);
   const roiLabel  = roiSuspect?"⚠️ N/A":rawRoi>=30?"🟢 ควรซื้อ":rawRoi>=15?"🟡 พิจารณา":"🔴 ข้าม";
   const roiDisp   = roiSuspect ? "N/A" : rawRoi.toFixed(1)+"%";
@@ -1172,7 +1337,7 @@ function dealCard(d) {
   const areaSqm   = d.area_sqm || 0;
   const areaDisp  = areaSqm >= 1600 ? `${(areaSqm/1600).toFixed(2)} ไร่` : areaSqm>0 ? `${areaSqm} ตร.ม.` : "—";
   const cond      = d.condition || "—";
-  const condCol   = COND_COL[cond] || "var(--grayMid)";
+  const condCol   = COND_COL[cond] || "var(--textMid)";
   const srcCol    = getSrcColor(d.source_domain||"");
   const url       = d.listing_url || "#";
   const pType     = d.property_type || "other";
@@ -1182,9 +1347,13 @@ function dealCard(d) {
   const title     = projectName || `${TYPE_TH[pType]||"ทรัพย์"} — ${locShort}`;
   const src       = d.source_domain || "—";
 
-  // Slideshow
-  const cardId = "c" + (d.id || Math.random().toString(36).slice(2,8));
+  // Slideshow & selection
+  const cardId  = "c" + (d.id || Math.random().toString(36).slice(2,8));
+  const dKey    = dealKey(d);
+  const isSelMode = selectMode;
+  const isSel   = selectedDealKeys.has(dKey);
   const rawData = rawD;  // alias — already declared above
+  const hasAI   = isAnalyzed(d);
   const images  = Array.isArray(rawD.images) && rawD.images.length>0 ? rawD.images : [];
   const hasImgs = images.length > 0;
   const imgsPipe = images.join("|");
@@ -1223,11 +1392,11 @@ function dealCard(d) {
         return `
       <div class="rb-row"><span class="rb-lbl">ราคาซื้อ</span><span class="rb-val">฿${fmtNum(buyPrice)}</span></div>
       <div class="rb-row"><span class="rb-lbl">ค่ารีโนเวท</span><span class="rb-val">฿${fmtNum(renoTotal)}${renoSqm?" (฿"+fmtNum(renoSqm)+"/ตร.ม.)":""}</span></div>
-      <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง <span style="font-size:9px;color:var(--gray)">(5.5%)</span></span><span class="rb-val">฿${fmtNum(transfer)}</span></div>
+      <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง <span style="font-size:9px;color:var(--textLight)">(5.5%)</span></span><span class="rb-val">฿${fmtNum(transfer)}</span></div>
       <div class="rb-row rb-total"><span class="rb-lbl">ต้นทุนรวม</span><span class="rb-val" style="color:var(--yellow)">฿${fmtNum(totalCost)}</span></div>
       <div class="rb-row"><span class="rb-lbl">ราคาตลาดอ้างอิง${mktSqm?" (฿"+fmtNum(mktSqm)+"/ตร.ม.)":""}</span><span class="rb-val" style="color:var(--green)">฿${fmtNum(mktVal)}</span></div>
       <div class="rb-row rb-total"><span class="rb-lbl">กำไรโดยประมาณ</span><span class="rb-val" style="color:${profit>0?"var(--green)":"var(--red)"}">฿${fmtNum(Math.round(profit))}</span></div>
-      <div style="font-size:9px;color:var(--gray);margin-top:6px;line-height:1.4">
+      <div style="font-size:9px;color:var(--textMid);margin-top:6px;line-height:1.4">
         ${d.roi_data_source==="sonar_pro"?"✅ ราคาตลาดจากข้อมูลจริง (Sonar Pro)":d.roi_data_source==="cache"?"♻️ ราคาตลาดจาก pattern cache (script คำนวณ)":"⚠️ ROI ประมาณการ — ควรตรวจสอบราคาตลาดจริงก่อนตัดสินใจ"}
       </div>
         `;
@@ -1235,8 +1404,12 @@ function dealCard(d) {
     </div>` : "";
 
   return `
-  <div class="deal-card${hot?" hot":""}${isPromo?" promo":""}">
-    <div onclick="openLightbox('${cardId}',${JSON.stringify(images)})" style="cursor:${hasImgs?'zoom-in':'default'}">${imgHTML}</div>
+  <div class="deal-card${hot?" hot":""}${isPromo?" promo":""}${isSelMode?" select-mode-on":""}${isSel?" deal-selected":""}" id="dc-${CSS.escape(dKey)}">
+    ${isSelMode?`<div class="deal-sel-overlay" onclick="event.stopPropagation()">
+      <input type="checkbox" class="deal-sel-cb" data-key="${escHtml(dKey)}" ${isSel?"checked":""} onchange="toggleDealSelect(${JSON.stringify(dKey)},this)">
+    </div>`:""}
+    ${hasAI?`<div class="deal-ai-badge">🧠 AI</div>`:""}
+    <div onclick="${isSelMode?`toggleDealSelect(${JSON.stringify(dKey)},this.closest('.deal-card').querySelector('.deal-sel-cb'))`:`openLightbox('${cardId}',${JSON.stringify(images)})`}" style="cursor:${isSelMode?'pointer':hasImgs?'zoom-in':'default'}">${imgHTML}</div>
     <div class="card-body">
       ${isPromo?`<div style="margin-bottom:6px"><span class="promo-badge">🏷 Promotion</span>${savePct>0?`<span class="price-save">ลด ${savePct}%</span>`:""}</div>`:""}
       <div class="card-title" title="${title}">${title}</div>
@@ -1244,7 +1417,7 @@ function dealCard(d) {
       <div class="card-fields">
         <div class="cf">
           <div class="cf-lbl">ราคาซื้อ</div>
-          <div class="cf-val" style="color:var(--white)">
+          <div class="cf-val" style="color:var(--text)">
             ${origPrice>0&&origPrice!==d.price?`<span class="price-original">฿${(origPrice/1e6).toFixed(2)}M</span>`:""}
             <span${isPromo&&saveAmt>0?' class="price-discount"':""}>฿${priceM}M</span>
           </div>
@@ -1289,13 +1462,13 @@ function dealCard(d) {
         const srcLabel = url !== "#" && url ? url.replace(/https?:\/\/(www\.)?/,"").split("?")[0].slice(0,48) : srcDom;
         return `<div class="card-source" style="cursor:default">
           <div>
-            <div class="card-src-lbl">แหล่งที่มา${assetCode?` · รหัส: <span style="color:var(--gold);font-weight:700;cursor:pointer" onclick="navigator.clipboard.writeText('${assetCode}');showToast('คัดลอก ${assetCode} แล้ว')" title="คลิกเพื่อคัดลอก">${assetCode} 📋</span>`:""}</div>
+            <div class="card-src-lbl">แหล่งที่มา${assetCode?` · รหัส: <span style="color:var(--accent);font-weight:700;cursor:pointer" onclick="navigator.clipboard.writeText('${assetCode}');showToast('คัดลอก ${assetCode} แล้ว')" title="คลิกเพื่อคัดลอก">${assetCode} 📋</span>`:""}</div>
             <span class="card-src-url">🔗 ${srcLabel}</span>
           </div>
-          <a href="${workingUrl}" target="_blank" rel="noopener" style="color:var(--blue);font-size:18px" title="${isBAM?'ค้นหาบน BAM':'เปิดหน้าทรัพย์จากต้นทาง'}">↗</a>
+          <a href="${workingUrl}" target="_blank" rel="noopener" style="color:var(--accent);font-size:18px" title="${isBAM?'ค้นหาบน BAM':'เปิดหน้าทรัพย์จากต้นทาง'}">↗</a>
         </div>
-        ${isBAM&&assetCode?`<div style="font-size:9px;color:#aaa;margin-bottom:6px;line-height:1.5;background:#1a1a0f;border-radius:4px;padding:4px 6px">🔍 กด ↗ เพื่อค้นหารหัส <b style="color:var(--gold)">${assetCode}</b> บน BAM.co.th</div>`:""}
-        ${isGSB?`<div style="font-size:9px;color:#aaa;margin-bottom:6px;line-height:1.5">🔍 กด ↗ ค้นหาด้วยรหัสบนเว็บ GSB NPA</div>`:""}`;
+        ${isBAM&&assetCode?`<div style="font-size:9px;color:var(--textMid);margin-bottom:6px;line-height:1.5;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:4px 6px">🔍 กด ↗ เพื่อค้นหารหัส <b style="color:var(--accent)">${assetCode}</b> บน BAM.co.th</div>`:""}
+        ${isGSB?`<div style="font-size:9px;color:var(--textMid);margin-bottom:6px;line-height:1.5">🔍 กด ↗ ค้นหาด้วยรหัสบนเว็บ GSB NPA</div>`:""}`;
       })()}
       ${(()=>{
         const srcDomB = d.source_domain||"";
@@ -1338,11 +1511,11 @@ function dealCard(d) {
           return `<a href="${u}" target="_blank" rel="noopener" class="src-ref-btn" title="${u}">${label} ↗</a>`;
         }).join("");
         return `<div style="margin-top:7px">
-          <div style="font-size:9px;color:var(--gray);margin-bottom:4px">🔗 แหล่งอ้างอิงราคา:</div>
+          <div style="font-size:9px;color:var(--textMid);margin-bottom:4px">🔗 แหล่งอ้างอิงราคา:</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">${btns}</div>
         </div>`;
       })()}
-      ${d.ai_analysis?`<div style="margin-top:8px;background:#0d2f2c22;border:1px solid var(--teal)22;border-radius:6px;padding:6px 8px;font-size:9px;color:var(--teal)">
+      ${d.ai_analysis?`<div style="margin-top:8px;background:var(--tealDim);border:1px solid #99F6E4;border-radius:6px;padding:6px 8px;font-size:9px;color:var(--teal)">
         🧠 AI: ${typeof d.ai_analysis==="object"?d.ai_analysis.summary_th||d.ai_analysis.summary||JSON.stringify(d.ai_analysis).slice(0,80):String(d.ai_analysis).slice(0,80)}...
       </div>`:""}
     </div>
@@ -1393,9 +1566,9 @@ function renderSources() {
   ];
   const TYPE_COL = {bank_npa:"var(--blue)",enforcement:"var(--red)",marketplace:"var(--purple)"};
   document.getElementById("pane-sources").innerHTML = `
-    <div style="color:var(--gray);font-size:11px;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+    <div style="color:var(--textMid);font-size:11px;margin-bottom:16px;display:flex;align-items:center;gap:8px">
       <span>แหล่งข้อมูลที่ระบบ crawl อัตโนมัติ — คลิก 🔗 เพื่อเปิดเว็บต้นทาง</span>
-      <span style="margin-left:auto;color:var(--grayMid)">${deals.length} deals ใน DB</span>
+      <span style="margin-left:auto;color:var(--textLight)">${deals.length} deals ใน DB</span>
     </div>` +
     groups.map(g => {
       const sites = TARGET_SITES.filter(s=>s.type===g.type);
@@ -1423,7 +1596,7 @@ function srcCard(site, col) {
         <span class="tag" style="background:${col}18;color:${col};border:1px solid ${col}33;border-radius:4px;padding:2px 7px;font-size:9px;font-weight:700">${site.type==="bank_npa"?"NPA":site.type==="enforcement"?"บังคับคดี":"ตลาด"}</span>
         ${isBlocked?'<span class="tag" style="background:#e0555515;color:var(--red);border:1px solid #e0555533;border-radius:4px;padding:2px 7px;font-size:9px;font-weight:700;margin-left:4px">⚠️ WAF</span>':""}
       </div>
-      ${count>0?`<div style="text-align:right"><div style="font-weight:800;font-size:18px;color:var(--white)">${count}</div><div style="font-size:9px;color:var(--gray)">deals</div></div>`:""}
+      ${count>0?`<div style="text-align:right"><div style="font-weight:800;font-size:18px;color:var(--text)">${count}</div><div style="font-size:9px;color:var(--textLight)">deals</div></div>`:""}
     </div>
     <div class="src-desc">${site.desc}</div>
     <div class="src-url-row">
@@ -1746,7 +1919,7 @@ function scanDone() {
 // LOG
 // ─────────────────────────────────────────────
 function addLog(type, msg) {
-  const c={info:"#8a9ba8",success:"var(--green)",warn:"var(--yellow)",error:"var(--red)",ai:"var(--goldLight)"};
+  const c={info:"var(--textLight)",success:"var(--green)",warn:"var(--yellow)",error:"var(--red)",ai:"var(--accent)"};
   const ts=new Date().toLocaleTimeString("th-TH");
   logs.push({type,msg,color:c[type]||c.info,ts});
   if(logs.length>300) logs.shift();
@@ -1786,7 +1959,7 @@ function buildAnalyzeProvChecks() {
   if (!container) return;
   container.innerHTML = provinces.map(p => {
     const checked = analyzeProvs.has(p);
-    return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--grayLight);background:var(--panel2);border:1px solid ${checked?"var(--teal)":"var(--border)"};border-radius:6px;padding:4px 8px" id="aprov-lbl-${CSS.escape(p)}">
+    return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--textMid);background:var(--panel2);border:1px solid ${checked?"var(--teal)":"var(--border)"};border-radius:6px;padding:4px 8px" id="aprov-lbl-${CSS.escape(p)}">
       <input type="checkbox" value="${p}" ${checked?"checked":""} style="accent-color:var(--teal)" onchange="onAnalyzeProvCheck(this,'${p}')">
       ${p}
     </label>`;
@@ -1813,54 +1986,128 @@ function hideAnalyzeConfirm() {
 }
 
 function previewAnalyze() {
-  const limit  = parseInt(document.getElementById("analyze-limit").value)||50;
+  const limit   = parseInt(document.getElementById("analyze-limit").value)||50;
   const hotOnly = document.getElementById("analyze-hot-only").checked;
 
-  // Count deals matching criteria from loaded data
-  let candidates = deals.filter(d => !d.ai_analyzed_at);
-  if (hotOnly) candidates = candidates.filter(d=>(d.roi_percent||0)>=30);
-  if (analyzeProvs.size > 0)
-    candidates = candidates.filter(d=>analyzeProvs.has(getProvince(d.location||"")));
-  const toProcess = Math.min(candidates.length, limit);
+  const usingSelection = selectedDealKeys.size > 0;
 
-  // Estimate: cache hits save tokens; assume ~30% cache hit rate initially
+  // ── Choose candidate pool ────────────────────────────────────────────────
+  let candidates;
+  let provList;
+
+  if (usingSelection) {
+    // Use explicitly selected deals
+    candidates = deals.filter(d => selectedDealKeys.has(dealKey(d)));
+    provList = "ทรัพย์ที่เลือก";
+  } else {
+    // Normal province/hotOnly filter
+    candidates = deals.filter(d => {
+      if (hotOnly && (d.roi_percent||0) < 30) return false;
+      if (analyzeProvs.size > 0 && !analyzeProvs.has(getProvince(d.location||""))) return false;
+      return true;
+    });
+    provList = analyzeProvs.size > 0 ? [...analyzeProvs].join(", ") : "ทุกจังหวัด";
+  }
+
+  // ── Split: already analyzed vs fresh ────────────────────────────────────
+  const alreadyDone  = candidates.filter(d =>  isAnalyzed(d));
+  const notYetDone   = candidates.filter(d => !isAnalyzed(d));
+
+  // For normal mode: only queue un-analyzed (unless reanalyze checked)
+  const allowReanalyze = document.getElementById("chk-reanalyze")?.checked;
+  const toQueue = usingSelection
+    ? (allowReanalyze ? candidates : notYetDone)
+    : notYetDone;  // normal mode always skips done unless forced
+
+  const toProcess = Math.min(toQueue.length, limit);
   const estApiCalls = Math.round(toProcess * 0.7);
-  const provList = analyzeProvs.size > 0
-    ? [...analyzeProvs].join(", ")
-    : "ทุกจังหวัด";
+
+  // ── Summary HTML ─────────────────────────────────────────────────────────
+  const selRow = usingSelection
+    ? `<div class="analyze-confirm-row"><span>โหมด</span><b>☑ ทรัพย์ที่เลือก (${selectedDealKeys.size} รายการ)</b></div>`
+    : `<div class="analyze-confirm-row"><span>จังหวัด</span><b>${provList}</b></div>`;
 
   const summary = `
-    <div class="analyze-confirm-row"><span>จังหวัด</span><b>${provList}</b></div>
-    <div class="analyze-confirm-row"><span>Deals รอวิเคราะห์ (ไม่มี AI data)</span><b>${candidates.length.toLocaleString()} deals</b></div>
+    ${selRow}
+    <div class="analyze-confirm-row"><span>ทรัพย์ทั้งหมดในกลุ่ม</span><b>${candidates.length.toLocaleString()} deals</b></div>
+    <div class="analyze-confirm-row"><span>ยังไม่ได้ Analyze</span><b>${notYetDone.length.toLocaleString()} deals</b></div>
     <div class="analyze-confirm-row"><span>จะประมวลผล (batch)</span><b>${toProcess.toLocaleString()} deals</b></div>
-    <div class="analyze-confirm-row"><span>ประเภท</span><b>${hotOnly?"🔥 HOT deals เท่านั้น (ROI ≥ 30%)":"ทั้งหมด"}</b></div>
+    ${!usingSelection?`<div class="analyze-confirm-row"><span>ประเภท</span><b>${hotOnly?"🔥 HOT เท่านั้น":"ทั้งหมด"}</b></div>`:""}
     <div class="analyze-confirm-row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
-      <span>ประมาณ Sonar Pro API calls</span><b style="color:var(--gold)">~${estApiCalls} calls</b>
+      <span>ประมาณ Sonar Pro API calls</span><b style="color:var(--accent)">~${estApiCalls} calls</b>
     </div>
-    <div style="font-size:9px;color:var(--gray);margin-top:4px">♻️ Deals ในโครงการ/ทำเลเดียวกันจะใช้ cache แทน — ไม่เสีย token</div>
+    <div style="font-size:9px;color:var(--textMid);margin-top:4px">♻️ Deals ในโครงการ/ทำเลเดียวกันจะใช้ cache แทน — ไม่เสีย token</div>
   `;
   document.getElementById("analyze-confirm-summary").innerHTML = summary;
+
+  // ── Re-analyze warning ────────────────────────────────────────────────────
+  const warnBox  = document.getElementById("reanalyze-warn");
+  const warnCnt  = document.getElementById("reanalyze-count");
+  const runBtn   = document.getElementById("btn-run-analyze");
+  if (alreadyDone.length > 0) {
+    warnBox.style.display = "block";
+    warnCnt.textContent   = alreadyDone.length;
+    // Disable run button if there are ONLY already-done deals and reanalyze not checked
+    if (usingSelection && notYetDone.length === 0 && !allowReanalyze) {
+      runBtn.disabled = true;
+      runBtn.title    = "เลือก 'analyze ซ้ำ' ก่อน";
+    } else {
+      runBtn.disabled = false;
+      runBtn.title    = "";
+    }
+  } else {
+    warnBox.style.display = "none";
+    runBtn.disabled = toProcess === 0;
+    runBtn.title    = toProcess === 0 ? "ไม่มีทรัพย์ที่จะ analyze" : "";
+  }
+
   document.getElementById("analyze-confirm-box").style.display = "block";
 }
 
+function onReanalyzeToggle() {
+  // Re-run preview to update counts and button state
+  previewAnalyze();
+}
+
 async function doRunAnalyze() {
-  const limit   = parseInt(document.getElementById("analyze-limit").value)||50;
-  const hotOnly = document.getElementById("analyze-hot-only").checked;
-  const btn     = document.getElementById("btn-run-analyze");
+  const limit          = parseInt(document.getElementById("analyze-limit").value)||50;
+  const hotOnly        = document.getElementById("analyze-hot-only").checked;
+  const allowReanalyze = document.getElementById("chk-reanalyze")?.checked || false;
+  const usingSelection = selectedDealKeys.size > 0;
+  const btn = document.getElementById("btn-run-analyze");
 
   btn.disabled = true;
   btn.textContent = "⏳ กำลังส่ง...";
   document.getElementById("analyze-status").textContent = "กำลังส่ง request...";
 
   try {
-    const provsParam = analyzeProvs.size > 0
-      ? "&provinces=" + encodeURIComponent([...analyzeProvs].join(","))
-      : "";
-    const r = await fetch(`${API}/analyze?limit=${limit}&hot_only=${hotOnly}${provsParam}`, {method:"POST"});
+    let url, body = {};
+
+    if (usingSelection) {
+      // Build list of listing_urls for selected deals
+      const selectedDeals = deals.filter(d => selectedDealKeys.has(dealKey(d)));
+      const urls = selectedDeals.map(d => d.listing_url).filter(Boolean);
+      url = `${API}/analyze?limit=${limit}&force=${allowReanalyze}`;
+      body = { urls, force_reanalyze: allowReanalyze };
+    } else {
+      const provsParam = analyzeProvs.size > 0
+        ? "&provinces=" + encodeURIComponent([...analyzeProvs].join(","))
+        : "";
+      url = `${API}/analyze?limit=${limit}&hot_only=${hotOnly}${provsParam}&force=${allowReanalyze}`;
+    }
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: usingSelection ? {"Content-Type":"application/json"} : undefined,
+      body: usingSelection ? JSON.stringify(body) : undefined,
+    });
     const d = await r.json();
     document.getElementById("analyze-status").textContent = d.message || "Started";
-    showToast("🧠 AI Analysis เริ่มทำงานแล้ว — รอสักครู่แล้ว reload");
+    const modeStr = usingSelection ? `${selectedDealKeys.size} ทรัพย์ที่เลือก` : "deals ทั้งหมด";
+    showToast(`🧠 AI Analysis เริ่มทำงานแล้ว (${modeStr}) — รอสักครู่แล้ว reload`);
     hideAnalyzeConfirm();
+    // Clear selection after sending
+    if (usingSelection) clearSelection();
   } catch(e) {
     document.getElementById("analyze-status").textContent = "Error: "+e.message;
     showToast("❌ Analyze error: "+e.message);
