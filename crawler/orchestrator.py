@@ -410,6 +410,18 @@ class AutonomousCrawler:
             "scraped_at":    datetime.now(timezone.utc).isoformat(),
             "raw_data":      raw_dict,
         }
+        # ── buy_price: ใช้ค่าจาก harvester ถ้ามี มิฉะนั้น fallback ──────────────────
+        # BAM harvester ตั้ง buy_price เองแล้ว ส่วน NPA อื่น price = buy price
+        harvester_buy = record.get("buy_price")
+        if harvester_buy is not None:
+            try:
+                bp = int(float(str(harvester_buy).replace(",", "")))
+                if bp > 0:
+                    result["buy_price"] = bp
+            except (ValueError, TypeError):
+                pass
+        elif source_type in ("bank_npa", "enforcement") and price and price > 0:
+            result["buy_price"] = price
         if title:
             result["project_name"] = title
         if area_sqm and area_sqm > 0:

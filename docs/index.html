@@ -1097,7 +1097,11 @@ function computeSrcStats() {
     const src = d.source_domain || "unknown";
     if (!srcStats[src]) srcStats[src] = {count:0, hot:0};
     srcStats[src].count++;
-    if ((d.roi_percent||0) >= 30) srcStats[src].hot++;
+    // ใช้ calcFreshRoi + roi_data_source เหมือน HOT filter หลัก เพื่อ consistency
+    if ((d.roi_data_source === 'sonar_pro' || d.roi_data_source === 'cache') &&
+        d.roi_valid !== false && calcFreshRoi(d) >= 30) {
+      srcStats[src].hot++;
+    }
   });
 }
 
@@ -1120,10 +1124,11 @@ async function loadStats() {
     const total = d.total_deals || deals.length;
     if (total > 0) document.getElementById("s-hot-pct").textContent = ((hotCount/total)*100).toFixed(1)+"%";
     
-    // AVG ROI — exclude outliers (roi_valid=false หรือ ROI > 120%) เพื่อกัน Sonar unit confusion
+    // AVG ROI — เฉพาะ deals ที่ผ่าน AI analyze จริง (sonar_pro/cache) และ ROI อยู่ในช่วงสมเหตุสมผล
     const validRois = deals
       .filter(deal => {
         if (deal.roi_valid === false) return false;
+        if (deal.roi_data_source !== 'sonar_pro' && deal.roi_data_source !== 'cache') return false;
         const r = calcFreshRoi(deal);
         return r != null && r >= -50 && r <= 120;
       })
