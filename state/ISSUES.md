@@ -16,7 +16,7 @@
   1. Push git → redeploy Render
   2. ตรวจสอบว่า Supabase update bulk ทำงานจริงไหม
   3. หลัง reset สำเร็จ → frontend reload deals ใหม่อัตโนมัติ
-- **Status:** OPEN → มอบหมาย Antigravity
+- **Status:** FIXED (2026-04-18) — commit 786c3d5
 
 ---
 
@@ -27,8 +27,8 @@
 - **Symptom:** dashboard แสดง AVG ROI = 120.0% ซึ่งสูงเกินจริง
 - **Root cause:** Sonar Pro บางครั้ง return ราคา ฿/ตร.ม. มาเป็นราคารวม → ROI พุ่งสูง
   sanity check `roi_max > 200%` ดักได้บางส่วน แต่ case ที่ 100-200% หลุดผ่าน
-- **Fix needed:** ปรับ sanity threshold + filter avg ROI ใน frontend ให้ exclude outlier
-- **Status:** OPEN → มอบหมาย Antigravity
+- **Fix:** perplexity_analyzer.py roi_max > 200 → 120 + frontend exclude roi > 120% จาก AVG
+- **Status:** FIXED (2026-04-18) — commit 786c3d5
 
 ---
 
@@ -39,8 +39,8 @@
 - **Symptom:** scan LED [asset.led.go.th] → pages=0 saved=0 ทุกครั้ง
 - **Root cause:** Playwright ต้องใช้ `networkidle` wait ให้ JS set CAPTCHA ก่อน
   code fix เขียนแล้วใน led_harvester_v2.py แต่ยังไม่ push
-- **Fix needed:** Push git + verify Playwright CAPTCHA read ทำงานบน Render
-- **Status:** OPEN → Antigravity verify หลัง push
+- **Fix:** networkidle wait + 5s poll loop ใน led_harvester_v2.py (push 2026-04-18)
+- **Status:** PENDING VERIFY — ทดสอบใน dashboard หลัง Render deploy
 
 ---
 
