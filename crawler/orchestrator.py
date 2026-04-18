@@ -354,6 +354,8 @@ class AutonomousCrawler:
                     pass
 
         # Land area in rai → sqm (1 rai = 1,600 sqm)
+        # ⚠️ ใช้เป็น land_area_sqm เท่านั้น — ห้าม fallback เป็น area_sqm
+        # เพราะ Krungthai ส่ง calSumAreaCollGrpId (ที่ดิน rai) ซึ่ง ≠ พื้นที่ใช้สอย
         raw_rai = record.get("area_rai")
         if raw_rai is not None:
             try:
@@ -361,9 +363,10 @@ class AutonomousCrawler:
                 if rai > 0:
                     land_sqm = round(rai * 1600, 2)
                     if ptype == "land":
-                        land_area_sqm = land_sqm   # ที่ดิน → land_area_sqm
-                    elif area_sqm is None:
-                        area_sqm = land_sqm         # อื่นๆ → area_sqm
+                        land_area_sqm = land_sqm   # ที่ดิน → land_area_sqm ✅
+                    else:
+                        land_area_sqm = land_sqm   # บ้าน/คอนโด → land_area_sqm (context เท่านั้น)
+                        # ไม่ set area_sqm ← ป้องกัน implied ฿/sqm ผิดพลาด
             except (ValueError, TypeError):
                 pass
 

@@ -270,17 +270,31 @@ class ROIEngine:
         location  = data.get("location", "")
 
         # ─ เลือก area ที่เหมาะสม ─
-        # สำหรับที่ดิน: ใช้ land_area_sqm ก่อน, ถ้าไม่มีค่อยใช้ area_sqm
+        # สำหรับที่ดิน   : ใช้ land_area_sqm (ไร่→ตร.ม.) เป็นหลัก
+        # สำหรับ อื่นๆ   : ใช้ area_sqm (พื้นที่ใช้สอย) เท่านั้น
+        #                  ห้ามใช้ land_area_sqm แทน area_sqm —
+        #                  ไม่งั้น Krungthai/GSB ที่รายงาน rai จะทำให้ implied ฿/sqm ผิด
         area_built = data.get("area_sqm") or data.get("usable_area_sqm")
         area_land  = data.get("land_area_sqm")
 
         if prop_type == "land":
-            area = area_land or area_built
+            area = area_land or area_built   # ที่ดิน: land_area_sqm เป็นหลัก
         else:
-            area = area_built or area_land
+            area = area_built                # บ้าน/คอนโด: ต้องมี built area เท่านั้น
 
-        if not price or not area or price <= 0 or area <= 0:
-            return {"roi_valid": False, "roi_skip_reason": "ข้อมูลราคา/พื้นที่ไม่ครบ"}
+        if not price or price <= 0:
+            return {"roi_valid": False, "roi_skip_reason": "ไม่มีราคา"}
+        if not area or area <= 0:
+            reason = (
+                "ไม่มีพื้นที่ใช้สอย (area_sqm) — รอ Sonar Pro วิเคราะห์"
+                if prop_type != "land" else "ไม่มีพื้นที่ที่ดิน"
+            )
+            return {
+                "roi_valid":       False,
+                "roi_skip_reason": reason,
+                "buy_price":       price,
+                "roi_data_source": "estimate",
+            }
 
         # ─ Sanity: implied price/sqm ─
         implied_price_sqm = price / area

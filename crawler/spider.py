@@ -349,6 +349,11 @@ class RealEstateCrawler:
         "krungsriproperty.com":       "KrungsriHarvester",
         "npa-assets.gsb.or.th":       "GSBHarvester",
         "asset.home.scb":             "SCBHarvester",
+        # ── SAM (บสก.) ───────────────────────────────────────────
+        "sam.or.th":                  "SAMHarvester",
+        "www.sam.or.th":              "SAMHarvester",
+        # ── KKP Propify ──────────────────────────────────────────
+        "kkppropify.kkpfg.com":       "KKPHarvester",
         # ── กรมบังคับคดี ────────────────────────────────────────
         "www.led.go.th":         "LEDHarvesterV2",
         "led.go.th":             "LEDHarvesterV2",
@@ -399,6 +404,12 @@ class RealEstateCrawler:
         elif harvester_name == "KBankHarvester":
             from crawler.kbank_harvester import KBankHarvester
             return KBankHarvester(page_size=12, delay=2.5)
+        elif harvester_name == "SAMHarvester":
+            from crawler.sam_harvester import SAMHarvester
+            return SAMHarvester(delay=2.0)
+        elif harvester_name == "KKPHarvester":
+            from crawler.kkp_harvester import KKPHarvester
+            return KKPHarvester(delay=1.5)
         elif harvester_name == "DDPropertyHarvester":
             from crawler.ddproperty_harvester import DDPropertyHarvester
             return DDPropertyHarvester(rows_per_page=30, delay=1.5)
