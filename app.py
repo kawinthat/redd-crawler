@@ -546,6 +546,69 @@ TYPE_TH_PY = {
 }
 
 
+@app.post("/deals/reset-analysis")
+async def reset_analysis():
+    """
+    ล้างข้อมูล AI Analysis ทั้งหมดออกจาก deals
+    — ไม่ลบตัว deal (listing_url, price, location ฯลฯ คงอยู่)
+    — เฉพาะ field ที่ Sonar Pro/analyzer เขียน เท่านั้น
+    """
+    db = _get_supabase()
+
+    # fields ทั้งหมดที่ analyzer เขียน — set เป็น null
+    null_fields: dict = {
+        # ── core AI output ──────────────────────────────────
+        "ai_analysis":            None,
+        "ai_analyzed_at":         None,
+        "roi_data_source":        None,
+        "source_urls":            None,
+        # ── ราคาตลาด 3 ระดับ (schema ใหม่) ───────────────
+        "price_original_low":     None,
+        "price_original_high":    None,
+        "price_good_low":         None,
+        "price_good_high":        None,
+        "price_reno_low":         None,
+        "price_reno_high":        None,
+        "rental_monthly_est":     None,
+        # ── ข้อมูลโครงการ (schema ใหม่) ───────────────────
+        "project_official_name":  None,
+        "project_developer":      None,
+        "project_address":        None,
+        # ── market value / ฿ per sqm ──────────────────────
+        "market_value":           None,
+        "market_value_min":       None,
+        "market_value_max":       None,
+        "market_value_before_reno": None,
+        "market_price_sqm":       None,
+        "market_price_sqm_min":   None,
+        "market_price_sqm_max":   None,
+        # ── cost breakdown ─────────────────────────────────
+        "reno_cost_total":        None,
+        "reno_cost_sqm":          None,
+        "transfer_fee":           None,
+        "total_cost":             None,
+        # ── ROI ────────────────────────────────────────────
+        "estimated_profit":       None,
+        "estimated_profit_max":   None,
+        "roi_percent":            None,
+        "roi_min":                None,
+        "roi_max":                None,
+        "roi_valid":              None,
+        "roi_flag":               None,
+        "priority":               None,
+    }
+
+    try:
+        # Supabase: update ทุก row (ใช้ neq id 0 เพื่อจับทุก row)
+        result = db.table("deals").update(null_fields).neq("id", 0).execute()
+        affected = len(result.data) if result.data else 0
+        logger.info(f"reset-analysis: cleared {affected} deals")
+        return {"status": "ok", "cleared": affected, "fields_reset": list(null_fields.keys())}
+    except Exception as e:
+        logger.error(f"reset-analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/deals/stats")
 def deal_stats():
     """Summary stats: total deals, HOT count, avg ROI, by source."""

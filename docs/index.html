@@ -475,6 +475,7 @@ input,select{font-family:var(--font)}
       <span id="api-label">กำลังเชื่อมต่อ...</span>
     </div>
     <button class="btn btn-teal" id="btn-analyze" onclick="openAnalyze()" style="display:none" title="วิเคราะห์ deals ด้วย AI Perplexity">🧠 Analyze</button>
+    <button class="btn btn-ghost" id="btn-reset-analysis" onclick="confirmResetAnalysis()" style="display:none" title="ล้างข้อมูล AI Analysis ทั้งหมด (ไม่ลบรายการทรัพย์)">🗑 ล้าง AI</button>
     <button class="btn btn-ghost" id="btn-dryrun" onclick="openScanModal(true)" style="display:none">🧪 Dry Run</button>
     <button class="btn btn-danger" id="btn-stop" onclick="stopScan()">⏹ หยุด</button>
     <button class="btn btn-primary" id="btn-scan" onclick="openScanModal(false)" disabled>⏳ รอ server...</button>
@@ -918,6 +919,7 @@ async function checkAPI() {
       document.getElementById("btn-scan").textContent = "▶ เริ่มสแกน";
       document.getElementById("btn-dryrun").style.display = "";
       document.getElementById("btn-analyze").style.display = "";
+      document.getElementById("btn-reset-analysis").style.display = "";
       document.getElementById("wake-banner").style.display = "none";
       loadAll();
       checkScanStatusOnLoad();
@@ -2491,6 +2493,44 @@ function addLog(type, msg) {
   _renderLogEntry(body, entry);
   body.scrollTop = body.scrollHeight;
   document.getElementById("log-count").textContent = logs.length + " events";
+}
+
+// ─────────────────────────────────────────────
+// RESET AI ANALYSIS
+// ─────────────────────────────────────────────
+async function confirmResetAnalysis() {
+  const ok = confirm(
+    "⚠️ ล้างข้อมูล AI Analysis ทั้งหมด?\n\n" +
+    "รายการทรัพย์ (ราคา, ที่ตั้ง, ฯลฯ) จะยังอยู่ครบ\n" +
+    "แต่จะลบ: ราคาตลาด, ROI, กำไร, ข้อมูลโครงการ, กลุ่มลูกค้า, ทำเล\n\n" +
+    "กด OK เพื่อยืนยัน — การกระทำนี้ไม่สามารถย้อนกลับได้"
+  );
+  if (!ok) return;
+
+  const btn = document.getElementById("btn-reset-analysis");
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "⏳ กำลังล้าง...";
+
+  try {
+    const r = await fetch(`${API}/deals/reset-analysis`, { method: "POST" });
+    const d = await r.json();
+    if (r.ok && d.status === "ok") {
+      showToast(`✅ ล้าง AI Analysis เรียบร้อย (${d.cleared} รายการ)`);
+      addLog("warn", `🗑 ล้าง AI Analysis ทั้งหมดแล้ว — ${d.cleared} deals ถูก reset`);
+      // reload deals เพื่ออัพเดทหน้าจอ
+      setTimeout(loadDeals, 800);
+    } else {
+      showToast("❌ เกิดข้อผิดพลาด: " + (d.detail || JSON.stringify(d)));
+      addLog("error", "❌ reset-analysis failed: " + (d.detail || JSON.stringify(d)));
+    }
+  } catch (e) {
+    showToast("❌ เชื่อมต่อ API ไม่ได้: " + e.message);
+    addLog("error", "❌ reset-analysis error: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
 }
 
 // ─────────────────────────────────────────────
