@@ -58,7 +58,7 @@ PROMPT_TEMPLATE = """\
 โครงการ/หมู่บ้าน: {project_name}
 พื้นที่/ขนาด: {area}
 จังหวัด: {province}  |  เขต/อำเภอ: {district}
-ราคา NPA (ราคาซื้อ): {buy_price_fmt}
+ราคา ประมูล (ราคาซื้อ): {buy_price_fmt}
 
 ต้องการข้อมูล 4 ส่วน:
 
@@ -144,7 +144,12 @@ CONDITION_TH_MAP = {
 
 
 def _build_prompt(deal: dict) -> str:
-    """Build a Perplexity Sonar Pro prompt from a deal dict."""
+    """Build a Perplexity Sonar Pro prompt from a deal dict.
+
+    Note: For LED enforcement deals (source_type='bank_npa' or 'enforcement'),
+    the prompt treats the auction price as the acquisition cost and seeks
+    comparable market prices for flip analysis.
+    """
     import re
     loc = deal.get("location") or ""
     m = re.search(r"^([ก-๙a-zA-Z]+)\s+((?:อำเภอ|เขต)[ก-๙a-zA-Z ]+)", loc)

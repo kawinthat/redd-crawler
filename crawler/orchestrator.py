@@ -416,6 +416,9 @@ class AutonomousCrawler:
             result["area_sqm"] = area_sqm
         if land_area_sqm and land_area_sqm > 0:
             result["land_area_sqm"] = land_area_sqm
+        # Pass through auction_date if harvester sets it (LED enforcement deals)
+        if record.get("auction_date"):
+            result["auction_date"] = str(record["auction_date"])
         # Pass through raw_data dict if already set correctly by harvester
         if isinstance(record.get("raw_data"), dict):
             result["raw_data"] = record["raw_data"]

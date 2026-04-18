@@ -155,7 +155,8 @@ async def _run_scan(req: ScanRequest):
         # crawler จะ update dict นี้ real-time ทุก deal ที่ save
         combined_stats = {"pages": 0, "scraped": 0, "saved": 0, "hot": 0,
                           "dedup_skipped": 0, "sites": [],
-                          "total_sites": len(target_urls), "done_sites": 0}
+                          "total_sites": len(target_urls), "done_sites": 0,
+                          "current_site": "", "progress": ""}
         _scan_state["stats"] = combined_stats  # frontend อ่าน reference นี้ตลอดเวลา
 
         crawler = AutonomousCrawler(

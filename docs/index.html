@@ -1918,6 +1918,7 @@ function dealCard(d) {
       ${isPromo?`<div style="margin-bottom:6px"><span class="promo-badge">🏷 Promotion</span>${savePct>0?`<span class="price-save">ลด ${savePct}%</span>`:""}</div>`:""}
       <div class="card-title" title="${title}">${title}</div>
       <div class="card-loc">📍 ${loc||"—"} · ${areaDisp}</div>
+      ${(d.auction_date||(d.raw_data&&d.raw_data.bid_dates&&d.raw_data.bid_dates[0]))?`<div class="card-loc" style="color:var(--yellow);font-size:9px">📅 ประมูล: ${d.auction_date||(d.raw_data&&d.raw_data.bid_dates&&d.raw_data.bid_dates[0])||''}</div>`:""}
       <div class="card-fields">
         <div class="cf">
           <div class="cf-lbl">ราคาซื้อ</div>
@@ -1973,9 +1974,15 @@ function dealCard(d) {
                          : isGSB ? gsbSearchUrl
                          : url;
         const srcLabel = url !== "#" && url ? url.replace(/https?:\/\/(www\.)?/,"").split("?")[0].slice(0,48) : srcDom;
+        const srcType = d.source_type || "unknown";
+        const typeBadge = srcType === "bank_npa" ? '<span style="background:var(--red);color:white;padding:2px 6px;border-radius:3px;font-size:8px;font-weight:700;margin-right:4px">🏦 BANK NPA</span>'
+          : srcType === "enforcement" ? '<span style="background:var(--orange);color:white;padding:2px 6px;border-radius:3px;font-size:8px;font-weight:700;margin-right:4px">🏛️ LED</span>'
+          : srcType === "developer" ? '<span style="background:var(--blue);color:white;padding:2px 6px;border-radius:3px;font-size:8px;font-weight:700;margin-right:4px">🏢 Developer</span>'
+          : srcType === "agent" ? '<span style="background:var(--teal);color:white;padding:2px 6px;border-radius:3px;font-size:8px;font-weight:700;margin-right:4px">🏠 Agent</span>'
+          : "";
         return `<div class="card-source" style="cursor:default">
           <div>
-            <div class="card-src-lbl">แหล่งที่มา${assetCode?` · รหัส: <span style="color:var(--accent);font-weight:700;cursor:pointer" onclick="navigator.clipboard.writeText('${assetCode}');showToast('คัดลอก ${assetCode} แล้ว')" title="คลิกเพื่อคัดลอก">${assetCode} 📋</span>`:""}</div>
+            <div class="card-src-lbl">${typeBadge}แหล่งที่มา${assetCode?` · รหัส: <span style="color:var(--accent);font-weight:700;cursor:pointer" onclick="navigator.clipboard.writeText('${assetCode}');showToast('คัดลอก ${assetCode} แล้ว')" title="คลิกเพื่อคัดลอก">${assetCode} 📋</span>`:""}</div>
             <span class="card-src-url">🔗 ${srcLabel}</span>
           </div>
           <a href="${workingUrl}" target="_blank" rel="noopener" style="color:var(--accent);font-size:18px" title="${isBAM?'ค้นหาบน BAM':'เปิดหน้าทรัพย์จากต้นทาง'}">↗</a>

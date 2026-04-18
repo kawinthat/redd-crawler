@@ -177,8 +177,11 @@ class KBankHarvester:
             if price <= 0:
                 return None
             pid = item.get("id") or item.get("Id") or item.get("propertyId") or ""
-            url = (item.get("url") or item.get("Url") or item.get("detailUrl") or
-                   f"https://www.kasikornbank.com/th/propertyforsale/detail/{pid}" if pid else "")
+            # Fix: parentheses ensure url resolution before conditional
+            url = (
+                item.get("url") or item.get("Url") or item.get("detailUrl") or
+                (f"https://www.kasikornbank.com/th/propertyforsale/detail/{pid}" if pid else "")
+            )
             orig = float(item.get("originalPrice") or item.get("appraisePrice") or 0)
             raw = dict(item)
             if orig > price:

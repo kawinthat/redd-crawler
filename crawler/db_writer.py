@@ -70,10 +70,10 @@ DEALS_COLUMNS = frozenset({
     "roi_valid", "roi_percent", "roi_flag", "priority", "roi_data_source",
     "estimated_profit", "total_cost",
     "market_value",             # ราคาตลาดหลังรีโนเวท (สภาพดี)
-    "market_value_before_reno", # ราคาตลาดก่อนรีโนเวท (สภาพเดิม) — จาก Sonar Pro
+    "market_value_before_reno", # ราคาตลาดก่อนรีโนเวท (สภาพเดิม)
     "reno_cost_total", "reno_cost_sqm", "transfer_fee", "market_price_sqm", "buy_price",
-    "source_urls",               # URL อ้างอิงราคาตลาดจาก Sonar Pro (JSONB array)
-    "dedup_key", "is_duplicate",
+    "source_urls",              # URL references for market prices (JSONB array)
+    "dedup_key",                # 16-char MD5 fingerprint for cross-scan dedup
     "scraped_at", "updated_at", "raw_data",
 })
 

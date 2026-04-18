@@ -45,6 +45,16 @@ CREATE TABLE IF NOT EXISTS deals (
   market_value    BIGINT,
   reno_cost_total BIGINT,
 
+  -- Deduplication & Market Data
+  dedup_key       TEXT,                     # 16-char MD5 fingerprint for cross-site dedup
+  market_value_before_reno BIGINT,          # ราคาตลาดก่อนรีโนเวท (สภาพเดิม)
+  reno_cost_sqm   NUMERIC(10,2),
+  transfer_fee    BIGINT,
+  market_price_sqm NUMERIC(10,2),
+  buy_price       BIGINT,
+  source_urls     JSONB,                    # URL references for market prices
+  roi_data_source TEXT,
+
   -- Meta
   scraped_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW(),
@@ -62,6 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_deals_source      ON deals (source_domain);
 CREATE INDEX IF NOT EXISTS idx_deals_location    ON deals (location);
 CREATE INDEX IF NOT EXISTS idx_deals_scraped     ON deals (scraped_at DESC);
 CREATE INDEX IF NOT EXISTS idx_deals_property    ON deals (property_type);
+CREATE INDEX IF NOT EXISTS idx_deals_dedup       ON deals (dedup_key) WHERE dedup_key IS NOT NULL;
 
 
 -- ─── SCRAPE CACHE TABLE ─────────────────────────
