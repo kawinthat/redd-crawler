@@ -133,44 +133,42 @@ async def _run_scan(req: ScanRequest):
         target_urls = NPA_SITES + PROMO_SITES
 
     try:
-        crawler = AutonomousCrawler(
-            dry_run    = req.dry_run,
-            line_token = os.getenv("LINE_NOTIFY_TOKEN"),
-        )
-
+        # สร้าง combined_stats ก่อน แล้วส่งเป็น live_stats ให้ crawler
+        # crawler จะ update dict นี้ real-time ทุก deal ที่ save
         combined_stats = {"pages": 0, "scraped": 0, "saved": 0, "hot": 0,
                           "dedup_skipped": 0, "sites": [],
                           "total_sites": len(target_urls), "done_sites": 0}
-        _scan_state["stats"] = combined_stats  # expose ทันที ไม่รอจบ
+        _scan_state["stats"] = combined_stats  # frontend อ่าน reference นี้ตลอดเวลา
+
+        crawler = AutonomousCrawler(
+            dry_run    = req.dry_run,
+            line_token = os.getenv("LINE_NOTIFY_TOKEN"),
+            live_stats = combined_stats,   # crawler update real-time ผ่าน reference เดียวกัน
+        )
 
         for site_url in target_urls:
             logger.info(f"Scanning (unlimited): {site_url}")
-            _scan_state["stats"]["current_site"] = site_url
+            combined_stats["current_site"] = site_url
 
             config = CrawlConfig(
                 base_url     = site_url,
-                max_pages    = req.max_pages,    # UNLIMITED by default
-                max_listings = req.max_listings, # UNLIMITED by default
+                max_pages    = req.max_pages,
+                max_listings = req.max_listings,
                 concurrency  = req.concurrency,
                 delay_min    = 0.5,
                 delay_max    = 1.5,
             )
             try:
                 stats = await crawler.run(site_url, config)
-                combined_stats["pages"]        += stats.get("pages_crawled", 0)
-                combined_stats["scraped"]      += stats.get("scraped", 0)
-                combined_stats["saved"]        += stats.get("saved", 0)
-                combined_stats["hot"]          += stats.get("hot_deals", 0)
-                combined_stats["dedup_skipped"]+= stats.get("dedup_skipped", 0)
-                combined_stats["done_sites"]   += 1
+                # saved/hot/scraped ถูก update real-time แล้ว ไม่ต้อง += อีก
+                # แต่ dedup_skipped ต้อง += เพราะ orchestrator reset ต่อ site
+                combined_stats["dedup_skipped"] += stats.get("dedup_skipped", 0)
+                combined_stats["done_sites"]    += 1
                 combined_stats["sites"].append({"url": site_url, "status": "ok", **stats})
             except Exception as site_err:
                 logger.error(f"Site {site_url} failed: {site_err}")
                 combined_stats["done_sites"] += 1
                 combined_stats["sites"].append({"url": site_url, "status": "error", "error": str(site_err)})
-
-            # ── อัพเดท scan state หลังแต่ละไซต์ (ไม่รอจบทุกไซต์) ──
-            _scan_state["stats"] = dict(combined_stats)
 
         _scan_state["stats"]       = combined_stats
         _scan_state["status"]      = "done"

@@ -51,9 +51,11 @@ class AutonomousCrawler:
         self,
         dry_run: bool = False,
         line_token: Optional[str] = None,
+        live_stats: Optional[dict] = None,   # shared dict — อัพเดท real-time ระหว่างสแกน
     ):
         self.dry_run     = dry_run
         self.line_token  = line_token
+        self.live_stats  = live_stats or {}  # reference ที่ app.py อ่านได้ตลอดเวลา
         self.extractor   = DetailExtractor()           # reads OPENROUTER_API_KEY from env
         self.roi_engine  = ROIEngine()
         self.db          = SupabaseWriter()            # reads SUPABASE_URL/KEY from env
@@ -107,6 +109,9 @@ class AutonomousCrawler:
                 self._stats["scraped"] = len(api_data)
                 self._stats["extracted"] = len(api_data)
                 self._stats["pages_crawled"] = len(api_data)
+                # live stats: แสดงจำนวน scraped ทันที
+                self.live_stats["scraped"] = self.live_stats.get("scraped", 0) + len(api_data)
+                self.live_stats["pages"]   = self.live_stats.get("pages", 0)   + len(api_data)
 
                 for url, record in api_data.items():
                     deal = self._api_record_to_deal(record)
@@ -122,20 +127,24 @@ class AutonomousCrawler:
                         ok = await self.db.upsert_deal(merged)
                         if ok:
                             self._stats["saved"] += 1
+                            self.live_stats["saved"] = self.live_stats.get("saved", 0) + 1
                         else:
-                            self._stats["errors"] += 1  # count failed upserts
+                            self._stats["errors"] += 1
                     else:
                         self._stats["saved"] += 1
+                        self.live_stats["saved"] = self.live_stats.get("saved", 0) + 1
 
                     if roi.get("priority") == "HIGH":
                         hot_deals.append(merged)
                         self._stats["hot_deals"] += 1
+                        self.live_stats["hot"] = self.live_stats.get("hot", 0) + 1
 
             else:
                 # ── Playwright Path: scrape detail pages ────────────────────────
                 # ใช้เฉพาะสำหรับ sites ที่ไม่มี API harvester
                 raw_listings = await self._scrape_details(listing_urls, config)
                 self._stats["scraped"] = len(raw_listings)
+                self.live_stats["scraped"] = self.live_stats.get("scraped", 0) + len(raw_listings)
 
                 if not raw_listings:
                     logger.warning("ไม่มี HTML ให้ extract")
@@ -163,12 +172,15 @@ class AutonomousCrawler:
                         ok = await self.db.upsert_deal(merged)
                         if ok:
                             self._stats["saved"] += 1
+                            self.live_stats["saved"] = self.live_stats.get("saved", 0) + 1
                     else:
                         self._stats["saved"] += 1
+                        self.live_stats["saved"] = self.live_stats.get("saved", 0) + 1
 
                     if roi.get("priority") == "HIGH":
                         hot_deals.append(merged)
                         self._stats["hot_deals"] += 1
+                        self.live_stats["hot"] = self.live_stats.get("hot", 0) + 1
 
             # ── Phase 5: Alert ──
             if not self.dry_run:
