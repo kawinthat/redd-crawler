@@ -493,14 +493,14 @@ input,select{font-family:var(--font)}
       <!-- ── Price range filter ── -->
       <div class="az-filter-section">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div class="az-section-lbl" style="margin-bottom:0">💰 ช่วงราคา (ล้านบาท)</div>
+          <div class="az-section-lbl" style="margin-bottom:0">💰 ช่วงราคา</div>
           <button class="az-clear-link" onclick="clearAnalyzePriceRange()">ล้าง</button>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="number" id="az-price-min" class="az-price-input" placeholder="ต่ำสุด" min="0" step="0.5" oninput="hideAnalyzeConfirm()">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <input type="number" id="az-price-min" class="az-price-input" placeholder="ต่ำสุด (บาท)" min="0" step="100000" oninput="hideAnalyzeConfirm()">
           <span style="color:var(--textMid);font-size:11px">–</span>
-          <input type="number" id="az-price-max" class="az-price-input" placeholder="สูงสุด" min="0" step="0.5" oninput="hideAnalyzeConfirm()">
-          <span style="color:var(--textLight);font-size:10px">ล้านบาท</span>
+          <input type="number" id="az-price-max" class="az-price-input" placeholder="สูงสุด (บาท)" min="0" step="100000" oninput="hideAnalyzeConfirm()">
+          <span style="color:var(--textLight);font-size:10px">เช่น 500000 – 5000000</span>
         </div>
       </div>
 
@@ -2098,11 +2098,11 @@ function previewAnalyze() {
   const limit   = parseInt(document.getElementById("analyze-limit").value)||50;
   const hotOnly = document.getElementById("analyze-hot-only").checked;
 
-  // Read price range from inputs (convert million baht → baht for comparison)
+  // Read price range from inputs (raw baht — compare directly against d.price)
   const priceMinInput = parseFloat(document.getElementById("az-price-min")?.value||"");
   const priceMaxInput = parseFloat(document.getElementById("az-price-max")?.value||"");
-  analyzePriceMin = isNaN(priceMinInput) ? null : priceMinInput * 1e6;
-  analyzePriceMax = isNaN(priceMaxInput) ? null : priceMaxInput * 1e6;
+  analyzePriceMin = isNaN(priceMinInput) ? null : priceMinInput;
+  analyzePriceMax = isNaN(priceMaxInput) ? null : priceMaxInput;
 
   const usingSelection = selectedDealKeys.size > 0;
 
@@ -2160,8 +2160,9 @@ function previewAnalyze() {
   const typeLabel = analyzeTypes.size === 0
     ? "ทุกประเภท"
     : [...analyzeTypes].map(t=>TYPE_NAMES[t]||t).join(", ");
+  const fmtBaht = v => v >= 1e6 ? (v/1e6).toLocaleString("th")+"M" : v.toLocaleString("th");
   const priceLabel = (analyzePriceMin !== null || analyzePriceMax !== null)
-    ? `${analyzePriceMin !== null ? (analyzePriceMin/1e6).toLocaleString()+"M" : "0"} – ${analyzePriceMax !== null ? (analyzePriceMax/1e6).toLocaleString()+"M" : "∞"} บาท`
+    ? `${analyzePriceMin !== null ? fmtBaht(analyzePriceMin) : "0"} – ${analyzePriceMax !== null ? fmtBaht(analyzePriceMax) : "∞"} บาท`
     : "ทุกราคา";
   const statusLabel = analyzeAIStatus === "unanalyzed" ? "📋 ยังไม่ Analyze"
                     : analyzeAIStatus === "analyzed"   ? "🧠 Analyze แล้ว"
