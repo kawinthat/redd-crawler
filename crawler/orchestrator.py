@@ -282,10 +282,14 @@ class AutonomousCrawler:
         """
         # ── source_type (must match CHECK constraint) ────────────────────
         source_domain = str(record.get("source_domain") or record.get("source_site") or "")
+        PROMO_DOMAINS = {"krungsriproperty.com", "kasikornbank.com", "pamco.co.th", "ghbhomecenter.com"}
+        is_promo_domain = any(p in source_domain for p in PROMO_DOMAINS)
         if "led.go.th" in source_domain:
             source_type = "enforcement"          # กรมบังคับคดี
         elif record.get("is_benchmark"):
             source_type = "agent"                # market reference sites
+        elif record.get("is_promotion") or is_promo_domain:
+            source_type = "bank_npa"             # ใช้ bank_npa แต่ mark is_promotion ไว้ใน raw_data
         else:
             source_type = "bank_npa"             # krungthai, SCB NPA, GH Bank
 

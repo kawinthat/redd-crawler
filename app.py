@@ -74,6 +74,20 @@ NPA_SITES = [
     "https://asset.home.scb/project",
     # ── กรมบังคับคดี — REST API ✅
     "https://www.led.go.th",
+    # ── SAM (บสก.) — HTML scraper
+    "https://sam.or.th/site/npa/page_list.php?s_product_type=&s_province=&s_district=&s_status_id=&key_search=",
+    # ── KKP Propify — HTML scraper
+    "https://kkppropify.kkpfg.com/th/npa",
+    # ── Krungsri Home (ทรัพย์บ้าน)
+    "https://www.krungsriproperty.com/home",
+]
+
+# โปรโมชั่น / ราคาพิเศษ — ราคาลด ลดพิเศษจากธนาคาร
+PROMO_SITES = [
+    "https://www.krungsriproperty.com/investment_th",
+    "https://www.kasikornbank.com/th/propertyforsale/search/pages/index.aspx?tabname=PromotionPropertie",
+    "https://property.pamco.co.th/assets",
+    "https://www.ghbhomecenter.com/promotions",
 ]
 
 # ราคาตลาดอ้างอิง — ใช้ compare ROI กับ NPA
@@ -115,8 +129,8 @@ async def _run_scan(req: ScanRequest):
     elif req.url:
         target_urls = [req.url]
     else:
-        # Full scan: NPA sites only (market sites are reference data, not deal sources)
-        target_urls = NPA_SITES
+        # Full scan: NPA + Promotion sites
+        target_urls = NPA_SITES + PROMO_SITES
 
     try:
         crawler = AutonomousCrawler(
@@ -238,7 +252,7 @@ async def trigger_scan(req: ScanRequest, background_tasks: BackgroundTasks):
     if _scan_state["status"] == "running":
         raise HTTPException(409, "Scan already running")
 
-    target_urls = req.urls or ([req.url] if req.url else NPA_SITES)
+    target_urls = req.urls or ([req.url] if req.url else NPA_SITES + PROMO_SITES)
     background_tasks.add_task(_run_scan, req)
     return {
         "message":      "Scan started",

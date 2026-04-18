@@ -152,6 +152,13 @@ input,select{font-family:var(--font)}
 .sdot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.35);cursor:pointer;border:none;padding:0;transition:background .2s}
 .sdot.active{background:#fff;width:12px;border-radius:3px}
 .img-count{position:absolute;top:6px;right:7px;background:rgba(0,0,0,.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;z-index:2}
+/* ── Promotion Badge ── */
+.deal-card.promo{border-color:#ff6b2b44}
+.deal-card.promo:hover{border-color:#ff6b2b99}
+.promo-badge{display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#ff6b2b,#ff4500);color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;letter-spacing:.4px;text-transform:uppercase;box-shadow:0 0 8px #ff450055}
+.price-original{font-size:10px;color:var(--gray);text-decoration:line-through;margin-right:4px}
+.price-discount{color:#ff6b2b;font-weight:700;font-size:11px}
+.price-save{font-size:9px;color:#ff6b2b;background:#ff450015;border-radius:4px;padding:1px 5px;margin-left:3px}
 /* ── Lightbox ── */
 #lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;flex-direction:column}
 #lb-overlay.open{display:flex}
@@ -449,14 +456,24 @@ const API = "https://redd-crawler.onrender.com";
 const PAGE_SIZE = 50;
 
 const TARGET_SITES = [
+  // ── NPA ─────────────────────────────────────────────────────────────────
   { url:"https://npa.krungthai.com",           label:"Krungthai NPA",  type:"bank_npa",    domain:"npa.krungthai.com",    desc:"ทรัพย์ NPA ธนาคารกรุงไทย — REST API ~5k ทรัพย์" },
-  { url:"https://www.ghbhomecenter.com",        label:"GH Bank",        type:"bank_npa",    domain:"ghbhomecenter.com",    desc:"ทรัพย์ NPA ธนาคารอาคารสงเคราะห์ — HTML scraper ~3k ทรัพย์" },
+  { url:"https://www.ghbhomecenter.com",        label:"GH Bank NPA",    type:"bank_npa",    domain:"ghbhomecenter.com",    desc:"ทรัพย์ NPA ธนาคารอาคารสงเคราะห์ — HTML scraper ~3k ทรัพย์" },
   { url:"https://www.bam.co.th/npa",            label:"BAM",            type:"bank_npa",    domain:"bam.co.th",            desc:"ทรัพย์ NPA บริษัทบริหารสินทรัพย์กรุงเทพ — REST API ~16k ทรัพย์" },
-  { url:"https://www.krungsriproperty.com/home",label:"Krungsri",       type:"bank_npa",    domain:"krungsriproperty.com", desc:"ทรัพย์ NPA ธนาคารกรุงศรีอยุธยา — HTML scraper ~1.7k ทรัพย์" },
+  { url:"https://www.krungsriproperty.com/home",label:"Krungsri NPA",   type:"bank_npa",    domain:"krungsriproperty.com", desc:"ทรัพย์ NPA ธนาคารกรุงศรีอยุธยา — HTML scraper ~1.7k ทรัพย์" },
   { url:"https://npa-assets.gsb.or.th",         label:"GSB (ออมสิน)",   type:"bank_npa",    domain:"npa-assets.gsb.or.th", desc:"ทรัพย์ NPA ธนาคารออมสิน — SSR scraper ~3k+ ทรัพย์" },
+  { url:"https://npa-assets.gsb.or.th/asset/npa/all", label:"GSB ทั้งหมด", type:"bank_npa", domain:"npa-assets.gsb.or.th", desc:"ทรัพย์ NPA ออมสิน — ทุกประเภทรวมในหน้าเดียว" },
   { url:"https://asset.home.scb/project",       label:"SCB Asset",      type:"bank_npa",    domain:"asset.home.scb",       desc:"ทรัพย์ NPA ธนาคารไทยพาณิชย์ — REST API ~4k ทรัพย์" },
-  { url:"https://www.kasikornbank.com/th/propertyforsale/search/pages/index.aspx", label:"KBank", type:"bank_npa", domain:"kasikornbank.com", desc:"ทรัพย์ NPA ธนาคารกสิกรไทย — WAF (Incapsula) — deferred Playwright" },
-  { url:"https://www.led.go.th",                label:"กรมบังคับคดี",  type:"enforcement", domain:"led.go.th",             desc:"ทรัพย์ขายทอดตลาดบังคับคดี — REST API (WAF deferred)" },
+  { url:"https://www.kasikornbank.com/th/propertyforsale/search/pages/index.aspx", label:"KBank NPA", type:"bank_npa", domain:"kasikornbank.com", desc:"ทรัพย์ NPA ธนาคารกสิกรไทย — Playwright" },
+  { url:"https://www.led.go.th",                label:"กรมบังคับคดี",  type:"enforcement", domain:"led.go.th",             desc:"ทรัพย์ขายทอดตลาดบังคับคดี — REST API" },
+  { url:"https://sam.or.th/site/npa/page_list.php?s_product_type=&s_province=&s_district=&s_status_id=&key_search=", label:"SAM (บสก.)", type:"bank_npa", domain:"sam.or.th", desc:"บรรษัทบริหารสินทรัพย์ไทย — HTML scraper" },
+  { url:"https://kkppropify.kkpfg.com/th/npa",  label:"KKP Propify",    type:"bank_npa",    domain:"kkppropify.kkpfg.com", desc:"ทรัพย์ NPA เกียรตินาคินภัทร — HTML scraper" },
+  // ── Promotion / ราคาพิเศษ ───────────────────────────────────────────────
+  { url:"https://www.krungsriproperty.com/investment_th", label:"Krungsri Promo", type:"promotion", domain:"krungsriproperty.com", desc:"ราคาโปรโมชั่น ธนาคารกรุงศรีอยุธยา" },
+  { url:"https://www.kasikornbank.com/th/propertyforsale/search/pages/index.aspx?tabname=PromotionPropertie", label:"KBank Promo", type:"promotion", domain:"kasikornbank.com", desc:"ราคาโปรโมชั่น ธนาคารกสิกรไทย" },
+  { url:"https://property.pamco.co.th/assets",  label:"PAMCO",          type:"promotion",   domain:"pamco.co.th",           desc:"ทรัพย์ราคาพิเศษ PAMCO — บริษัทบริหารสินทรัพย์" },
+  { url:"https://www.ghbhomecenter.com/promotions", label:"GH Bank Promo", type:"promotion", domain:"ghbhomecenter.com",    desc:"ราคาโปรโมชั่น ธนาคารอาคารสงเคราะห์" },
+  // ── Marketplace ─────────────────────────────────────────────────────────
   { url:"https://www.ddproperty.com",           label:"DDProperty",     type:"marketplace", domain:"ddproperty.com",        desc:"ตลาดอสังหาฯ — market price benchmark" },
   { url:"https://www.hipflat.co.th",            label:"Hipflat",        type:"marketplace", domain:"hipflat.co.th",         desc:"ตลาดคอนโดมือสอง — price reference" },
   { url:"https://www.baania.com",               label:"Baania",         type:"marketplace", domain:"baania.com",            desc:"ตลาดอสังหาฯ + AI valuation" },
@@ -470,8 +487,14 @@ const SRC_COLORS = {
   "gsb":"#f59e0b",
   "scb":"#a855f7",
   "led":"#e05555",
+  "sam":"#e07b3b",
+  "kkp":"#0ea5e9","kkppropify":"#0ea5e9",
+  "kasikorn":"#1db954","kbank":"#1db954",
+  "pamco":"#f43f5e",
   "ddproperty":"#06b6d4","hipflat":"#0ea5e9","baania":"#8b5cf6",
 };
+// Promotion domains — ใช้สำหรับ detect & badge
+const PROMO_DOMAINS = ["krungsriproperty.com","kasikornbank.com","pamco.co.th","ghbhomecenter.com/promotions","ghbhomecenter.com"];
 const COND_COL = {poor:"#e05555",fair:"#f0b429",good:"#22d07a",new:"#22d07a"};
 const TYPE_TH  = {land:"ที่ดิน",condo:"คอนโด",house:"บ้านเดี่ยว",townhouse:"ทาวน์เฮาส์",commercial:"อาคารพาณิชย์",other:"ทรัพย์"};
 const PIPE_STEPS = [
@@ -928,6 +951,16 @@ function dealCard(d) {
   const roiLabel  = roiSuspect?"⚠️ N/A":rawRoi>=30?"🟢 ควรซื้อ":rawRoi>=15?"🟡 พิจารณา":"🔴 ข้าม";
   const roiDisp   = roiSuspect ? "N/A" : rawRoi.toFixed(1)+"%";
   const priceM    = d.price ? (d.price/1e6).toFixed(2) : "—";
+  // ── Promotion / ราคาลด ────────────────────────────────────────
+  const rawD      = typeof d.raw_data==="object" && d.raw_data ? d.raw_data : {};
+  const isPromo   = !!(rawD.is_promotion || rawD.original_price || rawD.discount_price
+                    || TARGET_SITES.find(s=>s.type==="promotion"&&(d.source_domain||"").includes(s.domain.split("/")[0])));
+  const origPrice = rawD.original_price ? Number(rawD.original_price) : 0;
+  const discPrice = rawD.discount_price  ? Number(rawD.discount_price)  : 0;
+  const saveAmt   = origPrice > 0 && d.price > 0 && origPrice > d.price
+                    ? origPrice - d.price
+                    : (origPrice > 0 && discPrice > 0 && origPrice > discPrice ? origPrice - discPrice : 0);
+  const savePct   = origPrice > 0 && saveAmt > 0 ? Math.round(saveAmt/origPrice*100) : 0;
   const areaSqm   = d.area_sqm || 0;
   const areaDisp  = areaSqm >= 1600 ? `${(areaSqm/1600).toFixed(2)} ไร่` : areaSqm>0 ? `${areaSqm} ตร.ม.` : "—";
   const cond      = d.condition || "—";
@@ -943,8 +976,8 @@ function dealCard(d) {
 
   // Slideshow
   const cardId = "c" + (d.id || Math.random().toString(36).slice(2,8));
-  const rawData = typeof d.raw_data==="object" && d.raw_data ? d.raw_data : {};
-  const images  = Array.isArray(rawData.images) && rawData.images.length>0 ? rawData.images : [];
+  const rawData = rawD;  // alias — already declared above
+  const images  = Array.isArray(rawD.images) && rawD.images.length>0 ? rawD.images : [];
   const hasImgs = images.length > 0;
   const imgsPipe = images.join("|");
 
@@ -992,15 +1025,19 @@ function dealCard(d) {
     </div>` : "";
 
   return `
-  <div class="deal-card${hot?" hot":""}">
+  <div class="deal-card${hot?" hot":""}${isPromo?" promo":""}">
     <div onclick="openLightbox('${cardId}',${JSON.stringify(images)})" style="cursor:${hasImgs?'zoom-in':'default'}">${imgHTML}</div>
     <div class="card-body">
+      ${isPromo?`<div style="margin-bottom:6px"><span class="promo-badge">🏷 Promotion</span>${savePct>0?`<span class="price-save">ลด ${savePct}%</span>`:""}</div>`:""}
       <div class="card-title" title="${title}">${title}</div>
       <div class="card-loc">📍 ${loc||"—"} · ${areaDisp}</div>
       <div class="card-fields">
         <div class="cf">
           <div class="cf-lbl">ราคาซื้อ</div>
-          <div class="cf-val" style="color:var(--white)">฿${priceM}M</div>
+          <div class="cf-val" style="color:var(--white)">
+            ${origPrice>0&&origPrice!==d.price?`<span class="price-original">฿${(origPrice/1e6).toFixed(2)}M</span>`:""}
+            <span${isPromo&&saveAmt>0?' class="price-discount"':""}>฿${priceM}M</span>
+          </div>
         </div>
         <div class="cf">
           <div class="cf-lbl">ประเภท</div>
