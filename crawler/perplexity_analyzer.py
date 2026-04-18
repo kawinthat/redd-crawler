@@ -75,13 +75,15 @@ JSON format (หน่วย: บาท และ บาท/ตร.ม.):
   "summary_th": null
 }}
 
-คำอธิบาย fields:
+คำอธิบาย fields (สำคัญมาก — ต้องกรอกทุก field):
 - market_price_sqm_before_reno: ราคาตลาด ฿/ตร.ม. สภาพเดิม ไม่รีโนเวท (ประเภทและทำเลเดียวกัน)
 - market_price_sqm_after_reno: ราคาตลาด ฿/ตร.ม. สภาพดี หลังรีโนเวทแล้ว
 - market_value_before_reno: มูลค่ารวมสภาพเดิม = market_price_sqm_before_reno × {area_sqm:.0f} ตร.ม.
 - market_value_after_reno: มูลค่ารวมหลังรีโนเวท = market_price_sqm_after_reno × {area_sqm:.0f} ตร.ม.
-- data_sources: URL หรือชื่อเว็บที่ใช้อ้างอิง
-- comparable_projects: โครงการที่ใกล้เคียงที่นำมาเปรียบเทียบ"""
+- data_sources: รายการ URL หรือชื่อเว็บที่ใช้อ้างอิงราคาตลาดจริง (เช่น ["https://www.ddproperty.com/...", "hipflat.co.th"])
+- comparable_projects: รายชื่อโครงการใกล้เคียงที่นำมาเปรียบเทียบราคา (เช่น ["The Trust Ratchada", "ลลิล Lumpini"])
+- target_buyers: กลุ่มลูกค้าเป้าหมาย (เช่น ["นักลงทุนปล่อยเช่า", "ครอบครัว", "นักลงทุน flip"])
+- summary_th: สรุปภาษาไทย 2-3 ประโยค ครอบคลุม: (1) ราคาตลาดที่ค้นเจอ (2) ศักยภาพการลงทุน (3) ข้อควรระวัง — ห้ามเว้นว่าง ต้องกรอกเสมอ"""
 
 TYPE_TH_MAP = {
     "house":      "บ้านเดี่ยว",
@@ -279,28 +281,59 @@ class PerplexityAnalyzer:
         # ── คำนวณ ROI ใหม่ด้วยราคาจริงจาก Sonar Pro ──────────────────
         if market_value_after and buy_price > 0 and area_sqm > 0:
             reno_total   = area_sqm * 5_000      # flat 5,000 ฿/ตร.ม.
-            transfer_fee = buy_price * 0.055     # 5.5%
+            transfer_fee = buy_price * 0.055     # 5.5% (โอน 2% + จดจำนอง 1% + อากร 0.5% + อื่นๆ)
             total_cost   = buy_price + reno_total + transfer_fee
             profit       = market_value_after - total_cost
             roi_pct      = (profit / total_cost) * 100
 
-            enrichment["reno_cost_total"]  = round(reno_total)
-            enrichment["reno_cost_sqm"]    = 5_000
-            enrichment["transfer_fee"]     = round(transfer_fee)
-            enrichment["total_cost"]       = round(total_cost)
-            enrichment["estimated_profit"] = round(profit)
-            enrichment["roi_percent"]      = round(roi_pct, 2)
-            enrichment["roi_valid"]        = True
-
-            if roi_pct >= 30:
-                enrichment["roi_flag"] = "🟢 ควรซื้อ"
-                enrichment["priority"] = "HIGH"
-            elif roi_pct >= 15:
-                enrichment["roi_flag"] = "🟡 พิจารณา"
-                enrichment["priority"] = "MEDIUM"
+            # ── Sanity checks — กัน ROI หลอก ──────────────────────────
+            # 1. ราคาตลาดต้องไม่ต่ำกว่าราคาซื้อ × 0.7 (ไม่มีใครซื้อสินทรัพย์ที่ขายได้แค่ 70% ของที่จ่ายไป)
+            if market_value_after < buy_price * 0.7:
+                logger.warning(
+                    f"Sanity fail deal {deal.get('id','?')}: "
+                    f"market_value_after {market_value_after:,.0f} < buy_price×0.7 {buy_price*0.7:,.0f} "
+                    f"— roi_valid=False"
+                )
+                enrichment["roi_valid"] = False
+                enrichment["roi_percent"] = round(roi_pct, 2)
+                enrichment["roi_flag"] = "⚠️ ข้อมูลผิดปกติ"
+                enrichment["priority"] = "SKIP"
+                enrichment["total_cost"] = round(total_cost)
+                enrichment["transfer_fee"] = round(transfer_fee)
+                enrichment["reno_cost_total"] = round(reno_total)
+                enrichment["reno_cost_sqm"] = 5_000
+            # 2. ROI ที่เป็นไปไม่ได้ (>200%) — Sonar Pro อาจ confuse ราคา/ตร.ม. กับราคารวม
+            elif roi_pct > 200:
+                logger.warning(
+                    f"Sanity fail deal {deal.get('id','?')}: "
+                    f"ROI {roi_pct:.1f}% > 200%% threshold — likely Sonar Pro confused unit "
+                    f"(market_value_after={market_value_after:,.0f}, area={area_sqm}) — roi_valid=False"
+                )
+                enrichment["roi_valid"] = False
+                enrichment["roi_flag"] = "⚠️ ROI เกินจริง (ตรวจสอบหน่วย)"
+                enrichment["priority"] = "SKIP"
+                enrichment["total_cost"] = round(total_cost)
+                enrichment["transfer_fee"] = round(transfer_fee)
+                enrichment["reno_cost_total"] = round(reno_total)
+                enrichment["reno_cost_sqm"] = 5_000
             else:
-                enrichment["roi_flag"] = "🔴 ข้ามไป"
-                enrichment["priority"] = "LOW"
+                enrichment["reno_cost_total"]  = round(reno_total)
+                enrichment["reno_cost_sqm"]    = 5_000
+                enrichment["transfer_fee"]     = round(transfer_fee)
+                enrichment["total_cost"]       = round(total_cost)
+                enrichment["estimated_profit"] = round(profit)
+                enrichment["roi_percent"]      = round(roi_pct, 2)
+                enrichment["roi_valid"]        = True
+
+                if roi_pct >= 30:
+                    enrichment["roi_flag"] = "🟢 ควรซื้อ"
+                    enrichment["priority"] = "HIGH"
+                elif roi_pct >= 15:
+                    enrichment["roi_flag"] = "🟡 พิจารณา"
+                    enrichment["priority"] = "MEDIUM"
+                else:
+                    enrichment["roi_flag"] = "🔴 ข้ามไป"
+                    enrichment["priority"] = "LOW"
 
         logger.info(
             f"✅ Sonar Pro analyzed deal {deal.get('id','?')} — "

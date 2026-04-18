@@ -1462,8 +1462,9 @@ function dealCard(d) {
       <span class="img-src-badge" style="background:${srcCol}22;color:${srcCol};border:1px solid ${srcCol}44">${(src.split(".")[0]||"").toUpperCase()}</span>
     </div>`;
 
-  // ROI breakdown
-  const hasBreakdown = d.roi_valid && d.total_cost;
+  // ── ROI Breakdown — แสดงเมื่อมีข้อมูลราคาตลาดจาก Sonar Pro ──────────────
+  // คำนวณสดทุกครั้ง ห้ามใช้ค่า stale จาก DB (estimated_profit / total_cost)
+  const hasBreakdown = !!(d.market_value && d.market_value > 0);
   const breakdownId = "bd-" + cardId;
   const breakdownHTML = hasBreakdown ? `
     <div class="roi-breakdown" id="${breakdownId}">
@@ -1472,22 +1473,47 @@ function dealCard(d) {
         const renoTotal  = d.reno_cost_total || 0;
         const renoArea   = d.area_sqm || d.usable_area_sqm || 0;
         const renoSqm    = d.reno_cost_sqm || (renoArea>0 && renoTotal>0 ? Math.round(renoTotal/renoArea) : null);
-        const transfer   = d.transfer_fee || Math.round(buyPrice * 0.04);
-        const totalCost  = d.total_cost || (buyPrice + renoTotal + transfer);
-        const mktVal     = d.market_value || 0;
-        const profit     = d.estimated_profit || (mktVal - totalCost);
-        const mktSqm     = d.market_price_sqm || null;
+        // ── ต้นทุน ──────────────────────────────────────────────────────────
+        // ค่าโอน 5.5% (2%โอน + 0.5%อากร + 1%จดจำนอง + 2%รายได้จากการโอน ≈ 5.5%)
+        const transfer    = d.transfer_fee && d.transfer_fee > 0
+                            ? d.transfer_fee
+                            : Math.round(buyPrice * 0.055);
+        const transferPct = buyPrice > 0 ? (transfer/buyPrice*100).toFixed(1) : "5.5";
+        // คำนวณต้นทุนรวมจาก line items จริงเสมอ — ห้ามใช้ d.total_cost (อาจ stale)
+        const totalCost   = buyPrice + renoTotal + transfer;
+        // ── ราคาตลาด ─────────────────────────────────────────────────────────
+        const mktBefore   = d.market_value_before_reno || 0;   // ก่อนรีโนเวท (สภาพเดิม)
+        const mktAfter    = d.market_value || 0;               // หลังรีโนเวท (สภาพดี) ← ใช้คำนวณกำไร
+        const mktSqm      = d.market_price_sqm || null;        // ฿/ตร.ม. หลังรีโนเวท
+        const mktSqmBefore= (mktBefore > 0 && renoArea > 0) ? Math.round(mktBefore/renoArea) : null;
+        const mktSqmAfter = mktSqm || (mktAfter > 0 && renoArea > 0 ? Math.round(mktAfter/renoArea) : null);
+        // ── กำไร/ขาดทุน (คำนวณสด) ──────────────────────────────────────────
+        // กำไร = ราคาตลาดหลังรีโนเวท − ต้นทุนรวม (ห้ามใช้ d.estimated_profit ที่ stale)
+        const profit      = mktAfter - totalCost;
+        const isLoss      = profit < 0;
+        // ── ROI คำนวณใหม่ และตรวจสอบกับค่าใน DB ──────────────────────────
+        const recalcRoi   = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+        const storedRoi   = d.roi_percent || 0;
+        const roiMismatch = storedRoi > 0 && Math.abs(recalcRoi - storedRoi) > 10;
+        const roiCol      = recalcRoi >= 30 ? "var(--green)" : recalcRoi >= 15 ? "var(--yellow)" : "var(--red)";
         return `
+      <div style="font-size:9px;font-weight:700;color:var(--textLight);letter-spacing:.5px;margin-bottom:4px">── ต้นทุน ──────────────────────</div>
       <div class="rb-row"><span class="rb-lbl">ราคาซื้อ</span><span class="rb-val">฿${fmtNum(buyPrice)}</span></div>
-      <div class="rb-row"><span class="rb-lbl">ค่ารีโนเวท</span><span class="rb-val">฿${fmtNum(renoTotal)}${renoSqm?" (฿"+fmtNum(renoSqm)+"/ตร.ม.)":""}</span></div>
-      <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง <span style="font-size:9px;color:var(--textLight)">(5.5%)</span></span><span class="rb-val">฿${fmtNum(transfer)}</span></div>
-      <div class="rb-row rb-total"><span class="rb-lbl">ต้นทุนรวม</span><span class="rb-val" style="color:var(--yellow)">฿${fmtNum(totalCost)}</span></div>
-      <div class="rb-row"><span class="rb-lbl">ราคาตลาดอ้างอิง${mktSqm?" (฿"+fmtNum(mktSqm)+"/ตร.ม.)":""}</span><span class="rb-val" style="color:var(--green)">฿${fmtNum(mktVal)}</span></div>
-      <div class="rb-row rb-total"><span class="rb-lbl">กำไรโดยประมาณ</span><span class="rb-val" style="color:${profit>0?"var(--green)":"var(--red)"}">฿${fmtNum(Math.round(profit))}</span></div>
-      <div style="font-size:9px;color:var(--textMid);margin-top:6px;line-height:1.4">
-        ${d.roi_data_source==="sonar_pro"?"✅ ราคาตลาดจากข้อมูลจริง (Sonar Pro)":d.roi_data_source==="cache"?"♻️ ราคาตลาดจาก pattern cache (script คำนวณ)":"⚠️ ROI ประมาณการ — ควรตรวจสอบราคาตลาดจริงก่อนตัดสินใจ"}
-      </div>
-        `;
+      <div class="rb-row"><span class="rb-lbl">ค่ารีโนเวท${renoSqm?" <span style='font-size:9px;color:var(--textLight)'>(฿"+fmtNum(renoSqm)+"/ตร.ม.)</span>":""}</span><span class="rb-val">฿${fmtNum(renoTotal)}</span></div>
+      <div class="rb-row"><span class="rb-lbl">ค่าโอน+จดจำนอง <span style="font-size:9px;color:var(--textLight)">(${transferPct}%)</span></span><span class="rb-val">฿${fmtNum(transfer)}</span></div>
+      <div class="rb-row rb-total" style="border-top:1px solid var(--border);margin-top:3px;padding-top:3px"><span class="rb-lbl" style="font-weight:800">ต้นทุนรวม</span><span class="rb-val" style="color:var(--yellow);font-size:13px">฿${fmtNum(totalCost)}</span></div>
+
+      <div style="font-size:9px;font-weight:700;color:var(--textLight);letter-spacing:.5px;margin:8px 0 4px">── ราคาตลาด (Sonar Pro) ─────────</div>
+      ${mktBefore>0?`<div class="rb-row"><span class="rb-lbl">ก่อนรีโนเวท (สภาพเดิม)${mktSqmBefore?" <span style='font-size:9px;color:var(--textLight)'>(฿"+fmtNum(mktSqmBefore)+"/ตร.ม.)</span>":""}</span><span class="rb-val" style="color:var(--blue)">฿${fmtNum(mktBefore)}</span></div>`:`<div class="rb-row"><span class="rb-lbl">ก่อนรีโนเวท (สภาพเดิม)</span><span class="rb-val" style="color:var(--textLight)">—</span></div>`}
+      <div class="rb-row"><span class="rb-lbl">หลังรีโนเวท (สภาพดี)${mktSqmAfter?" <span style='font-size:9px;color:var(--textLight)'>(฿"+fmtNum(mktSqmAfter)+"/ตร.ม.)</span>":""}</span><span class="rb-val" style="color:var(--green)">฿${fmtNum(mktAfter)}</span></div>
+
+      <div style="height:1px;background:var(--border);margin:6px 0"></div>
+      <div class="rb-row rb-total"><span class="rb-lbl" style="font-weight:800">${isLoss?"❌ ขาดทุนโดยประมาณ":"💰 กำไรโดยประมาณ"}</span><span class="rb-val" style="color:${isLoss?"var(--red)":"var(--green)"};font-size:14px;font-weight:900">${isLoss?"−":"+"}฿${fmtNum(Math.abs(Math.round(profit)))}</span></div>
+      <div class="rb-row" style="margin-top:3px"><span class="rb-lbl">ROI จากการคำนวณ</span><span class="rb-val" style="color:${roiCol};font-weight:800;font-size:13px">${recalcRoi>=0?"+":""}${recalcRoi.toFixed(1)}%</span></div>
+      ${roiMismatch?`<div style="background:var(--yellowDim);border:1px solid var(--yellowBorder);border-radius:5px;padding:5px 8px;margin-top:6px;font-size:9px;color:var(--yellow)">⚠️ ROI เดิมใน DB (${storedRoi.toFixed(1)}%) ไม่ตรงกับการคำนวณใหม่ (${recalcRoi.toFixed(1)}%) — ราคาตลาดอาจเปลี่ยนแปลง ควร Re-analyze</div>`:""}
+      <div style="font-size:9px;color:var(--textMid);margin-top:6px;line-height:1.5">
+        ${d.roi_data_source==="sonar_pro"?"✅ ราคาตลาดจากข้อมูลจริง (Sonar Pro)":d.roi_data_source==="cache"?"♻️ ราคาตลาดจาก pattern cache":"⚠️ ประมาณการ — ควรตรวจสอบราคาตลาดจริงก่อนตัดสินใจ"}
+      </div>`;
       })()}
     </div>` : "";
 
