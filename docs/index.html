@@ -1105,17 +1105,29 @@ async function loadStats() {
   try {
     const r = await fetch(`${API}/deals/stats`);
     const d = await r.json();
-    document.getElementById("s-total").textContent  = fmtNum(d.total_deals ?? 0);
-    document.getElementById("s-hot").textContent    = fmtNum(d.hot_deals ?? 0);
-    document.getElementById("s-medium").textContent = fmtNum(d.medium_deals ?? 0);
-    const total = d.total_deals || 0;
-    const hot   = d.hot_deals   || 0;
-    if (total > 0) document.getElementById("s-hot-pct").textContent = ((hot/total)*100).toFixed(1)+"%";
+    document.getElementById("s-total").textContent  = fmtNum(d.total_deals ?? deals.length);
+    let hotCount = 0;
+    let mediumCount = 0;
+    deals.forEach(deal => {
+      if (deal.roi_valid === false) return;
+      if (deal.roi_data_source !== 'sonar_pro' && deal.roi_data_source !== 'cache') return;
+      const r = calcFreshRoi(deal);
+      if (r >= 30) hotCount++;
+      else if (r >= 15) mediumCount++;
+    });
+    document.getElementById("s-hot").textContent    = fmtNum(hotCount);
+    document.getElementById("s-medium").textContent = fmtNum(mediumCount);
+    const total = d.total_deals || deals.length;
+    if (total > 0) document.getElementById("s-hot-pct").textContent = ((hotCount/total)*100).toFixed(1)+"%";
+    
     // AVG ROI — exclude outliers (roi_valid=false หรือ ROI > 120%) เพื่อกัน Sonar unit confusion
     const validRois = deals
-      .filter(d => d.roi_percent != null && d.roi_valid !== false &&
-                   d.roi_percent >= -50 && d.roi_percent <= 120)
-      .map(d => d.roi_percent);
+      .filter(deal => {
+        if (deal.roi_valid === false) return false;
+        const r = calcFreshRoi(deal);
+        return r != null && r >= -50 && r <= 120;
+      })
+      .map(deal => calcFreshRoi(deal));
     const avgRoi = validRois.length > 0
       ? (validRois.reduce((s,x)=>s+x,0)/validRois.length).toFixed(1)+"%"
       : "—";
@@ -1271,7 +1283,11 @@ function isAISuccess(d) { return getAIStatus(d) === "done"; }
 
 function applyFilters(list) {
   return list.filter(d => {
-    if (dealFilter === "hot" && calcFreshRoi(d) < 30) return false;
+    if (dealFilter === "hot") {
+      if (d.roi_valid === false) return false;
+      if (d.roi_data_source !== 'sonar_pro' && d.roi_data_source !== 'cache') return false;
+      if (calcFreshRoi(d) < 30) return false;
+    }
     if (filterType && d.property_type !== filterType) return false;
     // Multi-province filter: empty set = show all
     if (filterProvinces.size > 0) {

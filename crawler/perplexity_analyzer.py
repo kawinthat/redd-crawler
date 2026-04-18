@@ -392,7 +392,7 @@ class PerplexityAnalyzer:
             roi_pct      = (profit / total_cost) * 100 if total_cost > 0 else 0
             return reno_total, total_cost, roi_pct
 
-        if market_value_min is not None and buy_price > 0 and area_sqm > 0:
+        if market_value_min is not None and buy_price > 0:
             reno_total, total_cost, roi_min = _calc_roi(market_value_min)
             _,          _,          roi_max = _calc_roi(market_value_max)
             roi_mid = (roi_min + roi_max) / 2

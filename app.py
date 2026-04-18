@@ -637,7 +637,7 @@ async def reset_analysis():
             .not_.is_("ai_analyzed_at", "null").execute()
         count_before = count_before_r.count or 0
 
-        db.table("deals").update(core_fields).neq("id", 0).execute()
+        db.table("deals").update(core_fields).not_.is_("id", "null").execute()
 
         # นับหลัง reset
         count_after_r = db.table("deals").select("id", count="exact") \
@@ -658,7 +658,7 @@ async def reset_analysis():
     # รัน new fields — ถ้า column ไม่มีให้ข้ามไป (ไม่ error)
     for col, val in new_fields.items():
         try:
-            db.table("deals").update({col: val}).neq("id", 0).execute()
+            db.table("deals").update({col: val}).not_.is_("id", "null").execute()
             reset_fields.append(col)
         except Exception as e:
             err_msg = str(e)
