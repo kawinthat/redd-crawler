@@ -350,6 +350,20 @@ input,select{font-family:var(--font)}
 .reanalyze-check-row{display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:11px;color:var(--textMid)}
 .reanalyze-check-row input{accent-color:var(--accent);cursor:pointer}
 
+/* ── ANALYZE EXTRA FILTERS ── */
+.az-filter-section{margin-bottom:10px;padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:8px}
+.az-section-lbl{font-size:9.5px;font-weight:700;letter-spacing:.5px;color:var(--textMid);text-transform:uppercase;margin-bottom:6px}
+.az-type-chip{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:3px 10px;font-size:11px;color:var(--textMid);cursor:pointer;transition:all .2s;font-family:var(--font);white-space:nowrap}
+.az-type-chip:hover{border-color:var(--teal);color:var(--teal);background:var(--tealDim)}
+.az-type-chip.active{background:var(--teal);color:#fff;border-color:var(--teal);font-weight:700}
+.az-status-btn{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-size:11px;color:var(--textMid);cursor:pointer;font-family:var(--font);transition:all .2s;white-space:nowrap}
+.az-status-btn.active{background:var(--teal);color:#fff;border-color:var(--teal);font-weight:700}
+.az-price-input{width:110px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;outline:none;font-family:var(--font);transition:border-color .2s}
+.az-price-input:focus{border-color:var(--teal);box-shadow:0 0 0 2px var(--tealDim)}
+.az-price-input::placeholder{color:var(--textLight)}
+.az-clear-link{font-size:10px;background:none;border:none;color:var(--textMid);cursor:pointer;font-family:var(--font);padding:0;text-decoration:underline;text-underline-offset:2px}
+.az-clear-link:hover{color:var(--teal)}
+
 /* ── ANALYZED CHIP ── */
 .chip.ai-chip.active{background:var(--teal);border-color:var(--teal);color:#fff}
 .chip.noai-chip.active{background:var(--textMid);border-color:var(--textMid);color:#fff}
@@ -460,6 +474,43 @@ input,select{font-family:var(--font)}
         <div style="margin-top:5px;display:flex;gap:8px">
           <button style="font-size:10px;background:none;border:none;color:var(--teal);cursor:pointer;padding:0;font-family:var(--font)" onclick="analyzeSelectAllProvs(true)">+ เลือกทั้งหมด</button>
           <button style="font-size:10px;background:none;border:none;color:var(--textMid);cursor:pointer;padding:0;font-family:var(--font)" onclick="analyzeSelectAllProvs(false)">ล้าง</button>
+        </div>
+      </div>
+
+      <!-- ── Property type filter ── -->
+      <div class="az-filter-section">
+        <div class="az-section-lbl">🏠 ประเภททรัพย์</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <button class="az-type-chip active" id="az-type-all" onclick="toggleAnalyzeTypeAll()">ทั้งหมด</button>
+          <button class="az-type-chip" id="az-type-house" onclick="toggleAnalyzeType('house')">🏠 บ้านเดี่ยว</button>
+          <button class="az-type-chip" id="az-type-townhouse" onclick="toggleAnalyzeType('townhouse')">🏘 ทาวน์เฮาส์</button>
+          <button class="az-type-chip" id="az-type-condo" onclick="toggleAnalyzeType('condo')">🏢 คอนโด</button>
+          <button class="az-type-chip" id="az-type-land" onclick="toggleAnalyzeType('land')">🌾 ที่ดิน</button>
+          <button class="az-type-chip" id="az-type-commercial" onclick="toggleAnalyzeType('commercial')">🏬 พาณิชย์</button>
+        </div>
+      </div>
+
+      <!-- ── Price range filter ── -->
+      <div class="az-filter-section">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div class="az-section-lbl" style="margin-bottom:0">💰 ช่วงราคา (ล้านบาท)</div>
+          <button class="az-clear-link" onclick="clearAnalyzePriceRange()">ล้าง</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="number" id="az-price-min" class="az-price-input" placeholder="ต่ำสุด" min="0" step="0.5" oninput="hideAnalyzeConfirm()">
+          <span style="color:var(--textMid);font-size:11px">–</span>
+          <input type="number" id="az-price-max" class="az-price-input" placeholder="สูงสุด" min="0" step="0.5" oninput="hideAnalyzeConfirm()">
+          <span style="color:var(--textLight);font-size:10px">ล้านบาท</span>
+        </div>
+      </div>
+
+      <!-- ── AI status filter ── -->
+      <div class="az-filter-section">
+        <div class="az-section-lbl">🧠 สถานะ Analyze</div>
+        <div style="display:flex;gap:6px">
+          <button class="az-status-btn active" id="az-status-all" onclick="setAnalyzeAIStatus('all')">ทั้งหมด</button>
+          <button class="az-status-btn" id="az-status-unanalyzed" onclick="setAnalyzeAIStatus('unanalyzed')">📋 ยังไม่ Analyze</button>
+          <button class="az-status-btn" id="az-status-analyzed" onclick="setAnalyzeAIStatus('analyzed')">🧠 Analyze แล้ว</button>
         </div>
       </div>
 
@@ -700,6 +751,11 @@ const DEFAULT_PROVS = new Set(["กรุงเทพมหานคร","นน
 let filterProvinces = new Set(DEFAULT_PROVS);  // empty = show ALL
 // Analyze province set (independent from dashboard filter)
 let analyzeProvs = new Set(DEFAULT_PROVS);
+// Analyze extra filters
+let analyzeTypes    = new Set();          // empty = all types
+let analyzePriceMin = null;               // in million baht, null = no limit
+let analyzePriceMax = null;
+let analyzeAIStatus = "all";             // "all" | "unanalyzed" | "analyzed"
 // Multi-select mode
 let selectMode = false;
 let selectedDealKeys = new Set(); // key = listing_url || String(id)
@@ -1981,6 +2037,59 @@ function analyzeSelectAllProvs(checked) {
   buildAnalyzeProvChecks(); hideAnalyzeConfirm();
 }
 
+// ── Property type toggle ──────────────────────────
+function toggleAnalyzeTypeAll() {
+  analyzeTypes.clear();
+  ["house","townhouse","condo","land","commercial"].forEach(t => {
+    const el = document.getElementById("az-type-"+t);
+    if (el) el.classList.remove("active");
+  });
+  const allBtn = document.getElementById("az-type-all");
+  if (allBtn) allBtn.classList.add("active");
+  hideAnalyzeConfirm();
+}
+
+function toggleAnalyzeType(type) {
+  if (analyzeTypes.has(type)) {
+    analyzeTypes.delete(type);
+  } else {
+    analyzeTypes.add(type);
+  }
+  // If nothing selected, revert to "all"
+  if (analyzeTypes.size === 0) {
+    toggleAnalyzeTypeAll(); return;
+  }
+  // Update button states
+  const allBtn = document.getElementById("az-type-all");
+  if (allBtn) allBtn.classList.remove("active");
+  ["house","townhouse","condo","land","commercial"].forEach(t => {
+    const el = document.getElementById("az-type-"+t);
+    if (el) el.classList.toggle("active", analyzeTypes.has(t));
+  });
+  hideAnalyzeConfirm();
+}
+
+// ── AI status toggle ──────────────────────────────
+function setAnalyzeAIStatus(status) {
+  analyzeAIStatus = status;
+  ["all","unanalyzed","analyzed"].forEach(s => {
+    const el = document.getElementById("az-status-"+s);
+    if (el) el.classList.toggle("active", s === status);
+  });
+  hideAnalyzeConfirm();
+}
+
+// ── Price range clear ──────────────────────────────
+function clearAnalyzePriceRange() {
+  const mn = document.getElementById("az-price-min");
+  const mx = document.getElementById("az-price-max");
+  if (mn) mn.value = "";
+  if (mx) mx.value = "";
+  analyzePriceMin = null;
+  analyzePriceMax = null;
+  hideAnalyzeConfirm();
+}
+
 function hideAnalyzeConfirm() {
   document.getElementById("analyze-confirm-box").style.display = "none";
 }
@@ -1989,6 +2098,12 @@ function previewAnalyze() {
   const limit   = parseInt(document.getElementById("analyze-limit").value)||50;
   const hotOnly = document.getElementById("analyze-hot-only").checked;
 
+  // Read price range from inputs (convert million baht → baht for comparison)
+  const priceMinInput = parseFloat(document.getElementById("az-price-min")?.value||"");
+  const priceMaxInput = parseFloat(document.getElementById("az-price-max")?.value||"");
+  analyzePriceMin = isNaN(priceMinInput) ? null : priceMinInput * 1e6;
+  analyzePriceMax = isNaN(priceMaxInput) ? null : priceMaxInput * 1e6;
+
   const usingSelection = selectedDealKeys.size > 0;
 
   // ── Choose candidate pool ────────────────────────────────────────────────
@@ -1996,14 +2111,27 @@ function previewAnalyze() {
   let provList;
 
   if (usingSelection) {
-    // Use explicitly selected deals
-    candidates = deals.filter(d => selectedDealKeys.has(dealKey(d)));
+    // Use explicitly selected deals (extra filters applied on top)
+    candidates = deals.filter(d => {
+      if (!selectedDealKeys.has(dealKey(d))) return false;
+      if (analyzeTypes.size > 0 && !analyzeTypes.has(d.property_type)) return false;
+      if (analyzePriceMin !== null && (d.price||0) < analyzePriceMin) return false;
+      if (analyzePriceMax !== null && (d.price||0) > analyzePriceMax) return false;
+      if (analyzeAIStatus === "unanalyzed" && isAnalyzed(d)) return false;
+      if (analyzeAIStatus === "analyzed"   && !isAnalyzed(d)) return false;
+      return true;
+    });
     provList = "ทรัพย์ที่เลือก";
   } else {
-    // Normal province/hotOnly filter
+    // Normal province/hotOnly/type/price/AIstatus filter
     candidates = deals.filter(d => {
       if (hotOnly && (d.roi_percent||0) < 30) return false;
       if (analyzeProvs.size > 0 && !analyzeProvs.has(getProvince(d.location||""))) return false;
+      if (analyzeTypes.size > 0 && !analyzeTypes.has(d.property_type)) return false;
+      if (analyzePriceMin !== null && (d.price||0) < analyzePriceMin) return false;
+      if (analyzePriceMax !== null && (d.price||0) > analyzePriceMax) return false;
+      if (analyzeAIStatus === "unanalyzed" && isAnalyzed(d)) return false;
+      if (analyzeAIStatus === "analyzed"   && !isAnalyzed(d)) return false;
       return true;
     });
     provList = analyzeProvs.size > 0 ? [...analyzeProvs].join(", ") : "ทุกจังหวัด";
@@ -2027,12 +2155,27 @@ function previewAnalyze() {
     ? `<div class="analyze-confirm-row"><span>โหมด</span><b>☑ ทรัพย์ที่เลือก (${selectedDealKeys.size} รายการ)</b></div>`
     : `<div class="analyze-confirm-row"><span>จังหวัด</span><b>${provList}</b></div>`;
 
+  // ── Build filter summary strings ─────────────────────────────────────────
+  const TYPE_NAMES = {house:"บ้านเดี่ยว",townhouse:"ทาวน์เฮาส์",condo:"คอนโด",land:"ที่ดิน",commercial:"พาณิชย์"};
+  const typeLabel = analyzeTypes.size === 0
+    ? "ทุกประเภท"
+    : [...analyzeTypes].map(t=>TYPE_NAMES[t]||t).join(", ");
+  const priceLabel = (analyzePriceMin !== null || analyzePriceMax !== null)
+    ? `${analyzePriceMin !== null ? (analyzePriceMin/1e6).toLocaleString()+"M" : "0"} – ${analyzePriceMax !== null ? (analyzePriceMax/1e6).toLocaleString()+"M" : "∞"} บาท`
+    : "ทุกราคา";
+  const statusLabel = analyzeAIStatus === "unanalyzed" ? "📋 ยังไม่ Analyze"
+                    : analyzeAIStatus === "analyzed"   ? "🧠 Analyze แล้ว"
+                    : "ทั้งหมด";
+
   const summary = `
     ${selRow}
     <div class="analyze-confirm-row"><span>ทรัพย์ทั้งหมดในกลุ่ม</span><b>${candidates.length.toLocaleString()} deals</b></div>
     <div class="analyze-confirm-row"><span>ยังไม่ได้ Analyze</span><b>${notYetDone.length.toLocaleString()} deals</b></div>
     <div class="analyze-confirm-row"><span>จะประมวลผล (batch)</span><b>${toProcess.toLocaleString()} deals</b></div>
-    ${!usingSelection?`<div class="analyze-confirm-row"><span>ประเภท</span><b>${hotOnly?"🔥 HOT เท่านั้น":"ทั้งหมด"}</b></div>`:""}
+    ${!usingSelection?`<div class="analyze-confirm-row"><span>HOT Filter</span><b>${hotOnly?"🔥 HOT เท่านั้น":"ทั้งหมด"}</b></div>`:""}
+    <div class="analyze-confirm-row"><span>ประเภททรัพย์</span><b>${typeLabel}</b></div>
+    <div class="analyze-confirm-row"><span>ช่วงราคา</span><b>${priceLabel}</b></div>
+    <div class="analyze-confirm-row"><span>สถานะ Analyze</span><b>${statusLabel}</b></div>
     <div class="analyze-confirm-row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
       <span>ประมาณ Sonar Pro API calls</span><b style="color:var(--accent)">~${estApiCalls} calls</b>
     </div>
@@ -2090,10 +2233,16 @@ async function doRunAnalyze() {
       url = `${API}/analyze?limit=${limit}&force=${allowReanalyze}`;
       body = { urls, force_reanalyze: allowReanalyze };
     } else {
-      const provsParam = analyzeProvs.size > 0
+      const provsParam  = analyzeProvs.size > 0
         ? "&provinces=" + encodeURIComponent([...analyzeProvs].join(","))
         : "";
-      url = `${API}/analyze?limit=${limit}&hot_only=${hotOnly}${provsParam}&force=${allowReanalyze}`;
+      const typesParam  = analyzeTypes.size > 0
+        ? "&types=" + encodeURIComponent([...analyzeTypes].join(","))
+        : "";
+      const priceMinParam = analyzePriceMin !== null ? `&price_min=${analyzePriceMin}` : "";
+      const priceMaxParam = analyzePriceMax !== null ? `&price_max=${analyzePriceMax}` : "";
+      const aiStatusParam = analyzeAIStatus !== "all" ? `&ai_status=${analyzeAIStatus}` : "";
+      url = `${API}/analyze?limit=${limit}&hot_only=${hotOnly}${provsParam}${typesParam}${priceMinParam}${priceMaxParam}${aiStatusParam}&force=${allowReanalyze}`;
     }
 
     const r = await fetch(url, {
