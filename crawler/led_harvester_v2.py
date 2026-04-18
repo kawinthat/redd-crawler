@@ -1,5 +1,5 @@
 """
-led_harvester_v2.py — กรมบังคับคดี NPA Scraper (REWRITTEN v3)
+led_harvester_v2.py — กรมบังคับคดี NPA Scraper (v4 — robust + full logging)
 URL: https://asset.led.go.th/newbidreg/default.asp
 
 สิ่งที่ค้นพบจากการ reverse-engineer เว็บโดยตรง:
@@ -9,6 +9,7 @@ URL: https://asset.led.go.th/newbidreg/default.asp
   3. หน่วยงาน: select[name=region_name] ไม่ใช่ text field
   4. Result table: 11 col (lot, seq, case_no, type, ไร่, งาน, ตร.วา, ราคา, ตำบล, อำเภอ, จังหวัด)
   5. หน่วยงานแพ่งกรุงเทพ 1 มี 2,630+ รายการ / 88 หน้า
+  6. ASP Classic ใช้ <input type="submit"> ไม่ใช่ <button type="submit">
 """
 from __future__ import annotations
 
@@ -81,8 +82,9 @@ def _parse_type(txt: str) -> str:
 
 class LEDHarvesterV2:
     """
-    กรมบังคับคดี Playwright scraper (rewritten v3)
+    กรมบังคับคดี Playwright scraper (v4 — robust + full logging)
     - อ่าน CAPTCHA จาก hidden field input[name=oseckey] (ไม่ต้อง OCR!)
+    - Fallback: อ่าน CAPTCHA จาก hidden inputs ทั้งหมดหากไม่พบ oseckey
     - Pagination ด้วย form webFormX โดยตรง ไม่ต้อง CAPTCHA ใหม่
     - scrape 11 หน่วยงานกรุงเทพ+ปริมณฑล
     """
@@ -101,42 +103,52 @@ class LEDHarvesterV2:
             logger.error("LED: Playwright ไม่ได้ติดตั้ง")
             return []
 
-        async with async_playwright() as pw:
-            browser = await pw.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage",
-                      "--disable-blink-features=AutomationControlled"],
-            )
-            context = await browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
-                locale="th-TH",
-            )
-            await context.add_init_script(
-                "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
-            )
-            page = await context.new_page()
-
-            for region in TARGET_REGIONS:
-                if len(results) >= max_listings:
-                    break
-                logger.info(f"LED: เริ่ม scrape '{region}'")
-                region_results = await self._scrape_region(
-                    page, region, max_pages, max_listings - len(results)
+        logger.info("LED: เริ่ม launch Playwright Chromium...")
+        try:
+            async with async_playwright() as pw:
+                browser = await pw.chromium.launch(
+                    headless=True,
+                    args=["--no-sandbox", "--disable-dev-shm-usage",
+                          "--disable-blink-features=AutomationControlled"],
                 )
-                results.extend(region_results)
-                logger.info(
-                    f"LED: '{region}' → {len(region_results)} deals "
-                    f"(รวม {len(results)})"
+                logger.info("LED: Chromium launched OK")
+
+                context = await browser.new_context(
+                    user_agent=(
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/124.0.0.0 Safari/537.36"
+                    ),
+                    locale="th-TH",
                 )
-                await asyncio.sleep(self.delay)
+                await context.add_init_script(
+                    "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
+                )
+                page = await context.new_page()
 
-            await browser.close()
+                for region in TARGET_REGIONS:
+                    if len(results) >= max_listings:
+                        break
+                    logger.info(f"LED: เริ่ม scrape '{region}'")
+                    try:
+                        region_results = await self._scrape_region(
+                            page, region, max_pages, max_listings - len(results)
+                        )
+                        results.extend(region_results)
+                        logger.info(
+                            f"LED: '{region}' → {len(region_results)} deals "
+                            f"(รวม {len(results)})"
+                        )
+                    except Exception as region_err:
+                        logger.error(f"LED: region '{region}' failed: {region_err}")
+                    await asyncio.sleep(self.delay)
 
-        logger.info(f"LED v2: harvested {len(results)} total")
+                await browser.close()
+        except Exception as e:
+            logger.error(f"LED: Playwright error: {e}")
+            return []
+
+        logger.info(f"LED v4: harvested {len(results)} total")
         return results[:max_listings]
 
     # ──────────────────────────────────────────────────────────────────
@@ -151,57 +163,70 @@ class LEDHarvesterV2:
         # 1. โหลดหน้า search ใหม่ทุก region
         try:
             await page.goto(LED_URL, wait_until="domcontentloaded", timeout=30_000)
-            await page.wait_for_timeout(1000)
+            # รอ JS โหลดเสร็จ (ASP Classic อาจ inject CAPTCHA ด้วย JS)
+            await page.wait_for_timeout(2000)
         except Exception as e:
-            logger.error(f"LED: goto failed: {e}")
+            logger.error(f"LED: goto failed for '{region}': {e}")
             return []
 
-        # 2. อ่าน CAPTCHA จาก hidden field — คำตอบอยู่ใน input[name=oseckey]!
-        captcha_val = await page.input_value('input[name="oseckey"]')
-        if not captcha_val:
-            logger.warning(f"LED: ไม่พบ CAPTCHA value สำหรับ '{region}'")
-            return []
-        logger.debug(f"LED: CAPTCHA = '{captcha_val}'")
-
-        # 3. กรอก CAPTCHA ลงใน visible field input[name=seckey]
-        await page.fill('input[name="seckey"]', captcha_val)
-
-        # 4. เลือก region จาก dropdown select[name=region_name]
+        # 2. Log page info เพื่อ debug
         try:
-            await page.select_option('select[name="region_name"]', label=region)
+            page_title = await page.title()
+            page_url   = page.url
+            logger.info(f"LED: page loaded — title='{page_title}' url={page_url}")
         except Exception:
-            try:
-                await page.select_option('select[name="region_name"]', value=region)
-            except Exception as e:
-                logger.warning(f"LED: เลือก region '{region}' ไม่ได้: {e}")
-                return []
+            pass
+
+        # 3. อ่าน CAPTCHA จาก hidden field
+        captcha_val = await self._read_captcha(page, region)
+        if captcha_val is None:
+            return []
+
+        # 4. กรอก CAPTCHA ลงใน visible field
+        try:
+            await page.fill('input[name="seckey"]', captcha_val)
+            logger.debug(f"LED: filled seckey='{captcha_val}'")
+        except Exception as e:
+            logger.error(f"LED: ไม่สามารถกรอก seckey: {e}")
+            return []
+
+        # 5. เลือก region จาก dropdown — ลอง 3 วิธี
+        selected = await self._select_region(page, region)
+        if not selected:
+            return []
         await page.wait_for_timeout(300)
 
-        # 5. Submit — click ปุ่ม ค้นหา
-        try:
-            await page.click('button[type="submit"]')
-            await page.wait_for_load_state("domcontentloaded", timeout=25_000)
-            await page.wait_for_timeout(800)
-        except Exception as e:
-            logger.error(f"LED: submit failed for '{region}': {e}")
+        # 6. Submit form — ลอง input[type=submit] ก่อน, fallback button[type=submit]
+        submitted = await self._submit_form(page, region)
+        if not submitted:
             return []
 
-        # 6. ตรวจว่า search สำเร็จ
+        # 7. ตรวจว่า search สำเร็จ + log HTML snippet
         page_html = await page.content()
-        if "ผลการค้นหา" not in page_html and "หมายเลขคดี" not in page_html:
-            logger.warning(f"LED: '{region}' ไม่พบผลลัพธ์")
-            return []
+        # แสดง 500 chars แรกเพื่อ debug
+        logger.debug(f"LED: result page HTML (first 500): {page_html[:500]}")
 
-        # 7. หา total pages จาก "หน้าที่ X/Y"
+        success_keywords = ["ผลการค้นหา", "หมายเลขคดี", "ล๊อตที่", "ลำดับที่", "ราคา"]
+        found_kw = [kw for kw in success_keywords if kw in page_html]
+        if not found_kw:
+            logger.warning(
+                f"LED: '{region}' ไม่พบผลลัพธ์ — "
+                f"page length={len(page_html)}, "
+                f"URL={page.url}"
+            )
+            return []
+        logger.info(f"LED: '{region}' search success — found keywords: {found_kw}")
+
+        # 8. หา total pages
         total_pages = await self._get_total_pages(page)
         logger.info(f"LED: '{region}' → {total_pages} หน้า")
 
-        # 8. Parse หน้าแรก
+        # 9. Parse หน้าแรก
         page_results = await self._parse_current_page(page, region)
         results.extend(page_results)
         logger.info(f"LED: '{region}' หน้า 1/{total_pages} → {len(page_results)} รายการ")
 
-        # 9. Paginate — webFormX ไม่ต้อง CAPTCHA ใหม่
+        # 10. Paginate
         for page_num in range(2, min(total_pages + 1, max_pages + 1)):
             if len(results) >= remaining:
                 break
@@ -225,6 +250,134 @@ class LEDHarvesterV2:
     # ──────────────────────────────────────────────────────────────────
     # Helpers
     # ──────────────────────────────────────────────────────────────────
+
+    async def _read_captcha(self, page, region: str) -> Optional[str]:
+        """
+        อ่าน CAPTCHA value — ลอง selectors หลายอัน
+        คำตอบอยู่ใน input ที่ซ่อนอยู่ (type=hidden หรือ name=oseckey)
+        """
+        # Candidates ที่เป็นไปได้สำหรับ hidden CAPTCHA field
+        captcha_selectors = [
+            'input[name="oseckey"]',
+            'input[name="o_seckey"]',
+            'input[name="captcha_answer"]',
+            'input[name="answer"]',
+        ]
+        for sel in captcha_selectors:
+            try:
+                count = await page.locator(sel).count()
+                if count > 0:
+                    val = await page.locator(sel).first.input_value()
+                    if val:
+                        logger.info(f"LED: CAPTCHA found via '{sel}' = '{val}'")
+                        return val
+                    logger.debug(f"LED: '{sel}' exists but value is empty")
+            except Exception as e:
+                logger.debug(f"LED: selector '{sel}' error: {e}")
+
+        # Fallback: ดู hidden inputs ทั้งหมด (อาจเป็น name อื่น)
+        try:
+            hidden_inputs = await page.evaluate("""
+                () => {
+                    const inputs = document.querySelectorAll('input[type="hidden"]');
+                    return Array.from(inputs).map(i => ({name: i.name, value: i.value}));
+                }
+            """)
+            logger.info(f"LED: hidden inputs on page: {hidden_inputs}")
+
+            # หา hidden input ที่มี value เป็น string สั้นๆ (น่าจะเป็น CAPTCHA)
+            for inp in hidden_inputs:
+                v = inp.get("value", "")
+                n = inp.get("name", "")
+                # CAPTCHA มักเป็น alphanumeric 4-8 ตัว
+                if v and 2 <= len(v) <= 20 and n.lower() not in (
+                    "page", "pagenum", "region", "region_name", "action",
+                    "__viewstate", "__eventvalidation", "__viewstategenerator",
+                ):
+                    logger.info(f"LED: CAPTCHA fallback — using hidden field name='{n}' value='{v}'")
+                    return v
+
+        except Exception as e:
+            logger.error(f"LED: ไม่สามารถอ่าน hidden inputs: {e}")
+
+        logger.warning(f"LED: '{region}' — ไม่พบ CAPTCHA value ใน hidden fields ทั้งหมด")
+        return None
+
+    async def _select_region(self, page, region: str) -> bool:
+        """เลือก region จาก dropdown — ลอง label, value, index"""
+        # ลอง label ก่อน
+        try:
+            await page.select_option('select[name="region_name"]', label=region)
+            selected = await page.locator('select[name="region_name"]').input_value()
+            logger.debug(f"LED: selected region by label='{region}' → value='{selected}'")
+            return True
+        except Exception:
+            pass
+
+        # ลอง value
+        try:
+            await page.select_option('select[name="region_name"]', value=region)
+            return True
+        except Exception:
+            pass
+
+        # ลอง label แบบ fuzzy (ตัดช่องว่างออก)
+        region_stripped = " ".join(region.split())
+        try:
+            options = await page.evaluate("""
+                () => {
+                    const sel = document.querySelector('select[name="region_name"]');
+                    if (!sel) return [];
+                    return Array.from(sel.options).map(o => ({text: o.text.trim(), value: o.value}));
+                }
+            """)
+            logger.info(f"LED: dropdown options (first 15): {options[:15]}")
+            # หา option ที่ match แบบ fuzzy
+            for opt in options:
+                opt_text = " ".join((opt.get("text") or "").split())
+                if opt_text == region_stripped or region_stripped in opt_text:
+                    await page.select_option(
+                        'select[name="region_name"]', value=opt["value"]
+                    )
+                    logger.info(f"LED: fuzzy-matched region '{region}' → '{opt['text']}'")
+                    return True
+        except Exception as e:
+            logger.error(f"LED: เลือก region '{region}' ไม่ได้ทุกวิธี: {e}")
+
+        logger.warning(f"LED: ไม่สามารถเลือก region '{region}'")
+        return False
+
+    async def _submit_form(self, page, region: str) -> bool:
+        """Submit ฟอร์ม — ลอง input[type=submit] (ASP Classic) ก่อน"""
+        submit_selectors = [
+            'input[type="submit"]',
+            'button[type="submit"]',
+            'input[value="ค้นหา"]',
+            'button:has-text("ค้นหา")',
+            'input[type="button"][onclick*="submit"]',
+        ]
+        for sel in submit_selectors:
+            try:
+                count = await page.locator(sel).count()
+                if count > 0:
+                    await page.locator(sel).first.click()
+                    await page.wait_for_load_state("domcontentloaded", timeout=25_000)
+                    await page.wait_for_timeout(1000)
+                    logger.info(f"LED: submitted via '{sel}' for region '{region}'")
+                    return True
+            except Exception as e:
+                logger.debug(f"LED: submit selector '{sel}' failed: {e}")
+
+        # Fallback: JS form submit
+        try:
+            await page.evaluate("document.forms[0].submit()")
+            await page.wait_for_load_state("domcontentloaded", timeout=25_000)
+            await page.wait_for_timeout(1000)
+            logger.info(f"LED: submitted via JS forms[0].submit() for '{region}'")
+            return True
+        except Exception as e:
+            logger.error(f"LED: ไม่สามารถ submit form สำหรับ '{region}': {e}")
+            return False
 
     async def _get_total_pages(self, page) -> int:
         """อ่าน total pages จาก 'หน้าที่ X/Y'"""
@@ -297,18 +450,52 @@ class LEDHarvesterV2:
         try:
             tables = await page.query_selector_all("table")
             result_table = None
-            for t in tables:
+            result_table_debug = []
+
+            for i, t in enumerate(tables):
                 text = await t.inner_text()
-                if "ราคาประเมิน" in text and "หมายเลขคดี" in text:
+                result_table_debug.append(
+                    f"table[{i}] keywords: "
+                    + str([kw for kw in ["ราคาประเมิน","ราคาขั้นต้น","ราคาประมาณการ","หมายเลขคดี","ล๊อตที่"] if kw in text])
+                )
+                if "หมายเลขคดี" in text and any(
+                    kw in text for kw in ["ราคาประเมิน", "ราคาขั้นต้น", "ราคาประมาณการ", "ราคา"]
+                ):
                     result_table = t
                     break
+
+            if not result_table:
+                # ลอง fallback: ตาราง 2 ขึ้นไปที่มีข้อมูลมาก
+                logger.debug(f"LED: table scan for '{region}': {result_table_debug}")
+                for i, t in enumerate(tables):
+                    rows = await t.query_selector_all("tr")
+                    if len(rows) >= 5:
+                        result_table = t
+                        logger.info(f"LED: using table[{i}] with {len(rows)} rows (fallback)")
+                        break
 
             if not result_table:
                 logger.debug(f"LED: ไม่พบ result table สำหรับ '{region}'")
                 return []
 
             rows = await result_table.query_selector_all("tr")
-            for row in rows[2:]:  # skip 2 header rows
+            logger.debug(f"LED: '{region}' table has {len(rows)} rows")
+
+            # หา data rows — skip header rows (ที่ไม่ใช่ข้อมูล)
+            skip_count = 0
+            for row in rows[:5]:
+                cells = await row.query_selector_all("td,th")
+                texts = [((await c.inner_text()) or "").strip() for c in cells]
+                joined = " ".join(texts)
+                if any(kw in joined for kw in ["ล๊อตที่", "หมายเลขคดี", "ประเภท", "ไร่", "งาน"]):
+                    skip_count += 1
+                else:
+                    break
+
+            data_rows = rows[skip_count:] if skip_count > 0 else rows[2:]
+            logger.debug(f"LED: '{region}' skipping {skip_count} header rows, data rows={len(data_rows)}")
+
+            for row in data_rows:
                 cells = await row.query_selector_all("td")
                 if len(cells) < 11:
                     continue
