@@ -1,21 +1,12 @@
-FROM python:3.11-slim
+FROM mcr.microsoft.com/playwright/python:v1.43.0-jammy
 
 # ── System deps ─────────────────────────────────────────────────────────────
-# tesseract-ocr     → CAPTCHA solving for กรมบังคับคดี (LED)
-# tesseract-ocr-tha → Thai language pack (ไม่บังคับ แต่ช่วย accuracy)
-# Playwright deps   → Chromium headless browser for JS-heavy sites
+# Base image มี Chromium + ทุก dependency ครบแล้ว
+# เพิ่มเฉพาะ Tesseract OCR สำหรับ LED CAPTCHA
 RUN apt-get update && apt-get install -y \
-    wget curl ca-certificates gnupg \
-    # Tesseract OCR (for LED CAPTCHA)
     tesseract-ocr \
     tesseract-ocr-tha \
-    # Playwright / Chromium system libs
-    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
-    libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 \
-    libgbm1 libxss1 libgtk-3-0 libasound2 \
     fonts-thai-tlwg fonts-noto fonts-liberation \
-    # General utils
-    libglib2.0-0 libdbus-1-3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -25,9 +16,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Playwright Chromium browser ──────────────────────────────────────────────
-# ติดตั้ง Chromium สำหรับ sites ที่ต้องการ JS rendering (LED, GH Bank, etc.)
-# NOTE: ไม่ใช้ 2>/dev/null || true เพราะถ้า install ล้มเหลว build ต้อง fail ให้เห็น
-RUN playwright install chromium --with-deps
+# Base image (mcr.microsoft.com/playwright/python) มี Chromium ติดมาแล้ว
+# ไม่ต้อง playwright install อีก → ไม่มีปัญหา download timeout บน Render free tier
+# PLAYWRIGHT_BROWSERS_PATH ถูก set เป็น /ms-playwright ใน base image อัตโนมัติ
 
 # ── Source code ──────────────────────────────────────────────────────────────
 COPY . .
