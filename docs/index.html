@@ -1935,7 +1935,10 @@ function dealCard(d) {
       ${roiSuspect || rawRoi === 0
         ? `<div class="roi-na-box">
             <span class="roi-na-icon">📊</span>
-            <span>ยังไม่ได้คำนวณ ROI — ต้องการ market price จาก Sonar Pro</span>
+            <span>${isEstimate
+              ? "กด 🧠 Analyze เพื่อดึงราคาตลาดจากเว็บประกาศขาย"
+              : "AI วิเคราะห์แล้วแต่ไม่พบประกาศขายที่เปรียบเทียบได้ — ลอง Analyze อีกครั้ง"
+            }</span>
            </div>`
         : `<div class="roi-bar-wrap">
             <div class="roi-bar-head">
