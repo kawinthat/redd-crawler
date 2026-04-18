@@ -857,6 +857,7 @@ function dealKey(d) { return d.listing_url || String(d.id || "") || JSON.stringi
 
 function clearLog() {
   logs = [];
+  try { localStorage.removeItem(LOG_KEY); } catch(e) {}
   const lb = document.getElementById("log-body");
   const lc = document.getElementById("log-count");
   if (lb) lb.innerHTML = '<div class="log-empty">Log cleared</div>';
@@ -869,6 +870,7 @@ function clearLog() {
 document.addEventListener("DOMContentLoaded", () => {
   try { renderPipeline(); } catch(e) { console.error("renderPipeline:", e); }
   try { renderSources(); } catch(e) { console.error("renderSources:", e); }
+  try { restoreLogs(); } catch(e) { console.error("restoreLogs:", e); }
   const paneDeals = document.getElementById("pane-deals");
   if (paneDeals) paneDeals.style.display = "none";
   const wakeBanner = document.getElementById("wake-banner");
@@ -943,6 +945,8 @@ function setAPIStatus(ok, txt) {
 // ─────────────────────────────────────────────
 const CACHE_KEY   = "redd_deals_v1";
 const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 วัน
+const LOG_KEY     = "redd_logs_v2";
+const LOG_MAX_STORED = 200; // max entries kept in localStorage
 
 function saveCache(allDeals) {
   try {
@@ -2263,28 +2267,66 @@ function scanDone() {
 // ─────────────────────────────────────────────
 // LOG
 // ─────────────────────────────────────────────
-function addLog(type, msg) {
-  const c={info:"var(--textLight)",success:"var(--green)",warn:"var(--yellow)",error:"var(--red)",ai:"var(--accent)"};
-  const ts=new Date().toLocaleTimeString("th-TH");
-  logs.push({type,msg,color:c[type]||c.info,ts});
-  if(logs.length>300) logs.shift();
-  const body=document.getElementById("log-body");
-  if(!body) return;
-  const empty=body.querySelector(".log-empty");
-  if(empty) empty.remove();
-  const div=document.createElement("div");
-  div.className="ll";
-  div.style.color=c[type]||c.info;
-  const urlRx=/(https?:\/\/\S+)/g;
-  let html=`<span class="ll-ts">${ts}</span>`;
-  msg.split(urlRx).forEach(p=>{
-    if(p.match(/^https?:\/\//)) html+=`<a href="${p}" target="_blank" style="color:var(--blue)">${p.slice(0,55)+(p.length>55?"…":"")}</a>`;
-    else html+=p.replace(/</g,"&lt;").replace(/>/g,"&gt;");
+function _logColors() {
+  return {info:"var(--textLight)",success:"var(--green)",warn:"var(--yellow)",error:"var(--red)",ai:"var(--accent)"};
+}
+
+function _renderLogEntry(body, l) {
+  const div = document.createElement("div");
+  div.className = "ll";
+  div.style.color = l.color;
+  const urlRx = /(https?:\/\/\S+)/g;
+  let html = `<span class="ll-ts">${l.ts}</span>`;
+  (l.msg||"").split(urlRx).forEach(p => {
+    if (p.match(/^https?:\/\//)) html += `<a href="${p}" target="_blank" style="color:var(--blue)">${p.slice(0,55)+(p.length>55?"…":"")}</a>`;
+    else html += p.replace(/</g,"&lt;").replace(/>/g,"&gt;");
   });
-  div.innerHTML=html;
+  div.innerHTML = html;
   body.appendChild(div);
-  body.scrollTop=body.scrollHeight;
-  document.getElementById("log-count").textContent=logs.length+" events";
+}
+
+function saveLogs() {
+  try {
+    localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(-LOG_MAX_STORED)));
+  } catch(e) {}
+}
+
+function restoreLogs() {
+  try {
+    const raw = localStorage.getItem(LOG_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (!Array.isArray(saved) || saved.length === 0) return;
+    const c = _logColors();
+    const body = document.getElementById("log-body");
+    if (!body) return;
+    const empty = body.querySelector(".log-empty");
+    if (empty) empty.remove();
+    saved.forEach(l => {
+      if (!l.color) l.color = c[l.type] || c.info;
+      logs.push(l);
+      _renderLogEntry(body, l);
+    });
+    body.scrollTop = body.scrollHeight;
+    const lc = document.getElementById("log-count");
+    if (lc) lc.textContent = logs.length + " events";
+  } catch(e) { console.warn("log restore:", e); }
+}
+
+function addLog(type, msg) {
+  const c = _logColors();
+  const ts = new Date().toLocaleTimeString("th-TH");
+  const entry = {type, msg, color: c[type]||c.info, ts};
+  logs.push(entry);
+  if (logs.length > 300) logs.shift();
+  saveLogs();
+  const body = document.getElementById("log-body");
+  if (!body) return;
+  const empty = body.querySelector(".log-empty");
+  if (empty) empty.remove();
+  _renderLogEntry(body, entry);
+  body.scrollTop = body.scrollHeight;
+  document.getElementById("log-count").textContent = logs.length + " events";
 }
 
 // ─────────────────────────────────────────────

@@ -57,10 +57,15 @@ def _map_type(asset_type: str) -> str:
 
 
 def _parse_area_sqm(item: dict) -> Optional[float]:
-    """Convert BAM area fields → sqm."""
+    """Convert BAM area fields → sqm (built/usable area)."""
     # areaMeter = sqm directly
     if item.get("areaMeter") and float(item["areaMeter"]) > 0:
         return round(float(item["areaMeter"]), 2)
+    # Fallback: areaWa (ตร.ว.) → sqm (1 ตร.ว. = 4 sqm)
+    # BAM uses areaWa for condo unit sizes when areaMeter is missing/zero
+    awa = float(item.get("areaWa") or 0)
+    if awa > 0:
+        return round(awa * 4, 2)
     return None
 
 
@@ -119,6 +124,18 @@ def _record_to_deal(item: dict) -> Optional[dict]:
             if u and u.startswith("http"):
                 images.append(u)
 
+    # bedroom / bathroom — parse to int, fallback None
+    bedroom_raw = item.get("bedroom")
+    bathroom_raw = item.get("bathroom")
+    try:
+        bedrooms = int(bedroom_raw) if bedroom_raw not in (None, "", "0") else None
+    except (ValueError, TypeError):
+        bedrooms = None
+    try:
+        bathrooms = int(bathroom_raw) if bathroom_raw not in (None, "", "0") else None
+    except (ValueError, TypeError):
+        bathrooms = None
+
     deal: dict = {
         "listing_url":   listing_url,
         "source_domain": "bam.co.th",
@@ -127,17 +144,23 @@ def _record_to_deal(item: dict) -> Optional[dict]:
         "project_name":  item.get("projectTH") or "",
         "location":      location,
         "price":         int(price),
+        "buy_price":     int(price),   # NPA price IS the buy price; needed for ROI calc
         "condition":     condition,
         "is_benchmark":  False,
         "raw_data":      {
-            "asset_no":   asset_no,
-            "asset_type": asset_type,
-            "bedroom":    item.get("bedroom"),
-            "bathroom":   item.get("bathroom"),
+            "asset_no":    asset_no,
+            "asset_type":  asset_type,
+            "bedroom":     bedroom_raw,
+            "bathroom":    bathroom_raw,
             "is_hot_deal": item.get("isHotDeal"),
-            "images":     images[:8],    # max 8 photos per deal
+            "images":      images[:8],    # max 8 photos per deal
         },
     }
+    # Top-level bedrooms / bathrooms (displayed in card UI)
+    if bedrooms is not None:
+        deal["bedrooms"] = bedrooms
+    if bathrooms is not None:
+        deal["bathrooms"] = bathrooms
     if area_sqm and area_sqm > 0:
         deal["area_sqm"] = area_sqm
     if land_sqm and land_sqm > 0:
