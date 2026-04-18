@@ -72,8 +72,8 @@ NPA_SITES = [
     "https://npa-assets.gsb.or.th",
     # ── SCB Asset (ไทยพาณิชย์) — REST API ✅ (~4k assets)
     "https://asset.home.scb/project",
-    # ── กรมบังคับคดี — REST API ✅
-    "https://www.led.go.th",
+    # ── กรมบังคับคดี — Playwright form (เลือก จ.กทม/นนทบุรี/ปทุมธานี + CAPTCHA อัตโนมัติ)
+    "https://asset.led.go.th/newbidreg/default.asp",
     # ── SAM (บสก.) — HTML scraper
     "https://sam.or.th/site/npa/page_list.php?s_product_type=&s_province=&s_district=&s_status_id=&key_search=",
     # ── KKP Propify — HTML scraper
