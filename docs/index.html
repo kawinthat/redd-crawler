@@ -743,6 +743,14 @@ input,select{font-family:var(--font)}
           <input type="number" id="filter-cost-max" class="range-input" placeholder="สูงสุด" min="0" step="100000" oninput="onRangeFilter()">
         </div>
       </div>
+      <div class="range-group">
+        <div class="range-group-lbl">🏷 ราคาซื้อ (บาท)</div>
+        <div class="range-group-inputs">
+          <input type="number" id="filter-price-min" class="range-input" placeholder="ต่ำสุด" min="0" step="100000" oninput="onRangeFilter()">
+          <span class="range-dash">–</span>
+          <input type="number" id="filter-price-max" class="range-input" placeholder="สูงสุด" min="0" step="100000" oninput="onRangeFilter()">
+        </div>
+      </div>
       <button class="range-clear" onclick="clearRangeFilters()">✕ ล้างช่วง</button>
     </div>
 
@@ -884,6 +892,7 @@ let filterAnalyzed="all"; // "all" | "analyzed" | "unanalyzed"
 // Range filters (in baht, null = no limit)
 let filterProfitMin = null, filterProfitMax = null;
 let filterCostMin   = null, filterCostMax   = null;
+let filterPriceMin  = null, filterPriceMax  = null;
 // Multi-province filter — default: BKK + Nonthaburi + Pathum Thani
 const DEFAULT_PROVS = new Set(["กรุงเทพมหานคร","นนทบุรี","ปทุมธานี"]);
 let filterProvinces = new Set(DEFAULT_PROVS);  // empty = show ALL
@@ -1357,6 +1366,12 @@ function applyFilters(list) {
       if (filterCostMin !== null && cost < filterCostMin) return false;
       if (filterCostMax !== null && cost > filterCostMax) return false;
     }
+    // ── Buy price range filter ─────────────────────────────────────────────
+    if (filterPriceMin !== null || filterPriceMax !== null) {
+      const bp = d.buy_price || d.price || 0;
+      if (filterPriceMin !== null && bp < filterPriceMin) return false;
+      if (filterPriceMax !== null && bp > filterPriceMax) return false;
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const hay = [d.project_name,d.location,d.property_type,d.source_domain,d.address,d.features]
@@ -1463,8 +1478,8 @@ function setAnalyzedFilter(val) {
 }
 
 function clearRangeFilters() {
-  filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = null;
-  ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max"].forEach(id=>{
+  filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = filterPriceMin = filterPriceMax = null;
+  ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max","filter-price-min","filter-price-max"].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value = "";
   });
   curPage = 1; updateResetChip(); renderDeals();
@@ -1479,14 +1494,16 @@ function onRangeFilter() {
     filterProfitMax = v("filter-profit-max");
     filterCostMin   = v("filter-cost-min");
     filterCostMax   = v("filter-cost-max");
+    filterPriceMin  = v("filter-price-min");
+    filterPriceMax  = v("filter-price-max");
     curPage = 1; updateResetChip(); renderDeals();
   }, 350);
 }
 
 function resetFilters() {
   searchQuery=""; filterType=""; filterSource=""; dealFilter="all"; filterAnalyzed="all"; curPage=1;
-  filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = null;
-  ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max"].forEach(id=>{
+  filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = filterPriceMin = filterPriceMax = null;
+  ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max","filter-price-min","filter-price-max"].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value = "";
   });
   filterProvinces = new Set(DEFAULT_PROVS);  // reset to 3 provinces default
@@ -1503,7 +1520,7 @@ function resetFilters() {
 function updateResetChip() {
   const provChanged = filterProvinces.size !== DEFAULT_PROVS.size ||
     [...DEFAULT_PROVS].some(p => !filterProvinces.has(p));
-  const hasRangeFilter = filterProfitMin!==null||filterProfitMax!==null||filterCostMin!==null||filterCostMax!==null;
+  const hasRangeFilter = filterProfitMin!==null||filterProfitMax!==null||filterCostMin!==null||filterCostMax!==null||filterPriceMin!==null||filterPriceMax!==null;
   const hasFilter = searchQuery||filterType||filterSource||dealFilter==="hot"||provChanged||filterAnalyzed!=="all"||hasRangeFilter;
   document.getElementById("chip-reset").style.display = hasFilter?"":"none";
 }
