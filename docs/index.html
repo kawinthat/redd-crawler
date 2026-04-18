@@ -1270,18 +1270,18 @@ function tryParseJSON(v) {
 function getAIStatus(d) {
   if (!d.ai_analysis && !d.ai_analyzed_at) return "none";
   if (!d.ai_analysis) return "empty";
+
+  if (d.price_reno_low != null || d.market_value_min != null || d.market_value != null) return "done";
+
   const ai = tryParseJSON(d.ai_analysis);
-  if (!ai || typeof ai !== "object") {
-    // plain string analysis
-    return typeof d.ai_analysis === "string" && d.ai_analysis.length > 20 ? "done" : "empty";
+  if (ai && typeof ai === "object") {
+    if (ai.pricing && ai.pricing.after_reno_low != null) return "done";
+  } else if (typeof d.ai_analysis === "string" && d.ai_analysis.length > 20) {
+    // plain string from very old crawler without structured data
+    return "done";
   }
-  const hasSummary  = !!(ai.summary_th || ai.summary);
-  const hasSources  = Array.isArray(ai.data_sources) && ai.data_sources.length > 0;
-  const hasProjects = ai.comparable_projects && Object.keys(ai.comparable_projects).length > 0;
-  // รองรับ new 4-section format: ถ้ามี project name หรือ pricing data ถือว่า done
-  const hasNewProj  = !!(ai.project?.official_name || ai.project?.developer || ai.project?.exact_address);
-  const hasNewPrice = !!(ai.pricing?.after_reno_low || ai.pricing?.original_low || ai.pricing?.good_condition_low);
-  return (hasSummary || hasSources || hasProjects || hasNewProj || hasNewPrice) ? "done" : "empty";
+
+  return "none"; // old format — ต้องวิเคราะห์ใหม่
 }
 function isAnalyzed(d) { return getAIStatus(d) !== "none"; }
 function isAISuccess(d) { return getAIStatus(d) === "done"; }

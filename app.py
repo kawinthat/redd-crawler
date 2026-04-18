@@ -440,7 +440,7 @@ async def _run_analysis(
             "id,listing_url,source_domain,property_type,project_name,"
             "location,price,area_sqm,usable_area_sqm,land_area_sqm,roi_percent,priority,"
             "condition,ai_analyzed_at,reno_cost_total,transfer_fee,"
-            "market_value,buy_price"
+            "market_value,buy_price,price_reno_low,market_value_min"
         )
 
         # ── URL selection mode ─────────────────────────────────────────────
@@ -452,14 +452,21 @@ async def _run_analysis(
                 rows = db.table("deals").select(FIELDS).in_("listing_url", chunk).execute().data or []
                 all_deals.extend(rows)
             if not force:
-                pending = [d for d in all_deals if not d.get("ai_analyzed_at")]
+                pending = [
+                    d for d in all_deals 
+                    if not d.get("ai_analyzed_at") or (
+                        d.get("price_reno_low") is None and 
+                        d.get("market_value_min") is None and 
+                        d.get("market_value") is None
+                    )
+                ]
             else:
                 pending = all_deals
         else:
             # ── Filter-based mode ──────────────────────────────────────────
             q = db.table("deals").select(FIELDS)
             if not force and ai_status != "analyzed":
-                q = q.is_("ai_analyzed_at", "null")
+                q = q.or_("ai_analyzed_at.is.null,and(ai_analyzed_at.not.is.null,price_reno_low.is.null,market_value_min.is.null,market_value.is.null)")
             elif ai_status == "analyzed":
                 q = q.not_.is_("ai_analyzed_at", "null")
 
