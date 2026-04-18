@@ -1,14 +1,52 @@
 # Issues Log
-> Cowork เพิ่ม entry เมื่อพบปัญหา
+> Cowork เพิ่ม entry เมื่อพบปัญหา — อัปเดต 2026-04-18
 
-## Format
-```
-## [YYYY-MM-DD] Issue Title
-- Phase: X
-- Task: X.X
-- Error: ...
-- Attempted fixes: ...
-- Status: OPEN / RESOLVED
-```
+---
 
-_(ยังไม่มีปัญหา — log จะเริ่มเมื่อ development เริ่ม)_
+## [2026-04-18] ISS-002 — ปุ่ม "ล้าง AI" ไม่ล้างข้อมูล
+
+- **Phase:** Production (deployed on Render)
+- **Severity:** HIGH
+- **Symptom:** กดปุ่ม "ล้าง AI" แล้ว refresh — ข้อมูล AI analysis ยังอยู่เหมือนเดิม
+- **Root cause (สันนิษฐาน):**
+  1. git ยังไม่ถูก push → deployed code บน Render ไม่มี `/deals/reset-analysis` endpoint (เพิ่งเขียนใหม่)
+  2. หรือ Supabase `update().neq("id", 0)` ทำงานแต่ไม่ return data → `cleared=0` → ไม่รู้ว่าสำเร็จหรือไม่
+  3. หรือ frontend ไม่ได้ refetch หลัง reset สำเร็จ
+- **Fix needed:**
+  1. Push git → redeploy Render
+  2. ตรวจสอบว่า Supabase update bulk ทำงานจริงไหม
+  3. หลัง reset สำเร็จ → frontend reload deals ใหม่อัตโนมัติ
+- **Status:** OPEN → มอบหมาย Antigravity
+
+---
+
+## [2026-04-18] ISS-003 — AVG ROI แสดง 120% (สูงผิดปกติ)
+
+- **Phase:** Production
+- **Severity:** MEDIUM
+- **Symptom:** dashboard แสดง AVG ROI = 120.0% ซึ่งสูงเกินจริง
+- **Root cause:** Sonar Pro บางครั้ง return ราคา ฿/ตร.ม. มาเป็นราคารวม → ROI พุ่งสูง
+  sanity check `roi_max > 200%` ดักได้บางส่วน แต่ case ที่ 100-200% หลุดผ่าน
+- **Fix needed:** ปรับ sanity threshold + filter avg ROI ใน frontend ให้ exclude outlier
+- **Status:** OPEN → มอบหมาย Antigravity
+
+---
+
+## [2026-04-18] ISS-004 — LED Harvester คืน 0 listings
+
+- **Phase:** Production
+- **Severity:** MEDIUM
+- **Symptom:** scan LED [asset.led.go.th] → pages=0 saved=0 ทุกครั้ง
+- **Root cause:** Playwright ต้องใช้ `networkidle` wait ให้ JS set CAPTCHA ก่อน
+  code fix เขียนแล้วใน led_harvester_v2.py แต่ยังไม่ push
+- **Fix needed:** Push git + verify Playwright CAPTCHA read ทำงานบน Render
+- **Status:** OPEN → Antigravity verify หลัง push
+
+---
+
+## [2026-04-17] ISS-001 — Playwright install ใน sandbox
+
+- **Phase:** Phase 1
+- **Severity:** LOW
+- **Resolution:** ใช้ Render Docker image ที่มี Playwright built-in
+- **Status:** RESOLVED

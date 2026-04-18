@@ -416,11 +416,12 @@ class PerplexityAnalyzer:
                 enrichment["roi_flag"]    = "⚠️ ข้อมูลผิดปกติ"
                 enrichment["priority"]    = "SKIP"
 
-            # 2. ROI สูงผิดปกติ (>200%) — Sonar อาจส่ง ฿/ตร.ม. มาเป็นราคารวม
-            elif roi_max > 200:
+            # 2. ROI สูงผิดปกติ (>120%) — Sonar อาจส่ง ฿/ตร.ม. มาเป็นราคารวม
+            #    NPA flip ปกติไม่เกิน 80-100% — threshold 120% ดักได้ดีกว่า 200%
+            elif roi_max > 120:
                 logger.warning(
                     f"Sanity fail deal {deal.get('id','?')}: "
-                    f"roi_max {roi_max:.1f}% > 200% — likely unit confusion — roi_valid=False"
+                    f"roi_max {roi_max:.1f}% > 120% — likely unit confusion — roi_valid=False"
                 )
                 enrichment["roi_valid"]   = False
                 enrichment["roi_percent"] = round(roi_mid, 2)

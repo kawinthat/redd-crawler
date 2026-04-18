@@ -1111,7 +1111,11 @@ async function loadStats() {
     const total = d.total_deals || 0;
     const hot   = d.hot_deals   || 0;
     if (total > 0) document.getElementById("s-hot-pct").textContent = ((hot/total)*100).toFixed(1)+"%";
-    const validRois = deals.map(x=>Math.min(x.roi_percent||0,300)).filter(r=>r>0);
+    // AVG ROI — exclude outliers (roi_valid=false หรือ ROI > 120%) เพื่อกัน Sonar unit confusion
+    const validRois = deals
+      .filter(d => d.roi_percent != null && d.roi_valid !== false &&
+                   d.roi_percent >= -50 && d.roi_percent <= 120)
+      .map(d => d.roi_percent);
     const avgRoi = validRois.length > 0
       ? (validRois.reduce((s,x)=>s+x,0)/validRois.length).toFixed(1)+"%"
       : "—";
@@ -2543,10 +2547,10 @@ async function confirmResetAnalysis() {
     const r = await fetch(`${API}/deals/reset-analysis`, { method: "POST" });
     const d = await r.json();
     if (r.ok && d.status === "ok") {
-      showToast(`✅ ล้าง AI Analysis เรียบร้อย (${d.cleared} รายการ)`);
       addLog("warn", `🗑 ล้าง AI Analysis ทั้งหมดแล้ว — ${d.cleared} deals ถูก reset`);
-      // reload deals เพื่ออัพเดทหน้าจอ
-      setTimeout(loadDeals, 800);
+      // reload deals ทันทีเพื่ออัพเดทหน้าจอ
+      await loadDeals();
+      showToast(`✅ ล้าง AI Analysis เรียบร้อย (${d.cleared} รายการ)`);
     } else {
       showToast("❌ เกิดข้อผิดพลาด: " + (d.detail || JSON.stringify(d)));
       addLog("error", "❌ reset-analysis failed: " + (d.detail || JSON.stringify(d)));

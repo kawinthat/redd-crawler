@@ -632,10 +632,25 @@ async def reset_analysis():
 
     # รัน core fields ก่อน — ต้องสำเร็จ
     try:
-        r = db.table("deals").update(core_fields).neq("id", 0).execute()
-        cleared = len(r.data) if r.data else 0
+        # นับ deals ที่มี AI data ก่อน reset (Supabase v2+ ไม่ return rows จาก bulk UPDATE)
+        count_before_r = db.table("deals").select("id", count="exact") \
+            .not_.is_("ai_analyzed_at", "null").execute()
+        count_before = count_before_r.count or 0
+
+        db.table("deals").update(core_fields).neq("id", 0).execute()
+
+        # นับหลัง reset
+        count_after_r = db.table("deals").select("id", count="exact") \
+            .not_.is_("ai_analyzed_at", "null").execute()
+        count_after = count_after_r.count or 0
+
+        cleared = count_before - count_after
+        if cleared == 0 and count_before > 0:
+            # Supabase ไม่ return affected rows — ใช้ count_before แทน
+            cleared = count_before
+
         reset_fields.extend(core_fields.keys())
-        logger.info(f"reset-analysis core: cleared {cleared} deals")
+        logger.info(f"reset-analysis core: before={count_before} after={count_after} cleared={cleared}")
     except Exception as e:
         logger.error(f"reset-analysis core error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
