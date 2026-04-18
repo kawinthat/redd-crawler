@@ -152,6 +152,16 @@ input,select{font-family:var(--font)}
 .sdot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.35);cursor:pointer;border:none;padding:0;transition:background .2s}
 .sdot.active{background:#fff;width:12px;border-radius:3px}
 .img-count{position:absolute;top:6px;right:7px;background:rgba(0,0,0,.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;z-index:2}
+/* ── Lightbox ── */
+#lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;flex-direction:column}
+#lb-overlay.open{display:flex}
+#lb-img{max-width:92vw;max-height:80vh;border-radius:8px;object-fit:contain;box-shadow:0 0 40px #000}
+#lb-close{position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;line-height:1;opacity:.8}
+#lb-close:hover{opacity:1}
+#lb-prev,#lb-next{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.12);border:none;color:#fff;font-size:28px;width:44px;height:60px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#lb-prev{left:16px}
+#lb-next{right:16px}
+#lb-counter{color:#ffffffaa;font-size:12px;margin-top:10px}
 .img-src-badge{position:absolute;top:6px;left:7px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;z-index:2}
 
 /* card body */
@@ -983,7 +993,7 @@ function dealCard(d) {
 
   return `
   <div class="deal-card${hot?" hot":""}">
-    <a href="${url}" target="_blank" rel="noopener" style="display:block">${imgHTML}</a>
+    <div onclick="openLightbox('${cardId}',${JSON.stringify(images)})" style="cursor:${hasImgs?'zoom-in':'default'}">${imgHTML}</div>
     <div class="card-body">
       <div class="card-title" title="${title}">${title}</div>
       <div class="card-loc">📍 ${loc||"—"} · ${areaDisp}</div>
@@ -1416,6 +1426,49 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(()=>t.classList.remove("show"),3500);
 }
+</script>
+<!-- ── Lightbox Overlay ── -->
+<div id="lb-overlay" onclick="if(event.target===this)closeLightbox()">
+  <button id="lb-close" onclick="closeLightbox()">✕</button>
+  <button id="lb-prev" onclick="lbMove(-1)">‹</button>
+  <img id="lb-img" src="" alt="">
+  <button id="lb-next" onclick="lbMove(1)">›</button>
+  <div id="lb-counter"></div>
+</div>
+<script>
+(function(){
+  let _imgs=[], _idx=0;
+  window.openLightbox = function(cardId, imgs) {
+    if(!imgs||imgs.length===0) return;
+    _imgs = imgs;
+    _idx  = window.slideIdx&&window.slideIdx[cardId] || 0;
+    _render();
+    document.getElementById('lb-overlay').classList.add('open');
+    document.body.style.overflow='hidden';
+  };
+  window.closeLightbox = function() {
+    document.getElementById('lb-overlay').classList.remove('open');
+    document.body.style.overflow='';
+  };
+  window.lbMove = function(d) {
+    _idx = (_idx+d+_imgs.length)%_imgs.length;
+    _render();
+  };
+  function _render() {
+    document.getElementById('lb-img').src = _imgs[_idx];
+    const nav = _imgs.length>1;
+    document.getElementById('lb-prev').style.display = nav?'flex':'none';
+    document.getElementById('lb-next').style.display = nav?'flex':'none';
+    document.getElementById('lb-counter').textContent = nav?`${_idx+1} / ${_imgs.length}`:'';
+  }
+  document.addEventListener('keydown', function(e){
+    const ov = document.getElementById('lb-overlay');
+    if(!ov.classList.contains('open')) return;
+    if(e.key==='ArrowRight'||e.key==='ArrowDown') lbMove(1);
+    else if(e.key==='ArrowLeft'||e.key==='ArrowUp') lbMove(-1);
+    else if(e.key==='Escape') closeLightbox();
+  });
+})();
 </script>
 </body>
 </html>
