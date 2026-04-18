@@ -378,6 +378,30 @@ input,select{font-family:var(--font)}
 .roi-na-box{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:9.5px;color:var(--textMid);margin-bottom:8px;display:flex;align-items:center;gap:6px}
 .roi-na-icon{font-size:13px;flex-shrink:0}
 
+/* ── REFERENCE LINKS ── */
+.ref-links-section{margin-top:8px;padding:8px 10px;background:var(--blueDim);border:1px solid #BFDBFE;border-radius:6px}
+.ref-links-label{font-size:9px;color:var(--blue);font-weight:700;margin-bottom:5px;letter-spacing:.3px}
+.ref-links-grid{display:flex;flex-wrap:wrap;gap:5px}
+.ref-link-btn{display:inline-flex;align-items:center;gap:3px;padding:4px 9px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #93C5FD;color:var(--blue);background:#fff;text-decoration:none;white-space:nowrap;transition:all .15s;font-family:var(--font)}
+.ref-link-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+/* ── RANGE FILTER ROW ── */
+.range-filter-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:12px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.range-filter-row .range-label{font-size:9px;font-weight:700;color:var(--textMid);letter-spacing:.5px;text-transform:uppercase;align-self:center;margin-right:4px;white-space:nowrap}
+.range-group{display:flex;flex-direction:column;gap:3px}
+.range-group-lbl{font-size:9px;color:var(--textLight);font-weight:600}
+.range-group-inputs{display:flex;gap:4px;align-items:center}
+.range-input{width:120px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;outline:none;font-family:var(--font);transition:border-color .2s}
+.range-input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accentDim)}
+.range-input::placeholder{color:var(--textLight)}
+.range-dash{color:var(--textLight);font-size:10px}
+.range-clear{font-size:10px;background:none;border:none;color:var(--textMid);cursor:pointer;font-family:var(--font);padding:0 4px;text-decoration:underline;text-underline-offset:2px;align-self:flex-end;margin-bottom:1px;transition:color .15s}
+.range-clear:hover{color:var(--red)}
+
+/* ── SORT DIRECTION INDICATOR ── */
+.sort-dir-arrow{font-size:9px;opacity:.7;margin-left:1px}
+.sort-chip.active .sort-dir-arrow{opacity:1}
+
 /* ── ANIMATIONS ── */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -611,13 +635,37 @@ input,select{font-family:var(--font)}
     </div>
 
     <!-- Sort row -->
-    <div class="sort-row">
+    <div class="sort-row" style="flex-wrap:wrap;row-gap:6px">
       <span class="sort-label">เรียงตาม:</span>
-      <button class="sort-chip active" id="sort-roi" onclick="setSort('roi')">ROI สูง-ต่ำ</button>
-      <button class="sort-chip" id="sort-price-asc" onclick="setSort('price-asc')">ราคาต่ำ-สูง</button>
-      <button class="sort-chip" id="sort-price-desc" onclick="setSort('price-desc')">ราคาสูง-ต่ำ</button>
-      <button class="sort-chip" id="sort-area" onclick="setSort('area')">พื้นที่ใหญ่-เล็ก</button>
-      <button class="sort-chip" id="sort-new" onclick="setSort('new')">ใหม่ล่าสุด</button>
+      <button class="sort-chip active" id="sort-roi"    onclick="setSort('roi')">📈 ROI <span id="sort-roi-dir" class="sort-dir-arrow">↓</span></button>
+      <button class="sort-chip"        id="sort-profit" onclick="setSort('profit')">💰 กำไร <span id="sort-profit-dir" class="sort-dir-arrow">↓</span></button>
+      <button class="sort-chip"        id="sort-price"  onclick="setSort('price')">🏷 ราคา <span id="sort-price-dir" class="sort-dir-arrow">↓</span></button>
+      <button class="sort-chip"        id="sort-cost"   onclick="setSort('cost')">🏗 ต้นทุน <span id="sort-cost-dir" class="sort-dir-arrow">↓</span></button>
+      <button class="sort-chip"        id="sort-area"   onclick="setSort('area')">📐 พื้นที่ <span id="sort-area-dir" class="sort-dir-arrow">↓</span></button>
+      <button class="sort-chip"        id="sort-new"    onclick="setSort('new')">🕐 ใหม่ล่าสุด</button>
+      <span style="font-size:9px;color:var(--textLight);align-self:center;margin-left:4px">คลิกซ้ำเพื่อสลับทิศทาง ↑↓</span>
+    </div>
+
+    <!-- Range filters row -->
+    <div class="range-filter-row">
+      <span class="range-label">🔍 ช่วง:</span>
+      <div class="range-group">
+        <div class="range-group-lbl">💰 กำไรโดยประมาณ (บาท)</div>
+        <div class="range-group-inputs">
+          <input type="number" id="filter-profit-min" class="range-input" placeholder="ต่ำสุด" min="0" step="100000" oninput="onRangeFilter()">
+          <span class="range-dash">–</span>
+          <input type="number" id="filter-profit-max" class="range-input" placeholder="สูงสุด" min="0" step="100000" oninput="onRangeFilter()">
+        </div>
+      </div>
+      <div class="range-group">
+        <div class="range-group-lbl">🏗 ต้นทุนรวม (บาท)</div>
+        <div class="range-group-inputs">
+          <input type="number" id="filter-cost-min" class="range-input" placeholder="ต่ำสุด" min="0" step="100000" oninput="onRangeFilter()">
+          <span class="range-dash">–</span>
+          <input type="number" id="filter-cost-max" class="range-input" placeholder="สูงสุด" min="0" step="100000" oninput="onRangeFilter()">
+        </div>
+      </div>
+      <button class="range-clear" onclick="clearRangeFilters()">✕ ล้างช่วง</button>
     </div>
 
     <!-- Deals view -->
@@ -753,8 +801,11 @@ const PIPE_STEPS = [
 // STATE
 // ─────────────────────────────────────────────
 let deals=[], hotDeals=[], srcStats={};
-let dealFilter="all", filterType="", filterSource="", sortBy="roi";
+let dealFilter="all", filterType="", filterSource="", sortBy="roi", sortDir="desc";
 let filterAnalyzed="all"; // "all" | "analyzed" | "unanalyzed"
+// Range filters (in baht, null = no limit)
+let filterProfitMin = null, filterProfitMax = null;
+let filterCostMin   = null, filterCostMax   = null;
 // Multi-province filter — default: BKK + Nonthaburi + Pathum Thani
 const DEFAULT_PROVS = new Set(["กรุงเทพมหานคร","นนทบุรี","ปทุมธานี"]);
 let filterProvinces = new Set(DEFAULT_PROVS);  // empty = show ALL
@@ -1122,7 +1173,7 @@ function isAISuccess(d) { return getAIStatus(d) === "done"; }
 
 function applyFilters(list) {
   return list.filter(d => {
-    if (dealFilter === "hot" && (d.roi_percent||0) < 30) return false;
+    if (dealFilter === "hot" && calcFreshRoi(d) < 30) return false;
     if (filterType && d.property_type !== filterType) return false;
     // Multi-province filter: empty set = show all
     if (filterProvinces.size > 0) {
@@ -1132,6 +1183,19 @@ function applyFilters(list) {
     if (filterSource && d.source_domain !== filterSource) return false;
     if (filterAnalyzed === "analyzed"   && !isAnalyzed(d)) return false;
     if (filterAnalyzed === "unanalyzed" &&  isAnalyzed(d)) return false;
+    // ── Profit range filter ────────────────────────────────────────────────
+    if (filterProfitMin !== null || filterProfitMax !== null) {
+      const profit = calcFreshProfit(d);
+      if (profit === null) return false;  // ไม่มีข้อมูลกำไร — ซ่อนเมื่อมี range filter
+      if (filterProfitMin !== null && profit < filterProfitMin) return false;
+      if (filterProfitMax !== null && profit > filterProfitMax) return false;
+    }
+    // ── Total cost range filter ────────────────────────────────────────────
+    if (filterCostMin !== null || filterCostMax !== null) {
+      const cost = calcTotalCost(d);
+      if (filterCostMin !== null && cost < filterCostMin) return false;
+      if (filterCostMax !== null && cost > filterCostMax) return false;
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const hay = [d.project_name,d.location,d.property_type,d.source_domain,d.address,d.features]
@@ -1142,24 +1206,45 @@ function applyFilters(list) {
   });
 }
 
+function calcTotalCost(d) {
+  const bp   = d.buy_price || d.price || 0;
+  const reno = d.reno_cost_total || 0;
+  const fee  = (d.transfer_fee && d.transfer_fee > 0) ? d.transfer_fee : Math.round(bp * 0.055);
+  return bp + reno + fee;
+}
+
+function calcFreshProfit(d) {
+  if (d.market_value && d.market_value > 0) {
+    return d.market_value - calcTotalCost(d);
+  }
+  return d.estimated_profit ?? null;  // null = unknown
+}
+
 function calcFreshRoi(d) {
   if (d.market_value && d.market_value > 0) {
-    const bp   = d.buy_price || d.price || 0;
-    const reno = d.reno_cost_total || 0;
-    const fee  = (d.transfer_fee && d.transfer_fee > 0) ? d.transfer_fee : Math.round(bp * 0.055);
-    const cost = bp + reno + fee;
+    const cost = calcTotalCost(d);
     if (cost > 0) return (d.market_value - cost) / cost * 100;
   }
   return d.roi_percent || 0;
 }
 
 function applySort(list) {
+  // asc direction: smaller value first (×1 × (a-b) → a<b comes first)
+  // desc direction: larger value first (×(-1) × (a-b) → a>b comes first)
+  const d = sortDir === "asc" ? 1 : -1;
   return [...list].sort((a,b) => {
-    if (sortBy === "roi")        return calcFreshRoi(b) - calcFreshRoi(a);
-    if (sortBy === "price-asc")  return (a.price||0)-(b.price||0);
-    if (sortBy === "price-desc") return (b.price||0)-(a.price||0);
-    if (sortBy === "area")       return (b.area_sqm||0)-(a.area_sqm||0);
-    if (sortBy === "new")        return new Date(b.scraped_at||0)-new Date(a.scraped_at||0);
+    if (sortBy === "roi") {
+      return d * (calcFreshRoi(a) - calcFreshRoi(b));
+    }
+    if (sortBy === "profit") {
+      const pA = calcFreshProfit(a) ?? (sortDir==="asc" ? Infinity : -Infinity);
+      const pB = calcFreshProfit(b) ?? (sortDir==="asc" ? Infinity : -Infinity);
+      return d * (pA - pB);
+    }
+    if (sortBy === "price") return d * ((a.price||0) - (b.price||0));
+    if (sortBy === "area")  return d * ((a.area_sqm||0) - (b.area_sqm||0));
+    if (sortBy === "cost")  return d * (calcTotalCost(a) - calcTotalCost(b));
+    if (sortBy === "new")   return new Date(b.scraped_at||0) - new Date(a.scraped_at||0);
     return 0;
   });
 }
@@ -1194,8 +1279,33 @@ function setAnalyzedFilter(val) {
   curPage=1; updateResetChip(); renderDeals();
 }
 
+function clearRangeFilters() {
+  filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = null;
+  ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max"].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value = "";
+  });
+  curPage = 1; updateResetChip(); renderDeals();
+}
+
+let _rangeTimer;
+function onRangeFilter() {
+  clearTimeout(_rangeTimer);
+  _rangeTimer = setTimeout(() => {
+    const v = id => { const n = parseFloat(document.getElementById(id)?.value||""); return isNaN(n)?null:n; };
+    filterProfitMin = v("filter-profit-min");
+    filterProfitMax = v("filter-profit-max");
+    filterCostMin   = v("filter-cost-min");
+    filterCostMax   = v("filter-cost-max");
+    curPage = 1; updateResetChip(); renderDeals();
+  }, 350);
+}
+
 function resetFilters() {
   searchQuery=""; filterType=""; filterSource=""; dealFilter="all"; filterAnalyzed="all"; curPage=1;
+  filterProfitMin = filterProfitMax = filterCostMin = filterCostMax = null;
+  ["filter-profit-min","filter-profit-max","filter-cost-min","filter-cost-max"].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value = "";
+  });
   filterProvinces = new Set(DEFAULT_PROVS);  // reset to 3 provinces default
   document.getElementById("search-box").value="";
   document.getElementById("source-select").value="";
@@ -1210,20 +1320,42 @@ function resetFilters() {
 function updateResetChip() {
   const provChanged = filterProvinces.size !== DEFAULT_PROVS.size ||
     [...DEFAULT_PROVS].some(p => !filterProvinces.has(p));
-  const hasFilter = searchQuery||filterType||filterSource||dealFilter==="hot"||provChanged||filterAnalyzed!=="all";
+  const hasRangeFilter = filterProfitMin!==null||filterProfitMax!==null||filterCostMin!==null||filterCostMax!==null;
+  const hasFilter = searchQuery||filterType||filterSource||dealFilter==="hot"||provChanged||filterAnalyzed!=="all"||hasRangeFilter;
   document.getElementById("chip-reset").style.display = hasFilter?"":"none";
 }
 
 function setSort(s) {
-  sortBy = s; curPage=1;
-  document.querySelectorAll(".sort-chip").forEach(el=>el.classList.remove("active"));
-  const el = document.getElementById("sort-"+s);
-  if(el) el.classList.add("active");
-  // table headers
-  ["roi","price","area"].forEach(k=>{
-    const th = document.getElementById("th-"+k);
-    if(th) th.classList.toggle("sorted", s.startsWith(k));
+  if (sortBy === s && s !== "new") {
+    sortDir = sortDir === "desc" ? "asc" : "desc";
+  } else {
+    sortBy = s;
+    sortDir = "desc";  // default: high → low
+  }
+  curPage = 1;
+
+  // Update chip active states
+  document.querySelectorAll(".sort-chip").forEach(el => el.classList.remove("active"));
+  const chipEl = document.getElementById("sort-" + s);
+  if (chipEl) chipEl.classList.add("active");
+
+  // Update direction arrows on all sortable chips
+  ["roi","profit","price","area","cost"].forEach(k => {
+    const arrEl = document.getElementById("sort-" + k + "-dir");
+    if (!arrEl) return;
+    if (k === sortBy) {
+      arrEl.textContent = sortDir === "asc" ? "↑" : "↓";
+    } else {
+      arrEl.textContent = "↓";
+    }
   });
+
+  // Table header highlight
+  ["roi","price","area"].forEach(k => {
+    const th = document.getElementById("th-" + k);
+    if (th) th.classList.toggle("sorted", s === k || s.startsWith(k));
+  });
+
   renderDeals();
 }
 
@@ -1354,8 +1486,8 @@ function renderTableView(items, total) {
     return;
   }
   tbody.innerHTML = items.map(d=>{
-    const roi = d.roi_percent||0;
-    const roiSuspect = roi > 999 || !d.roi_valid;
+    const roi = calcFreshRoi(d);
+    const roiSuspect = roi > 999 || (d.roi_valid === false && !(d.market_value > 0));
     const roiClass = roiSuspect?"suspect":roi>=30?"hot":roi>=15?"medium":"low";
     const roiTxt   = roiSuspect?"N/A":roi.toFixed(1)+"%";
     const srcCol   = getSrcColor(d.source_domain||"");
@@ -1644,15 +1776,14 @@ function dealCard(d) {
       ${(()=>{
         const srcUrls = Array.isArray(d.source_urls) ? d.source_urls.filter(u=>u&&u.startsWith("http")) : [];
         if (!srcUrls.length) return "";
-        // Extract short domain label for each button (max 4)
-        const btns = srcUrls.slice(0,4).map(u=>{
+        const btns = srcUrls.slice(0,5).map(u=>{
           let label = u.replace(/https?:\/\/(www\.)?/,"").split("/")[0].split(".").slice(-2).join(".");
-          label = label.length > 20 ? label.slice(0,18)+"…" : label;
-          return `<a href="${u}" target="_blank" rel="noopener" class="src-ref-btn" title="${u}">${label} ↗</a>`;
+          label = label.length > 18 ? label.slice(0,16)+"…" : label;
+          return `<a href="${u}" target="_blank" rel="noopener" class="ref-link-btn" title="${u}">🔗 ${label}</a>`;
         }).join("");
-        return `<div style="margin-top:7px">
-          <div style="font-size:9px;color:var(--textMid);margin-bottom:4px">🔗 แหล่งอ้างอิงราคา:</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">${btns}</div>
+        return `<div class="ref-links-section">
+          <div class="ref-links-label">📊 ดูราคาตลาดอ้างอิง (จาก Sonar Pro)</div>
+          <div class="ref-links-grid">${btns}</div>
         </div>`;
       })()}
       ${(()=>{
